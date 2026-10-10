@@ -33,15 +33,18 @@ class AppContext:
     fault_injector: FaultInjector
 
 
-def build_app(config: Config | None = None) -> AppContext:
+def build_app(
+    config: Config | None = None, *, check_same_thread: bool = True
+) -> AppContext:
     config = config or load_config()
 
     # 1. Observability first — instrument before any agent logic.
     neatlogs = init_neatlogs(config)
     tracer = Tracer(neatlogs)
 
-    # 2. Persistence.
-    conn = init_db(config.db_path)
+    # 2. Persistence. The UI passes check_same_thread=False so a cached
+    #    connection can be reused across Streamlit's worker threads.
+    conn = init_db(config.db_path, check_same_thread=check_same_thread)
 
     # 3. Services and the agent.
     license_service = LicenseService(

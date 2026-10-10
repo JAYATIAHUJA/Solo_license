@@ -12,14 +12,20 @@ from pathlib import Path
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
-def connect(db_path: Path) -> sqlite3.Connection:
+def connect(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open a connection with sensible defaults.
 
     * ``row_factory`` yields dict-like rows for readable call sites.
     * foreign keys are enforced per-connection (SQLite requires this each time).
+    * ``check_same_thread=False`` lets a Streamlit cached resource reuse one
+      connection across the framework's worker threads (demo serialises writes).
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(
+        db_path,
+        detect_types=sqlite3.PARSE_DECLTYPES,
+        check_same_thread=check_same_thread,
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -31,8 +37,8 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def init_db(db_path: Path) -> sqlite3.Connection:
+def init_db(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open a connection and guarantee the schema exists."""
-    conn = connect(db_path)
+    conn = connect(db_path, check_same_thread=check_same_thread)
     apply_schema(conn)
     return conn
