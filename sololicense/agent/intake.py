@@ -10,6 +10,8 @@ import re
 import sqlite3
 from dataclasses import dataclass
 
+from pydantic import BaseModel, Field, ValidationError
+
 from sololicense.config import Config
 from sololicense.db.repositories import orders as orders_repo
 
@@ -23,7 +25,17 @@ class Intake:
     amount: float | None
     reason: str
     source: str            # deterministic | llm:<model>
+    confidence: float = 0.0
+    needs_human: bool = False
     note: str = ""
+
+
+class _LLMIntake(BaseModel):
+    order_id: str | None = None
+    amount: float | None = Field(default=None, ge=0)
+    reason: str = Field(default="customer refund", max_length=140)
+    confidence: float = Field(default=0.0, ge=0, le=1)
+    needs_human: bool = False
 
 
 def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
@@ -61,7 +73,30 @@ def _deterministic(message: str, conn: sqlite3.Connection) -> Intake:
         if row is not None:
             amount = float(row["amount"])
     reason = re.sub(r"\s+", " ", message).strip()[:140]
-    return Intake(order_id, amount, reason, "deterministic")
+    confidence = 0.85 if order_id and amount is not None else 0.35
+    return Intake(
+        order_id, amount, reason, "deterministic",
+        confidence=confidence,
+        needs_human=confidence < 0.5,
+    )
+
+
+def parse_llm_response(text: str, *, model: str) -> Intake | None:
+    try:
+        data = json.loads(text)
+        parsed = _LLMIntake(**data)
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    order_id = parsed.order_id.strip().upper() if parsed.order_id else None
+    return Intake(
+        order_id=order_id or None,
+        amount=float(parsed.amount) if parsed.amount is not None else None,
+        reason=parsed.reason.strip()[:140] or "customer refund",
+        source=f"llm:{model}",
+        confidence=float(parsed.confidence),
+        needs_human=bool(parsed.needs_human),
+    )
 
 
 def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | None:
@@ -74,21 +109,25 @@ def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | Non
     )
     try:
         text = complete(config, prompt, max_tokens=200)
-        data = json.loads(text[text.index("{"): text.rindex("}") + 1])
     except Exception:
         return None
-    order_id = (data.get("order_id") or "").strip().upper() or None
-    amount = data.get("amount")
-    amount = float(amount) if isinstance(amount, (int, float)) else None
-    if amount is None and order_id:
-        row = orders_repo.get_order(conn, order_id)
-        amount = float(row["amount"]) if row is not None else None
     model = (
         config.anthropic_model if config.llm_provider == "anthropic"
         else config.openai_model
     )
-    return Intake(order_id, amount, str(data.get("reason") or "customer refund")[:140],
-                  f"llm:{model}")
+    parsed = parse_llm_response(text, model=model)
+    if parsed is None:
+        return None
+    order_id = parsed.order_id
+    amount = parsed.amount
+    if amount is None and order_id:
+        row = orders_repo.get_order(conn, order_id)
+        amount = float(row["amount"]) if row is not None else None
+    return Intake(
+        order_id, amount, parsed.reason, parsed.source,
+        confidence=parsed.confidence,
+        needs_human=parsed.needs_human or parsed.confidence < 0.5,
+    )
 
 
 def parse_message(message: str, config: Config, conn: sqlite3.Connection) -> Intake:

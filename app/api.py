@@ -273,7 +273,9 @@ def intake(payload: IntakePayload) -> dict:
         run_id = None
         error = None
         if payload.run:
-            if not parsed.order_id or parsed.amount is None:
+            if parsed.needs_human:
+                error = "The intake needs human review before execution."
+            elif not parsed.order_id or parsed.amount is None:
                 error = "Could not find an order id and amount in that message."
             else:
                 try:
@@ -297,6 +299,8 @@ def intake(payload: IntakePayload) -> dict:
         body["intake"] = {
             "order_id": parsed.order_id, "amount": parsed.amount,
             "reason": parsed.reason, "source": parsed.source,
+            "confidence": parsed.confidence,
+            "needs_human": parsed.needs_human,
             "run_id": run_id, "error": error,
         }
         return body
