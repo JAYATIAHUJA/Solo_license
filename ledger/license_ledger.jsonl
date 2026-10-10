@@ -1,1 +1,2 @@
 {"ts": "2026-10-10T22:40:04.043718+00:00", "task_class": "refund", "kind": "promote", "from_level": 2, "to_level": 3, "reason": "3 consecutive clean runs; earned L3 (Full auto (audited)).", "run_id": 13, "trace_id": "be56b0e53369fd000960c0579eab856e"}
+{"ts": "2026-10-10T22:40:09.507136+00:00", "task_class": "refund", "kind": "demote", "from_level": 3, "to_level": 0, "reason": "Intended refund delta $20.00 but SQLite moved $0.00. Tool response cannot be trusted.", "run_id": 14, "trace_id": "abcd6b602be4cc7bed00dc68b8f7ccc0"}
