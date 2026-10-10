@@ -88,11 +88,35 @@ class RefundWorker:
         idempotency_key: str | None = None,
         actor: Actor = SYSTEM_ACTOR,
     ) -> RunResult:
+        trace = self._tracer.start_trace("refund")
+        try:
+            return self._run_refund(
+                request,
+                task_class=task_class,
+                approved=approved,
+                idempotency_key=idempotency_key,
+                actor=actor,
+                trace=trace,
+            )
+        except Exception as error:
+            trace.span("run.error", status="error", error_type=type(error).__name__)
+            trace.close()
+            raise
+
+    def _run_refund(
+        self,
+        request: RefundRequest,
+        *,
+        task_class: str,
+        approved: bool,
+        idempotency_key: str | None,
+        actor: Actor,
+        trace,
+    ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
         # Peek, don't consume: an armed fault only bends a run that actually
         # executes, so a draft or suggestion leaves it armed for the next one.
         armed_effects = effects_for(self._faults.peek(task_class))
-        trace = self._tracer.start_trace("refund")
         trace.span(
             "license.check",
             level=state.effective_level.name,

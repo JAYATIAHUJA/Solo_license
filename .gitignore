@@ -34,3 +34,9 @@ htmlcov/
 # Generated evidence artifacts (regenerate with scripts.generate_evidence)
 artifacts/evidence_report.md
 artifacts/evidence_report.json
+
+# Local scratch / tool state
+tmp/
+.tmp_pytest*/
+.entire/logs/
+data/ledger-repo/

@@ -9,7 +9,7 @@ uvicorn>=0.30,<1.0
 # Observability: neatlogs Python SDK (agent tracing + detections).
 # The code degrades gracefully to a local span recorder if this import
 # is unavailable, so the demo always runs (see sololicense/observability).
-neatlogs>=0.1.0 ; python_version >= "3.11"
+neatlogs>=1.4.26 ; python_version >= "3.11"
 
 # LLM planner. Either provider works; the agent falls back to a
 # deterministic planner when no API key is configured.

@@ -29,13 +29,12 @@ class Trace:
     trace_id: str
     client: NeatlogsClient
     spans: list[Span] = field(default_factory=list)
+    remote_workflow: object | None = None
 
     def span(self, name: str, status: str = "ok", **attributes) -> None:
         """Record a step. Forwarded to neatlogs immediately; mirrored on flush."""
         self.spans.append(Span(name=name, attributes=attributes, status=status))
-        self.client.log_event(
-            name, {"trace_id": self.trace_id, "status": status, **attributes}
-        )
+        self.client.record_span(self.remote_workflow, name, status, attributes)
 
     def flush(self, conn: sqlite3.Connection, run_id: int | None) -> None:
         """Persist every collected span to the local mirror. Caller commits."""
@@ -48,6 +47,12 @@ class Trace:
                 attributes=s.attributes,
                 status=s.status,
             )
+        self.close()
+
+    def close(self) -> None:
+        """End the remote workflow exactly once, after local persistence."""
+        self.client.finish_workflow(self.remote_workflow)
+        self.remote_workflow = None
 
 
 class Tracer:
@@ -58,5 +63,6 @@ class Tracer:
 
     def start_trace(self, name: str) -> Trace:
         trace = Trace(trace_id=uuid.uuid4().hex, client=self._client)
+        trace.remote_workflow = self._client.start_workflow(trace.trace_id)
         trace.span("trace.start", kind=name)
         return trace

@@ -54,6 +54,13 @@ _authenticator: TokenAuthenticator | None = None
 _lock = RLock()
 
 
+@app.on_event("shutdown")
+def shutdown_neatlogs() -> None:
+    """Flush remote traces when the long-running API process exits."""
+    if _context is not None:
+        _context.neatlogs.shutdown()
+
+
 # --- payloads -------------------------------------------------------------
 
 class RefundPayload(BaseModel):
