@@ -1,0 +1,31 @@
+.ap-launch { position: fixed; right: 20px; bottom: 20px; z-index: 60; box-shadow: 4px 4px 0 var(--ink); }
+
+.ap {
+  position: fixed; right: 20px; bottom: 20px; z-index: 70;
+  width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 40px);
+  display: grid; grid-template-rows: auto auto 1fr auto;
+  background: var(--paper); border: 1px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+}
+.ap-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--ink); }
+
+.ap-steps { list-style: none; margin: 0; padding: 8px 14px; display: grid; gap: 2px; border-bottom: 1px solid var(--hair); max-height: 34vh; overflow-y: auto; }
+.ap-steps button { width: 100%; display: flex; gap: 10px; align-items: center; padding: 5px 0; font-size: 14px; text-align: left; color: var(--muted); }
+.ap-steps button:disabled { cursor: default; }
+.ap-steps i { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 1px solid currentColor; font: 500 10px var(--font-mono); font-style: normal; }
+.ap-steps .is-done button { color: var(--ink); }
+.ap-steps .is-on button { color: var(--ink); font-weight: 500; }
+.ap-steps .is-on i { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.ap-say { padding: 14px 16px; overflow-y: auto; }
+.ap-say h3 { margin: 4px 0 8px; font-size: 26px; line-height: 1.05; font-weight: 400; }
+.ap-say p { margin: 0; font-size: 15px; line-height: 1.5; }
+.ap-tool { display: inline-block; padding: 2px 6px; border: 1px solid var(--ink); }
+.ap-working { margin-top: 10px !important; color: var(--muted); }
+.ap-error { margin-top: 10px !important; display: flex; gap: 6px; align-items: center; color: var(--signal); }
+
+.ap-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--ink); }
+
+@media (max-width: 600px) {
+  .ap { right: 16px; bottom: 16px; box-shadow: 4px 4px 0 var(--ink); }
+  .ap-launch { right: 16px; bottom: 16px; }
+}

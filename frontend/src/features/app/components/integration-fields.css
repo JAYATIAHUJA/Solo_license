@@ -1,0 +1,8 @@
+.if-block { display: grid; gap: 16px; min-width: 0; }
+.if-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
+.if-test { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.if-ok, .if-bad { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+.if-bad { color: var(--signal); }
+@media (max-width: 640px) {
+  .if-grid { grid-template-columns: 1fr; }
+}

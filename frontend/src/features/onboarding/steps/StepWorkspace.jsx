@@ -12,7 +12,7 @@ export function StepWorkspace({ form, set }) {
           onChange={(e) => set({ business_name: e.target.value })}
           maxLength={60}
         />
-        <small>At least two characters.</small>
+        <small>At least two characters. Shown on every screen, in the ledger and in alerts.</small>
       </label>
     </>
   );

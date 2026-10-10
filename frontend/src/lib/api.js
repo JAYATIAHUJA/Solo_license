@@ -1,34 +1,58 @@
-/** Thin fetch wrapper for the FastAPI adapter (proxied at /api by Vite). */
-export async function request(path, { method = 'GET', body } = {}) {
+/** Thin fetch wrapper for the FastAPI adapter (proxied at /api by Vite).
+ *  Every request carries the session's bearer token; the token lives only in
+ *  sessionStorage (never in source, never in VITE_* variables). */
+import { clearSession, getToken } from './session.js';
+
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export async function request(path, { method = 'GET', body, auth = true } = {}) {
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  const token = auth ? getToken() : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
   let response;
   try {
     response = await fetch(path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error('The API is not reachable. Start it with `make run-api`.');
+    throw new ApiError('The API is not reachable. Start it with `make run-api`.', 0);
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401 && auth) clearSession();
     const detail = Array.isArray(data.detail) ? data.detail.map((d) => d.msg).join('; ') : data.detail;
-    throw new Error(detail || `Request failed (${response.status}).`);
+    throw new ApiError(detail || `Request failed (${response.status}).`, response.status);
   }
   return data;
 }
 
 export const api = {
+  session: () => request('/api/session', { auth: false }),
+  demoSession: (name) => request('/api/session/demo', { method: 'POST', body: { name }, auth: false }),
+  me: () => request('/api/session/me'),
   dashboard: (runId) => request(`/api/dashboard${runId ? `?run_id=${runId}` : ''}`),
-  refund: (body) => request('/api/refunds', { method: 'POST', body }),
+  /** Run one action: { order_id, amount?, reason, task_class }. */
+  runAction: (body) => request('/api/runs', { method: 'POST', body }),
+  refund: (body) => request('/api/runs', { method: 'POST', body }),
   intake: (message) => request('/api/intake', { method: 'POST', body: { message, run: true } }),
   approve: (runId) => request(`/api/runs/${runId}/approve`, { method: 'POST' }),
-  arm: (mode) => request('/api/faults', { method: 'POST', body: { mode } }),
-  restore: (level, reason) => request('/api/restore', { method: 'POST', body: { level, reason } }),
+  arm: (mode, taskClass = 'refund') => request('/api/faults', { method: 'POST', body: { mode, task_class: taskClass } }),
+  restore: (level, reason, taskClass = 'refund') => request('/api/restore', { method: 'POST', body: { level, reason, task_class: taskClass } }),
   addOrder: (order) => request('/api/orders', { method: 'POST', body: order }),
   deleteOrder: (id) => request(`/api/orders/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   saveSettings: (values) => request('/api/settings', { method: 'PUT', body: { values } }),
   testLlm: (values) => request('/api/settings/test-llm', { method: 'POST', body: { values } }),
+  testNeatlogs: (values) => request('/api/settings/test-neatlogs', { method: 'POST', body: { values } }),
+  testAlert: (values) => request('/api/settings/test-alert', { method: 'POST', body: { values } }),
   onboard: (body) => request('/api/onboarding/complete', { method: 'POST', body }),
   reseed: () => request('/api/reseed', { method: 'POST' }),
+  topUp: (taskClass = 'refund', count = 4) => request('/api/demo/top-up', { method: 'POST', body: { task_class: taskClass, count } }),
 };

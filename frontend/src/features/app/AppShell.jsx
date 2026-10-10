@@ -6,14 +6,16 @@ import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Toast } from './components/Toast.jsx';
 import { HandIcon } from '../../components/icons/HandIcon.jsx';
+import { Autopilot } from './autopilot/Autopilot.jsx';
 import './app.css';
 
 export function AppShell() {
-  const { data, error, load } = useStore();
+  const { data, error, status, load } = useStore();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => setNavOpen(false), [location.pathname]);
 
+  if (!data && status === 401) return <Navigate to="/access?next=%2Fapp" replace />;
   if (!data) {
     return (
       <div className="app-boot">
@@ -52,6 +54,7 @@ export function AppShell() {
         </AnimatePresence>
       </div>
       <Toast />
+      <Autopilot />
     </div>
   );
 }

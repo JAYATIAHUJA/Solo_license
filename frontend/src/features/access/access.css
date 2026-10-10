@@ -1,0 +1,22 @@
+.ax .ob-main { gap: 22px; justify-content: center; }
+.ax .ob-title { margin-top: 4px; }
+.ax-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; font-size: 15px; }
+.ax-points li { display: flex; gap: 10px; align-items: center; }
+
+.ax-card { display: grid; gap: 18px; padding: 24px; border: 1px solid var(--ink); background: var(--sheet); box-shadow: 6px 6px 0 var(--ink); max-width: 560px; }
+.ax-card-head, .ax-token summary { display: flex; gap: 14px; align-items: flex-start; }
+.ax-card-head b, .ax-token summary b { display: block; font-weight: 500; font-size: 18px; }
+.ax-card-head small, .ax-token summary small { color: var(--muted); }
+.ax-token { box-shadow: none; }
+.ax-token summary { cursor: pointer; list-style: none; }
+.ax-token summary::-webkit-details-marker { display: none; }
+.ax-token-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.ax-note { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.ax-note code { font-family: var(--font-mono); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .ax .ob-aside-card { gap: 12px; }
+  .ax-points { display: none; }
+  .ax-token-form { grid-template-columns: 1fr; }
+  .ax-card { box-shadow: 4px 4px 0 var(--ink); padding: 18px; }
+}
