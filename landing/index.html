@@ -6,33 +6,24 @@
 <title>Solo License — autonomy you earn</title>
 <meta name="description" content="An operations agent that earns the right to act unattended, task class by task class, from a measured reliability track record — and loses it the instant a detection fires." />
 <meta name="theme-color" content="#031b36" />
-
-<!-- Open Graph / social (drop assets/og.jpg to populate the preview) -->
 <meta property="og:title" content="Solo License — autonomy you earn" />
 <meta property="og:description" content="Earned-permission ops agent. Demotion driven by detections, restored from one evidence packet, priced as a margin lever." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="assets/og.jpg" />
-
-<!-- Dial favicon (inline SVG) -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23031b36'/%3E%3Cpath d='M7 22a9 9 0 0 1 18 0' fill='none' stroke='%23fdffee' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='16' y1='22' x2='22' y2='13' stroke='%23ff2c17' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E" />
-
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
 
 <style>
-  /* ============================================================
-     Design tokens — adapted from thinkcompany.com's midnight_navy
-     theme (navy #031b36 / cream #fdffee / signature red #ff2c17).
-     ============================================================ */
   :root{
     --navy:#031b36; --navy-900:#020f21; --navy-800:#0b2c52; --navy-700:#13335c;
     --cream:#fdffee; --red:#ff2c17; --aqua:#b6ffff; --rose:#ffaaf6;
-    --charcoal:#2d2d2d; --ink-60:rgba(253,255,238,.62); --ink-40:rgba(253,255,238,.40);
-    --line:rgba(253,255,238,.14);
-    --maxw:1200px; --gutter:clamp(16px,5vw,64px);
-    --r:16px; --r-lg:24px;
-    --ease:cubic-bezier(.2,.7,.2,1);
+    --ink-70:rgba(253,255,238,.72); --ink-50:rgba(253,255,238,.52); --ink-35:rgba(253,255,238,.35);
+    --line:rgba(253,255,238,.14); --line-2:rgba(253,255,238,.08);
+    --maxw:1220px; --gutter:clamp(18px,5vw,72px);
+    --r:18px; --r-lg:26px;
+    --ease:cubic-bezier(.19,1,.22,1);
     --f-head:"Space Grotesk",system-ui,sans-serif;
     --f-body:"Inter",system-ui,sans-serif;
     --f-mono:"Space Mono",ui-monospace,monospace;
@@ -41,248 +32,253 @@
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-  body{
-    font-family:var(--f-body); background:var(--navy); color:var(--cream);
-    -webkit-font-smoothing:antialiased; line-height:1.55; overflow-x:hidden;
-  }
+  body{font-family:var(--f-body);background:var(--navy);color:var(--cream);
+    -webkit-font-smoothing:antialiased;line-height:1.55;overflow-x:hidden}
   a{color:inherit;text-decoration:none}
   img,video{max-width:100%;display:block}
   ::selection{background:var(--red);color:var(--cream)}
+  .grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.045;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
   .wrap{max-width:var(--maxw);margin:0 auto;padding-inline:var(--gutter)}
-  .kicker{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--red)}
-  .serif-it{font-family:var(--f-serif);font-style:italic;font-weight:400}
+  .kicker{font-family:var(--f-mono);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase;color:var(--red);
+    display:inline-flex;align-items:center;gap:.6em}
+  .kicker::before{content:"";width:26px;height:1px;background:var(--red);display:inline-block}
+  .serif-it{font-family:var(--f-serif);font-style:italic}
 
-  h1,h2,h3{font-family:var(--f-head);font-weight:600;line-height:1.02;
-    letter-spacing:-.02em}
-  h1{font-size:clamp(2.6rem,7.2vw,5.5rem)}
-  h2{font-size:clamp(2rem,4.6vw,3.4rem);letter-spacing:-.025em}
+  h2,h3{font-family:var(--f-head);font-weight:600;line-height:1.0;letter-spacing:-.025em}
+  h2{font-size:clamp(2rem,4.2vw,3.3rem);letter-spacing:-.03em}
   h3{font-size:1.25rem;letter-spacing:-.01em}
-  .lead{font-size:clamp(1.05rem,1.7vw,1.3rem);color:var(--ink-60);max-width:48ch}
+  .lead{font-size:clamp(1rem,1.4vw,1.2rem);color:var(--ink-70);max-width:52ch;line-height:1.5}
 
-  /* ---- buttons ---- */
-  .btn{display:inline-flex;align-items:center;gap:.6em;font-family:var(--f-head);
-    font-weight:500;font-size:1rem;padding:.9em 1.4em;border-radius:999px;
-    border:1px solid transparent;cursor:pointer;transition:transform .25s var(--ease),
-    background .25s,color .25s,border-color .25s;will-change:transform}
+  .btn{display:inline-flex;align-items:center;gap:.6em;font-family:var(--f-head);font-weight:500;font-size:1rem;
+    padding:1em 1.6em;border-radius:999px;border:1px solid transparent;cursor:pointer;
+    transition:transform .4s var(--ease),background .3s,color .3s,border-color .3s,box-shadow .3s;will-change:transform}
   .btn-primary{background:var(--cream);color:var(--navy)}
-  .btn-primary:hover{transform:translateY(-3px);background:var(--red);color:var(--cream)}
-  .btn-ghost{border-color:var(--line);color:var(--cream)}
-  .btn-ghost:hover{transform:translateY(-3px);border-color:var(--cream)}
+  .btn-primary:hover{transform:translateY(-4px);background:var(--red);color:var(--cream);box-shadow:0 20px 44px -16px rgba(255,44,23,.6)}
+  .btn-ghost{border-color:var(--line);color:var(--cream);background:rgba(253,255,238,.03)}
+  .btn-ghost:hover{transform:translateY(-4px);border-color:var(--cream)}
   .btn svg{width:1.05em;height:1.05em}
 
-  /* ============================================================ NAV */
-  header.nav{position:fixed;inset:0 0 auto 0;z-index:50;
-    transition:background .3s,backdrop-filter .3s,border-color .3s;
-    border-bottom:1px solid transparent}
-  header.nav.scrolled{background:rgba(3,27,54,.82);backdrop-filter:blur(14px);
-    border-bottom-color:var(--line)}
-  .nav-row{display:flex;align-items:center;justify-content:space-between;
-    height:72px}
-  .brand{display:flex;align-items:center;gap:.6rem;font-family:var(--f-head);
-    font-weight:600;font-size:1.12rem;letter-spacing:-.01em}
-  .brand .glyph{width:30px;height:30px}
-  .nav-links{display:flex;align-items:center;gap:2rem}
-  .nav-links a.navlink{font-family:var(--f-mono);font-size:.82rem;
-    color:var(--ink-60);letter-spacing:.03em;transition:color .2s}
+  /* ================= NAV ================= */
+  header.nav{position:fixed;inset:0 0 auto 0;z-index:60;transition:background .4s,backdrop-filter .4s,border-color .4s;border-bottom:1px solid transparent}
+  header.nav.scrolled{background:rgba(2,15,33,.72);backdrop-filter:blur(16px) saturate(1.3);border-bottom-color:var(--line-2)}
+  .nav-row{display:flex;align-items:center;justify-content:space-between;height:76px}
+  .brand{display:flex;align-items:center;gap:.6rem;font-family:var(--f-head);font-weight:600;font-size:1.15rem;letter-spacing:-.02em}
+  .brand .glyph{width:32px;height:32px}
+  .nav-links{display:flex;align-items:center;gap:2.2rem}
+  .nav-links a.navlink{font-family:var(--f-mono);font-size:.8rem;color:var(--ink-50);letter-spacing:.02em;transition:color .2s}
   .nav-links a.navlink:hover{color:var(--cream)}
-  .nav-cta{padding:.6em 1.1em;font-size:.9rem}
-  @media(max-width:860px){.nav-links a.navlink{display:none}}
+  .nav-cta{padding:.62em 1.15em;font-size:.88rem}
+  @media(max-width:880px){.nav-links a.navlink{display:none}}
 
-  /* ============================================================ HERO */
-  .hero{position:relative;min-height:100svh;display:flex;align-items:center;
-    padding-top:96px;padding-bottom:48px;overflow:hidden}
-  .hero-media{position:absolute;inset:0;z-index:0}
-  .hero-media video{width:100%;height:100%;object-fit:cover;opacity:.28}
-  .hero-grid-bg{position:absolute;inset:0;z-index:0;
-    background:
-      radial-gradient(1200px 700px at 72% 18%,rgba(182,255,255,.10),transparent 60%),
-      radial-gradient(900px 600px at 15% 90%,rgba(255,44,23,.10),transparent 60%),
-      linear-gradient(var(--line) 1px,transparent 1px) 0 0/48px 48px,
-      linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/48px 48px;
-    mask-image:radial-gradient(120% 100% at 50% 0%,#000 55%,transparent 100%)}
-  .hero-glow{position:absolute;z-index:0;width:60vw;height:60vw;max-width:720px;
-    max-height:720px;right:-8vw;top:-12vw;border-radius:50%;
-    background:radial-gradient(circle,rgba(255,44,23,.22),transparent 65%);
-    filter:blur(20px);animation:float 14s ease-in-out infinite}
-  @keyframes float{50%{transform:translate(-30px,40px) scale(1.08)}}
+  /* ================= HERO (floating collage) ================= */
+  .hero{position:relative;height:100svh;min-height:640px;display:flex;align-items:center;justify-content:center;
+    text-align:center;overflow:hidden;padding:104px 0 40px}
+  /* background: concentric arcs + glows */
+  .hero-bg{position:absolute;inset:0;z-index:0;pointer-events:none}
+  .arcs{position:absolute;inset:0;background:repeating-radial-gradient(circle at 50% 116%,transparent 0 76px,rgba(253,255,238,.045) 76px 77px);
+    -webkit-mask-image:radial-gradient(135% 92% at 50% 100%,#000 42%,transparent 76%);mask-image:radial-gradient(135% 92% at 50% 100%,#000 42%,transparent 76%)}
+  .glow{position:absolute;border-radius:50%;filter:blur(14px)}
+  .glow.a{right:-6%;top:-12%;width:min(56vw,660px);height:min(56vw,660px);background:radial-gradient(circle,rgba(182,255,255,.14),transparent 62%)}
+  .glow.b{left:-10%;bottom:-16%;width:min(56vw,620px);height:min(56vw,620px);background:radial-gradient(circle,rgba(255,44,23,.14),transparent 62%)}
+  .dot{position:absolute;border-radius:50%}
+  .dot.a{left:3.5%;bottom:5%;width:42px;height:42px;background:var(--aqua);opacity:.9}
+  .dot.b{left:8.5%;bottom:-1%;width:42px;height:42px;background:var(--red)}
 
-  .hero .wrap{position:relative;z-index:2;display:grid;
-    grid-template-columns:1.05fr .95fr;gap:clamp(32px,5vw,72px);align-items:center;width:100%}
-  @media(max-width:920px){.hero .wrap{grid-template-columns:1fr}}
+  .hero-center{position:relative;z-index:5;max-width:760px;margin:0 auto}
+  .hero-center .kicker{justify-content:center;margin-bottom:1.3rem}
+  .hero h1{font-family:var(--f-serif);font-weight:400;font-size:clamp(2.7rem,6.6vw,5.4rem);line-height:1.02;
+    letter-spacing:-.01em;margin:0 0 1.2rem}
+  .hero h1 .em{color:var(--red);font-style:italic} .hero h1 .aqua{color:var(--aqua);font-style:italic}
+  .hero-center .lead{margin:0 auto 2rem;max-width:46ch}
+  .hero-ctas{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
 
-  .hero h1{margin:.5rem 0 1.2rem}
-  .hero h1 .em{color:var(--red)}
-  .hero h1 .aqua{color:var(--aqua)}
-  .hero-ctas{display:flex;flex-wrap:wrap;gap:.8rem;margin:2rem 0 1.6rem}
-  .trust-row{display:flex;flex-wrap:wrap;gap:1.4rem;font-family:var(--f-mono);
-    font-size:.74rem;color:var(--ink-40);letter-spacing:.04em}
-  .trust-row b{color:var(--aqua);font-weight:400}
+  /* floating cards */
+  .fc{position:absolute;z-index:4;opacity:0;animation:pop .85s var(--ease) forwards;animation-delay:var(--d,.1s)}
+  .fc .flt{animation:var(--flt,float1) var(--dur,8s) ease-in-out infinite}
+  @keyframes pop{from{opacity:0;transform:translateY(26px) scale(.94)}to{opacity:1;transform:none}}
+  @keyframes float1{50%{transform:translateY(-14px)}}
+  @keyframes float2{50%{transform:translateY(13px)}}
+  @keyframes float3{50%{transform:translateY(-10px) translateX(7px)}}
+  @media (prefers-reduced-motion:reduce){.fc{opacity:1;animation:none}.fc .flt{animation:none}}
 
-  /* ---- live dial panel (the showpiece) ---- */
-  .panel{background:linear-gradient(180deg,rgba(11,44,82,.55),rgba(3,27,54,.75));
-    border:1px solid var(--line);border-radius:var(--r-lg);padding:26px;
-    backdrop-filter:blur(8px);box-shadow:0 40px 90px -40px rgba(0,0,0,.7)}
-  .panel-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
-  .panel-top .lbl{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;
-    text-transform:uppercase;color:var(--ink-40)}
-  .pill{font-family:var(--f-mono);font-size:.72rem;padding:.35em .75em;border-radius:999px;
-    border:1px solid var(--line);display:inline-flex;align-items:center;gap:.45em;
-    transition:all .35s var(--ease)}
-  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--aqua)}
-  .pill.ok{color:var(--aqua);border-color:rgba(182,255,255,.35)}
-  .pill.alert{color:var(--red);border-color:rgba(255,44,23,.5);background:rgba(255,44,23,.08)}
-  .pill.alert .dot{background:var(--red)}
+  .card{background:linear-gradient(165deg,rgba(19,51,92,.55),rgba(3,27,54,.74));border:1px solid var(--line);
+    border-radius:16px;padding:15px 17px;backdrop-filter:blur(12px);
+    box-shadow:0 34px 76px -40px rgba(0,0,0,.85),inset 0 1px 0 rgba(253,255,238,.07);width:max-content;max-width:258px}
+  .card.lite{background:var(--cream);color:var(--navy);border-color:transparent}
+  .card.alert{background:rgba(255,44,23,.14);border-color:rgba(255,44,23,.5)}
+  .card .chip{font-family:var(--f-mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-35);margin-bottom:9px}
+  .card.lite .chip{color:rgba(3,27,54,.55)}
+  .card .t{font-family:var(--f-head);font-weight:600;font-size:.98rem;line-height:1.25}
+  .card .s{font-size:.78rem;color:var(--ink-50);margin-top:5px;line-height:1.4}
+  .card.lite .s{color:rgba(3,27,54,.68)}
+  .card .mono{font-family:var(--f-mono);font-size:.76rem}
 
-  .ladder-track{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
-  .rung{position:relative;height:84px;border-radius:12px;border:1px solid var(--line);
-    display:flex;flex-direction:column;justify-content:flex-end;padding:10px;
-    background:rgba(253,255,238,.02);transition:all .4s var(--ease)}
-  .rung .lv{font-family:var(--f-head);font-weight:600;font-size:1.1rem}
-  .rung .cap{font-size:.62rem;color:var(--ink-40);line-height:1.2;font-family:var(--f-mono)}
-  .rung[data-on="1"]{background:rgba(182,255,255,.1);border-color:var(--aqua);
-    box-shadow:0 0 0 1px var(--aqua),0 12px 30px -12px rgba(182,255,255,.5)}
-  .rung[data-on="1"] .lv{color:var(--aqua)}
-  .rung.crashed[data-on="1"]{background:rgba(255,44,23,.14);border-color:var(--red);
-    box-shadow:0 0 0 1px var(--red),0 12px 30px -12px rgba(255,44,23,.6)}
-  .rung.crashed[data-on="1"] .lv{color:var(--red)}
-  .meter{height:6px;border-radius:999px;background:rgba(253,255,238,.08);overflow:hidden;margin:16px 0 14px}
-  .meter i{display:block;height:100%;width:0;background:var(--aqua);border-radius:999px;
-    transition:width .5s var(--ease)}
-  .meter.crashed i{background:var(--red)}
-  .feed{font-family:var(--f-mono);font-size:.72rem;line-height:1.9;height:108px;overflow:hidden;
-    color:var(--ink-60);border-top:1px solid var(--line);padding-top:10px}
-  .feed .ln{display:flex;gap:.5em;opacity:0;transform:translateY(6px);animation:ln .4s var(--ease) forwards}
-  .feed .ln.ok b{color:var(--aqua)} .feed .ln.bad b{color:var(--red)}
+  /* positions */
+  .fc-trace{top:15%;left:3.5%}
+  .fc-verify{top:13.5%;right:4%}
+  .fc-detect{top:45%;left:2.5%}
+  .fc-stat{top:43%;right:3%}
+  .fc-commit{bottom:8%;left:9%}
+  .fc-dial{bottom:6%;right:7%}
+  @media(max-width:1180px){.fc-trace,.fc-verify{display:none}}
+  @media(max-width:1024px){
+    .hero{height:auto;min-height:100svh;padding:118px 0 56px;flex-direction:column}
+    .fc-detect,.fc-stat,.fc-commit{display:none}
+    .fc-dial{position:static;margin:36px auto 0;animation:pop .85s var(--ease) forwards}
+    .fc-dial .flt{animation:none}
+  }
+
+  /* waveform */
+  .wave{display:flex;align-items:center;gap:3px;height:26px;margin:4px 0}
+  .wave span{width:3px;border-radius:2px;background:var(--aqua);animation:eq 1.4s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){.wave span{animation:none}}
+  @keyframes eq{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+
+  /* mini dial inside featured card */
+  .dcard{max-width:306px}
+  .dtop{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .dpill{font-family:var(--f-mono);font-size:.66rem;padding:.32em .7em;border-radius:999px;border:1px solid var(--line);
+    display:inline-flex;align-items:center;gap:.45em;color:var(--aqua);border-color:rgba(182,255,255,.35);transition:all .4s var(--ease)}
+  .dpill .d{width:6px;height:6px;border-radius:50%;background:var(--aqua)}
+  .dpill.alert{color:var(--red);border-color:rgba(255,44,23,.55);background:rgba(255,44,23,.1)} .dpill.alert .d{background:var(--red)}
+  .rungs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .rung{height:52px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:flex-end;justify-content:center;
+    padding-bottom:6px;font-family:var(--f-head);font-weight:700;font-size:.82rem;color:var(--ink-50);background:rgba(253,255,238,.02);transition:all .45s var(--ease)}
+  .rung[data-on="1"]{background:rgba(182,255,255,.14);border-color:var(--aqua);color:var(--aqua);box-shadow:0 0 0 1px var(--aqua)}
+  .rung.crashed[data-on="1"]{background:rgba(255,44,23,.16);border-color:var(--red);color:var(--red);box-shadow:0 0 0 1px var(--red)}
+  .dfeed{font-family:var(--f-mono);font-size:.68rem;line-height:1.75;height:40px;overflow:hidden;color:var(--ink-50);margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
+  .dfeed .ln{opacity:0;transform:translateY(5px);animation:ln .4s var(--ease) forwards}
+  .dfeed .ln.ok b{color:var(--aqua)} .dfeed .ln.bad b{color:var(--red)}
   @keyframes ln{to{opacity:1;transform:none}}
 
-  /* ---- marquee ---- */
-  .marquee{border-block:1px solid var(--line);padding:16px 0;overflow:hidden;
-    -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
-            mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
-  .marquee .track{display:flex;gap:2.5rem;white-space:nowrap;width:max-content;
-    animation:scroll 26s linear infinite;font-family:var(--f-mono);font-size:.82rem;
-    color:var(--ink-40);letter-spacing:.06em}
+  .scrollcue{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:5;font-family:var(--f-mono);
+    font-size:.64rem;color:var(--ink-35);letter-spacing:.24em;display:flex;flex-direction:column;align-items:center;gap:7px}
+  .scrollcue .l{width:1px;height:32px;background:linear-gradient(var(--red),transparent);animation:drop 1.9s var(--ease) infinite}
+  @keyframes drop{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}50.1%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+  @media(max-width:1024px){.scrollcue{display:none}}
+
+  /* ================= MARQUEE ================= */
+  .marquee{border-block:1px solid var(--line-2);padding:18px 0;overflow:hidden;background:var(--navy-900);
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+  .marquee .track{display:flex;gap:2.6rem;white-space:nowrap;width:max-content;animation:scroll 32s linear infinite;
+    font-family:var(--f-mono);font-size:.84rem;color:var(--ink-35);letter-spacing:.06em}
   .marquee .track span .s{color:var(--red)}
   @keyframes scroll{to{transform:translateX(-50%)}}
   @media (prefers-reduced-motion:reduce){.marquee .track{animation:none}}
 
-  /* ============================================================ SECTIONS */
-  section{position:relative}
-  .sec{padding:clamp(72px,11vw,150px) 0}
-  .sec-cream{background:var(--cream);color:var(--charcoal)}
-  .sec-cream h2{color:var(--navy)} .sec-cream .kicker{color:var(--red)}
-  .sec-cream .lead{color:rgba(45,45,45,.72)}
-  .sec-head{max-width:62ch;margin-bottom:clamp(40px,6vw,72px)}
-  .sec-head h2{margin:.7rem 0 1rem}
+  /* ================= SECTIONS ================= */
+  .sec{min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding:clamp(96px,11vh,128px) 0;background:var(--navy);border-top:1px solid var(--line-2)}
+  .sec.vivid{background:var(--navy-900)}
+  .sec-head{max-width:66ch;margin-bottom:clamp(30px,4vh,52px)}
+  .sec-head h2{margin:1rem 0 1.2rem}
 
-  /* reveal */
-  .reveal{opacity:0;transform:translateY(26px);
-    transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .reveal{opacity:0;transform:translateY(30px);transition:opacity .9s var(--ease),transform .9s var(--ease)}
   .reveal.in{opacity:1;transform:none}
+  .reveal[data-d="1"]{transition-delay:.08s}.reveal[data-d="2"]{transition-delay:.16s}.reveal[data-d="3"]{transition-delay:.24s}
   @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
 
-  /* ---- loop flow ---- */
-  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-  @media(max-width:860px){.flow{grid-template-columns:1fr 1fr}}
-  .step{border:1px solid var(--line);border-radius:var(--r);padding:22px;position:relative;
-    background:rgba(253,255,238,.02);transition:transform .3s var(--ease),border-color .3s}
-  .step:hover{transform:translateY(-6px);border-color:var(--aqua)}
-  .step .n{font-family:var(--f-mono);font-size:.74rem;color:var(--red)}
-  .step h3{margin:.6rem 0 .4rem;font-size:1.05rem}
-  .step p{font-size:.9rem;color:var(--ink-60)}
-  .branch{margin-top:20px;border:1px dashed rgba(255,44,23,.5);border-radius:var(--r);
-    padding:18px 22px;display:flex;gap:14px;align-items:center;background:rgba(255,44,23,.05)}
-  .branch .tag{font-family:var(--f-mono);font-size:.72rem;color:var(--red);
-    border:1px solid rgba(255,44,23,.5);border-radius:999px;padding:.3em .7em;white-space:nowrap}
-  .branch p{font-size:.92rem;color:var(--ink-60)}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media(max-width:880px){.flow{grid-template-columns:1fr 1fr}}
+  .step{border:1px solid var(--line);border-radius:var(--r);padding:26px;background:rgba(253,255,238,.025);transition:transform .4s var(--ease),border-color .4s,background .4s}
+  .step:hover{transform:translateY(-8px);border-color:var(--aqua);background:rgba(182,255,255,.05)}
+  .step .n{font-family:var(--f-mono);font-size:.76rem;color:var(--red)}
+  .step h3{margin:.7rem 0 .5rem;font-size:1.1rem}.step p{font-size:.92rem;color:var(--ink-50)}
+  .branch{margin-top:22px;border:1px dashed rgba(255,44,23,.5);border-radius:var(--r);padding:20px 24px;display:flex;gap:16px;align-items:center;background:rgba(255,44,23,.06)}
+  .branch .tag{font-family:var(--f-mono);font-size:.72rem;color:var(--red);border:1px solid rgba(255,44,23,.5);border-radius:999px;padding:.35em .8em;white-space:nowrap}
+  .branch p{font-size:.95rem;color:var(--ink-70)}
 
-  /* ---- ladder cards ---- */
   .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-  @media(max-width:980px){.cards{grid-template-columns:1fr 1fr}}
-  @media(max-width:560px){.cards{grid-template-columns:1fr}}
-  .lvl{border:1px solid rgba(45,45,45,.14);border-radius:var(--r);padding:24px;
-    background:#fff;transition:transform .35s var(--ease),box-shadow .35s}
-  .lvl:hover{transform:translateY(-8px);box-shadow:0 30px 60px -30px rgba(3,27,54,.4)}
-  .lvl .tag{font-family:var(--f-mono);font-size:.78rem;color:var(--red)}
-  .lvl .big{font-family:var(--f-head);font-weight:700;font-size:2.4rem;color:var(--navy);
-    line-height:1;margin:.3rem 0 .8rem}
-  .lvl h3{color:var(--navy);margin-bottom:.4rem}
-  .lvl p{font-size:.9rem;color:rgba(45,45,45,.7)}
+  @media(max-width:1000px){.cards{grid-template-columns:1fr 1fr}}@media(max-width:560px){.cards{grid-template-columns:1fr}}
+  .lvl{border:1px solid var(--line);border-radius:var(--r);padding:26px;background:rgba(253,255,238,.025);transition:transform .45s var(--ease),box-shadow .45s,border-color .45s;position:relative;overflow:hidden}
+  .lvl::after{content:"";position:absolute;inset:auto auto -40% -40%;width:80%;height:80%;border-radius:50%;background:radial-gradient(circle,rgba(182,255,255,.14),transparent 70%);opacity:0;transition:opacity .45s}
+  .lvl:hover{transform:translateY(-10px);border-color:var(--aqua);box-shadow:0 36px 70px -34px rgba(0,0,0,.8)}.lvl:hover::after{opacity:1}
+  .lvl .tag{font-family:var(--f-mono);font-size:.76rem;color:var(--red)}
+  .lvl .big{font-family:var(--f-head);font-weight:700;font-size:2.6rem;color:var(--aqua);line-height:1;margin:.4rem 0 .9rem}
+  .lvl h3{margin-bottom:.5rem}.lvl p{font-size:.92rem;color:var(--ink-50)}
 
-  /* ---- detections / tools shared grid ---- */
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  @media(max-width:860px){.grid3{grid-template-columns:1fr}}
-  .det{border:1px solid var(--line);border-radius:var(--r);padding:24px;
-    background:rgba(253,255,238,.02);transition:transform .3s var(--ease),border-color .3s}
-  .det:hover{transform:translateY(-6px);border-color:var(--red)}
-  .det .code{font-family:var(--f-mono);font-size:.76rem;color:var(--aqua);
-    background:var(--navy-900);border:1px solid var(--line);border-radius:10px;
-    padding:12px;margin:14px 0;overflow:auto}
-  .det h3{margin-bottom:.4rem} .det p{font-size:.9rem;color:var(--ink-60)}
-  .det .fires{font-family:var(--f-mono);font-size:.72rem;color:var(--red);margin-top:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:880px){.grid3{grid-template-columns:1fr}}
+  .det{border:1px solid var(--line);border-radius:var(--r);padding:26px;background:rgba(253,255,238,.025);transition:transform .4s var(--ease),border-color .4s}
+  .det:hover{transform:translateY(-8px);border-color:var(--red)}
+  .det .code{font-family:var(--f-mono);font-size:.78rem;color:var(--aqua);background:rgba(2,15,33,.85);border:1px solid var(--line);border-radius:12px;padding:14px;margin:16px 0;overflow:auto}
+  .det h3{margin-bottom:.5rem}.det p{font-size:.92rem;color:var(--ink-50)}.det .fires{font-family:var(--f-mono);font-size:.74rem;color:var(--red);margin-top:14px}
 
-  .tool{border:1px solid rgba(45,45,45,.14);border-radius:var(--r);padding:26px;background:#fff}
+  .tool{border:1px solid var(--line);border-radius:var(--r);padding:28px;background:rgba(253,255,238,.025);transition:transform .4s var(--ease),border-color .4s}
+  .tool:hover{transform:translateY(-8px);border-color:var(--aqua)}
   .tool .eyebrow{font-family:var(--f-mono);font-size:.76rem;color:var(--red)}
-  .tool h3{color:var(--navy);margin:.5rem 0 .6rem;font-size:1.3rem}
-  .tool p{font-size:.92rem;color:rgba(45,45,45,.72)}
-  .tool ul{list-style:none;margin-top:14px;font-size:.86rem;color:rgba(45,45,45,.8)}
-  .tool li{padding-left:1.2em;position:relative;margin:.4em 0}
-  .tool li::before{content:"→";position:absolute;left:0;color:var(--red)}
+  .tool h3{margin:.6rem 0 .7rem;font-size:1.4rem}.tool p{font-size:.94rem;color:var(--ink-50)}
+  .tool ul{list-style:none;margin-top:16px;font-size:.88rem;color:var(--ink-70)}
+  .tool li{padding-left:1.3em;position:relative;margin:.5em 0}.tool li::before{content:"→";position:absolute;left:0;color:var(--red)}
 
-  /* ---- economics ---- */
-  .econ{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(32px,5vw,64px);align-items:center}
-  @media(max-width:900px){.econ{grid-template-columns:1fr}}
-  .stat-row{display:flex;gap:40px;flex-wrap:wrap;margin:8px 0 28px}
-  .stat .num{font-family:var(--f-head);font-weight:700;font-size:clamp(2.4rem,5vw,3.6rem);
-    line-height:1;letter-spacing:-.03em}
-  .stat .num.good{color:var(--aqua)} .stat .num.bad{color:var(--red)}
-  .stat .cap{font-family:var(--f-mono);font-size:.74rem;color:var(--ink-40);margin-top:.5rem;max-width:22ch}
-  .bars{display:flex;gap:28px;align-items:flex-end;height:280px;
-    border-bottom:1px solid var(--line);padding:0 10px}
-  .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:12px;height:100%}
-  .bar .col{width:100%;max-width:120px;border-radius:12px 12px 0 0;height:0;
-    transition:height 1.1s var(--ease);position:relative}
-  .bar.good .col{background:linear-gradient(180deg,var(--aqua),rgba(182,255,255,.25))}
-  .bar.bad .col{background:linear-gradient(180deg,var(--red),rgba(255,44,23,.2))}
-  .bar .bl{font-family:var(--f-mono);font-size:.72rem;color:var(--ink-60);text-align:center}
-  .bar .bl b{display:block;font-family:var(--f-head);font-size:1rem;color:var(--cream)}
+  .econ{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(36px,5vw,72px);align-items:center}@media(max-width:920px){.econ{grid-template-columns:1fr}}
+  .stat-row{display:flex;gap:44px;flex-wrap:wrap;margin:10px 0 30px}
+  .stat .num{font-family:var(--f-head);font-weight:700;font-size:clamp(2.6rem,5.4vw,4rem);line-height:1;letter-spacing:-.04em}
+  .stat .num.good{color:var(--aqua)}.stat .num.bad{color:var(--red)}
+  .stat .cap{font-family:var(--f-mono);font-size:.74rem;color:var(--ink-35);margin-top:.6rem;max-width:22ch}
+  .bars{display:flex;gap:30px;align-items:flex-end;height:clamp(200px,34vh,280px);border-bottom:1px solid var(--line);padding:0 10px}
+  .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:14px;height:100%}
+  .bar .col{width:100%;max-width:130px;border-radius:14px 14px 0 0;height:0;transition:height 1.2s var(--ease)}
+  .bar.good .col{background:linear-gradient(180deg,var(--aqua),rgba(182,255,255,.2))}.bar.bad .col{background:linear-gradient(180deg,var(--red),rgba(255,44,23,.15))}
+  .bar .bl{font-family:var(--f-mono);font-size:.74rem;color:var(--ink-50);text-align:center}.bar .bl b{display:block;font-family:var(--f-head);font-size:1.05rem;color:var(--cream)}
 
-  /* ---- evidence terminal ---- */
-  .term{background:var(--navy-900);border:1px solid var(--line);border-radius:var(--r-lg);
-    overflow:hidden;box-shadow:0 40px 90px -40px rgba(0,0,0,.7)}
-  .term .bar3{display:flex;gap:7px;padding:14px 16px;border-bottom:1px solid var(--line)}
-  .term .bar3 i{width:11px;height:11px;border-radius:50%;background:var(--line)}
-  .term .bar3 i:first-child{background:var(--red)}
-  .term pre{font-family:var(--f-mono);font-size:.8rem;line-height:1.85;padding:22px;
-    overflow:auto;color:var(--ink-60);margin:0}
-  .term pre .c{color:var(--ink-40)} .term pre .g{color:var(--aqua)}
-  .term pre .r{color:var(--red)} .term pre .w{color:var(--cream)}
+  .term{background:var(--navy-900);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 50px 110px -50px rgba(0,0,0,.85)}
+  .term .bar3{display:flex;gap:8px;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .term .bar3 i{width:11px;height:11px;border-radius:50%;background:var(--line)}.term .bar3 i:first-child{background:var(--red)}
+  .term pre{font-family:var(--f-mono);font-size:.82rem;line-height:1.9;padding:24px;overflow:auto;color:var(--ink-50);margin:0}
+  .term pre .c{color:var(--ink-35)}.term pre .g{color:var(--aqua)}.term pre .r{color:var(--red)}.term pre .w{color:var(--cream)}
 
-  /* ---- CTA ---- */
-  .cta{text-align:center;padding:clamp(80px,12vw,160px) 0}
-  .cta h2{font-size:clamp(2.4rem,6vw,4.4rem);margin-bottom:1.4rem}
-  .cta .lead{margin:0 auto 2.4rem}
-  .cta-btns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+  .cta{min-height:100svh;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:clamp(88px,10vh,120px) 0;background:var(--navy-900);border-top:1px solid var(--line-2)}
+  .cta h2{font-size:clamp(2.4rem,6vw,4.4rem);margin-bottom:1.6rem}.cta .lead{margin:0 auto 2.6rem}
+  .cta-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
 
-  footer{border-top:1px solid var(--line);padding:40px 0}
-  .foot-row{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;
-    font-family:var(--f-mono);font-size:.76rem;color:var(--ink-40)}
+  footer{border-top:1px solid var(--line);padding:44px 0;background:var(--navy-900)}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;font-family:var(--f-mono);font-size:.76rem;color:var(--ink-35)}
   .foot-row a:hover{color:var(--cream)}
-
-  .scrollcue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
-    font-family:var(--f-mono);font-size:.68rem;color:var(--ink-40);letter-spacing:.2em;
-    display:flex;flex-direction:column;align-items:center;gap:8px;z-index:3}
-  .scrollcue .ln{width:1px;height:34px;background:linear-gradient(var(--red),transparent);
-    animation:drop 1.8s var(--ease) infinite}
-  @keyframes drop{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}
-    50.1%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+  /* Light product direction: intentionally separate from the app's dark theme. */
+  :root{--navy:#ffffff;--navy-900:#f5f7f4;--navy-800:#edf6ef;--navy-700:#dcecdf;--cream:#131512;--red:#28b95f;--aqua:#28b95f;--rose:#dff6e6;--ink-70:rgba(19,21,18,.72);--ink-50:rgba(19,21,18,.52);--ink-35:rgba(19,21,18,.35);--line:rgba(19,21,18,.13);--line-2:rgba(19,21,18,.08)}
+  body{background:#fff;color:var(--cream)}
+  .grain{opacity:.025;mix-blend-mode:multiply}
+  header.nav.scrolled{background:rgba(255,255,255,.84);backdrop-filter:blur(18px) saturate(1.1)}
+  .brand .glyph rect{fill:#151714}.brand .glyph path,.brand .glyph line{stroke:#fff}
+  .nav-links a.navlink{color:var(--ink-50)}.nav-links a.navlink:hover{color:var(--cream)}
+  .btn-primary{background:#151714;color:#fff}.btn-primary:hover{background:var(--red);color:#fff;box-shadow:0 20px 44px -16px rgba(40,185,95,.38)}
+  .btn-ghost{border-color:var(--line);color:var(--cream);background:#fff}.btn-ghost:hover{border-color:#151714}
+  .hero{min-height:730px;text-align:left;align-items:flex-start;justify-content:flex-start;padding:148px max(7vw,42px) 70px;background:#fff}
+  .hero-bg{background:radial-gradient(circle at 57% 44%,rgba(40,185,95,.16),transparent 25%),linear-gradient(180deg,#fff 0%,#f7faf7 100%)}
+  .arcs{background:repeating-radial-gradient(circle at 52% 120%,transparent 0 92px,rgba(19,21,18,.055) 92px 93px);opacity:.55}.glow.a{background:radial-gradient(circle,rgba(40,185,95,.16),transparent 62%)}.glow.b{background:radial-gradient(circle,rgba(40,185,95,.10),transparent 62%)}.dot{display:none}
+  .hero-center{max-width:520px;margin:0;z-index:6}.hero-center .kicker{justify-content:flex-start;color:var(--red)}.hero h1{font-family:var(--f-head);font-weight:600;letter-spacing:-.065em;font-size:clamp(3.2rem,5.5vw,5.8rem);line-height:.93}.hero h1 .aqua,.hero h1 .em{color:#28b95f;font-family:var(--f-serif);font-weight:400}.hero-center .lead{margin:1.65rem 0 2rem;color:var(--ink-70)}
+  .fc{opacity:1;animation:none}.fc .flt{animation:none}.fc-trace{top:22%;left:auto;right:6%}.fc-verify{top:61%;left:45%;right:auto}.fc-detect{top:62%;left:auto;right:6%}.fc-stat,.fc-commit{display:none}.fc-dial{top:21%;bottom:auto;right:22%;left:auto}
+  .card{background:rgba(255,255,255,.9);color:var(--cream);border-color:rgba(19,21,18,.12);box-shadow:0 30px 70px -36px rgba(19,21,18,.32),inset 0 1px rgba(255,255,255,.9);backdrop-filter:blur(14px)}.card.lite{background:#151714;color:#fff}.card.alert{background:#fff;border-color:rgba(40,185,95,.45)}.card .chip,.card .s{color:var(--ink-50)}.card.lite .chip,.card.lite .s{color:rgba(255,255,255,.64)}.dcard{background:#151714;color:#fff;border-color:#151714;box-shadow:0 44px 90px -38px rgba(40,185,95,.6)}.rung{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);color:rgba(255,255,255,.52)}.rung[data-on="1"]{background:rgba(40,185,95,.28);border-color:#54e58a;color:#fff;box-shadow:0 0 0 1px #54e58a}.dpill{color:#54e58a;border-color:rgba(84,229,138,.4)}.dpill .d{background:#54e58a}.dfeed{border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.6)}
+  .marquee{background:#151714;border-color:rgba(255,255,255,.12)}.sec,.sec.vivid,.cta,footer{background:#fff;color:#151714;border-color:var(--line-2)}.sec.vivid,.cta,footer{background:#f4f8f4}.lead,.step p,.lvl p,.det p,.tool p,.branch p{color:var(--ink-70)}.step,.lvl,.det,.tool{background:#fff;border-color:var(--line);box-shadow:0 14px 34px -30px rgba(19,21,18,.24)}.step:hover,.lvl:hover,.tool:hover{border-color:#28b95f;background:#fff}.lvl .big,.stat .num.good{color:#28b95f}.det .code,.term{background:#151714;color:#fff}.term pre{color:rgba(255,255,255,.72)}.term pre .w{color:#fff}.stat .num.bad,.lvl .tag,.kicker,.branch .tag,.det .fires{color:#28b95f}.branch{background:#effaf2;border-color:rgba(40,185,95,.45)}.bar.good .col{background:linear-gradient(180deg,#28b95f,rgba(40,185,95,.2))}.bar.bad .col{background:linear-gradient(180deg,#20231f,rgba(32,35,31,.12))}
+  @media(max-width:1024px){.hero{min-height:760px;padding:126px 30px 56px}.hero-center{max-width:590px}.fc-dial{position:absolute;top:52%;right:7%}.fc-verify{display:none}.fc-detect{top:auto;bottom:9%;right:7%}}
+  @media(max-width:700px){.hero{min-height:820px;padding:120px 22px 44px}.hero h1{font-size:3.25rem}.fc-dial{top:auto;bottom:8%;right:50%;transform:translateX(50%)}.fc-detect{display:none}.card.dcard{max-width:285px}}
+  /* Editorial hero rebuilt from the supplied AutoNyx composition. */
+  .hero{display:block;min-height:780px;height:min(900px,100svh);padding:0;background:#fff;isolation:isolate}
+  .hero-bg{background:linear-gradient(180deg,#fff 0%,#fbfdfb 100%)}
+  .hero-center{position:absolute;z-index:6;top:31%;left:clamp(42px,7vw,110px);width:min(31vw,470px);max-width:none}
+  .hero-center .kicker{display:none}
+  .hero h1{margin:0;color:#151714;font-family:var(--f-head);font-size:clamp(3.3rem,4.7vw,5rem);font-weight:600;letter-spacing:-.075em;line-height:.94}
+  .hero h1 .aqua,.hero h1 .em{color:#151714;font-family:var(--f-head);font-style:normal;font-weight:600}
+  .hero h1 .em{display:inline-block;color:#28b95f;font-family:var(--f-serif);font-size:1.09em;font-style:italic;font-weight:400;letter-spacing:-.04em}
+  .hero-center .lead{max-width:37ch;margin:1.35rem 0 1.75rem;color:rgba(19,21,18,.66);font-size:1rem;line-height:1.52}
+  .hero-ctas{justify-content:flex-start;gap:.65rem}.hero .btn{padding:.82em 1.22em;font-size:.87rem}
+  .hero-portrait{position:absolute;z-index:3;top:115px;left:50%;width:clamp(300px,33vw,510px);height:calc(100% - 115px);margin:0;overflow:hidden;transform:translateX(-50%);pointer-events:none}
+  .hero-portrait::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#fff 0%,transparent 15%,transparent 78%,#fff 100%),linear-gradient(0deg,#fbfdfb 0%,transparent 18%,transparent 82%,#fff 100%);pointer-events:none}
+  .hero-portrait img{width:100%;height:100%;object-fit:cover;object-position:58% 39%;transform:scale(1.45);filter:saturate(.9) contrast(1.03)}
+  .hero-proof{position:absolute;z-index:5;top:39%;right:clamp(42px,8vw,132px);width:min(22vw,290px);color:#151714}
+  .hero-proof>div{display:inline-flex;align-items:center;gap:7px;margin-bottom:14px;border-radius:9px;padding:10px 13px;background:#fff;box-shadow:0 12px 26px rgba(19,21,18,.10);font-size:.75rem;font-weight:600}
+  .proof-dot{width:8px;height:8px;border-radius:50%;background:#28b95f;box-shadow:0 0 0 4px #e5f9ec}
+  .hero-proof strong{display:block;font-family:var(--f-head);font-size:clamp(1.85rem,2.7vw,3rem);font-weight:600;letter-spacing:-.065em;line-height:.96}
+  .hero-proof p{margin:1rem 0 0;color:rgba(19,21,18,.58);font-size:.9rem;line-height:1.55}
+  .hero .fc,.hero .scrollcue{display:none}
+  @media(max-width:960px){.hero{height:820px}.hero-center{top:24%;left:7vw;width:min(43vw,430px)}.hero-portrait{left:66%;width:39vw}.hero-proof{top:63%;right:7vw;width:27vw}.hero h1{font-size:clamp(3rem,5vw,4rem)}}
+  @media(max-width:700px){.hero{height:820px;min-height:820px}.hero-center{top:116px;left:22px;width:calc(100% - 44px)}.hero h1{font-size:3.45rem;max-width:8ch}.hero-center .lead{max-width:35ch;font-size:.92rem}.hero-portrait{top:420px;left:64%;width:260px;height:400px;opacity:.78}.hero-proof{display:none}}
 </style>
 </head>
 <body>
+<div class="grain" aria-hidden="true"></div>
 
-<!-- ========================================================= NAV -->
 <header class="nav" id="nav">
   <div class="wrap nav-row">
     <a class="brand" href="#top" aria-label="Solo License home">
@@ -303,172 +299,154 @@
   </div>
 </header>
 
-<!-- ========================================================= HERO -->
+<!-- ================= HERO ================= -->
 <section class="hero" id="top">
-  <!-- Custom media slot: drop assets/hero.mp4 + assets/hero.webm (see assets/README). -->
-  <div class="hero-media" id="heroMedia" hidden>
-    <video autoplay muted loop playsinline poster="assets/hero-poster.jpg">
-      <source src="assets/hero.webm" type="video/webm" />
-      <source src="assets/hero.mp4" type="video/mp4" />
-    </video>
+  <div class="hero-bg" aria-hidden="true">
+    <div class="arcs"></div><div class="glow a"></div><div class="glow b"></div>
+    <div class="dot a"></div><div class="dot b"></div>
   </div>
-  <div class="hero-grid-bg"></div>
-  <div class="hero-glow"></div>
 
-  <div class="wrap">
-    <div class="hero-copy">
-      <span class="kicker">// neatHack · earned-permission ops agent</span>
-      <h1>
-        Autonomy you <span class="aqua">earn</span>.<br/>
-        Not autonomy you <span class="em">assume</span>.
-      </h1>
-      <p class="lead">Solo License is an operations agent that starts at near-zero autonomy and must <span class="serif-it">earn</span> the right to act unattended — task class by task class — from a measured reliability track record. One detection, and it crashes back to zero.</p>
-      <div class="hero-ctas">
-        <a class="btn btn-primary" href="https://github.com/JAYATIAHUJA/Solo_lincense" target="_blank" rel="noopener">
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-          Clone the repo
-        </a>
-        <a class="btn btn-ghost" href="#loop">See how it works</a>
-      </div>
-      <div class="trust-row">
-        <span>verifies side effects in <b>SQLite</b></span>
-        <span>demotion driven by <b>detections</b></span>
-        <span>every change is a <b>git commit</b></span>
-      </div>
-    </div>
-
-    <!-- Live autonomy-dial showpiece (pure code, animates on loop) -->
-    <div class="panel reveal" id="dialPanel" aria-label="Live autonomy dial demo">
-      <div class="panel-top">
-        <span class="lbl">task class · refund</span>
-        <span class="pill ok" id="statusPill"><span class="dot"></span><span id="statusText">earning</span></span>
-      </div>
-      <div class="ladder-track" id="ladder">
-        <div class="rung" data-lv="0"><span class="lv">L0</span><span class="cap">suggest<br/>only</span></div>
-        <div class="rung" data-lv="1"><span class="lv">L1</span><span class="cap">draft +<br/>approve</span></div>
-        <div class="rung" data-lv="2"><span class="lv">L2</span><span class="cap">auto under<br/>ceiling</span></div>
-        <div class="rung" data-lv="3"><span class="lv">L3</span><span class="cap">full auto<br/>audited</span></div>
-      </div>
-      <div class="meter" id="meter"><i id="meterFill"></i></div>
-      <div class="feed" id="feed" aria-hidden="true"></div>
+  <div class="hero-center">
+    <span class="kicker">neatHack · earned-permission ops agent</span>
+    <h1>Autonomy you <span class="aqua">earn</span>,<br/>not autonomy you <span class="em">assume</span>.</h1>
+    <p class="lead">An operations agent that starts at near-zero autonomy and earns the right to act unattended — task class by task class — from a measured track record. One detection, and it crashes back to zero.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="https://github.com/JAYATIAHUJA/Solo_lincense" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Clone the repo
+      </a>
+      <a class="btn btn-ghost" href="#loop">See how it works</a>
     </div>
   </div>
 
-  <div class="scrollcue"><span>SCROLL</span><span class="ln"></span></div>
+  <figure class="hero-portrait" aria-label="AI operations agent visual">
+    <img src="assets/autonyx-reference.jpeg" alt="An AI operations agent" />
+  </figure>
+  <div class="hero-proof">
+    <div><span class="proof-dot"></span> Solo License</div>
+    <strong>Autonomy that stays<br/>inside its authority.</strong>
+    <p>Verify every side effect.<br/>Demote on detection.</p>
+  </div>
+
+  <!-- floating product cards -->
+  <div class="fc fc-trace" style="--d:.15s"><div class="flt card" style="--flt:float1;--dur:7.5s">
+    <div class="chip">trace · 7 spans</div>
+    <div class="wave">
+      <span style="height:40%;animation-delay:0s"></span><span style="height:80%;animation-delay:.1s"></span>
+      <span style="height:55%;animation-delay:.2s"></span><span style="height:100%;animation-delay:.3s"></span>
+      <span style="height:65%;animation-delay:.15s"></span><span style="height:90%;animation-delay:.25s"></span>
+      <span style="height:45%;animation-delay:.05s"></span><span style="height:75%;animation-delay:.35s"></span>
+      <span style="height:60%;animation-delay:.2s"></span><span style="height:85%;animation-delay:.1s"></span>
+    </div>
+    <div class="s mono">plan → execute → verify · 1.2s</div>
+  </div></div>
+
+  <div class="fc fc-verify" style="--d:.3s"><div class="flt card lite" style="--flt:float2;--dur:8.5s">
+    <div class="chip">verification</div>
+    <div class="t">Side effects read back<br/>from SQLite.</div>
+    <div class="s">A tool's response is never evidence that anything happened.</div>
+  </div></div>
+
+  <div class="fc fc-detect" style="--d:.45s"><div class="flt card alert" style="--flt:float3;--dur:6.8s">
+    <div class="t mono" style="color:var(--red)">✗ state_mismatch</div>
+    <div class="s">intended $40.00 · moved $0.00 → demoted to L0</div>
+  </div></div>
+
+  <div class="fc fc-stat" style="--d:.55s"><div class="flt card" style="--flt:float1;--dur:9s">
+    <div class="chip">margin impact</div>
+    <div class="t" style="font-size:1.9rem;color:var(--aqua)">+20.3%</div>
+    <div class="s">running autonomy it earned — vs −73.4% over-promoted.</div>
+  </div></div>
+
+  <div class="fc fc-commit" style="--d:.65s"><div class="flt card" style="--flt:float2;--dur:7.8s">
+    <div class="chip">git ledger · Entire</div>
+    <div class="t mono" style="font-size:.86rem"><span style="color:var(--aqua)">df966e0</span> promote L2 → L3</div>
+    <div class="s">every license change is one commit.</div>
+  </div></div>
+
+  <!-- featured live dial -->
+  <div class="fc fc-dial" style="--d:.8s"><div class="flt card dcard" style="--flt:float1;--dur:8.2s" aria-label="Live autonomy dial">
+    <div class="dtop"><span class="chip" style="margin:0">task class · refund</span>
+      <span class="dpill" id="statusPill"><span class="d"></span><span id="statusText">earning</span></span></div>
+    <div class="rungs" id="ladder">
+      <div class="rung" data-lv="0">L0</div><div class="rung" data-lv="1">L1</div>
+      <div class="rung" data-lv="2">L2</div><div class="rung" data-lv="3">L3</div>
+    </div>
+    <div class="dfeed" id="feed" aria-hidden="true"></div>
+  </div></div>
+
+  <div class="scrollcue"><span>SCROLL</span><span class="l"></span></div>
 </section>
 
-<!-- ========================================================= MARQUEE -->
-<div class="marquee" aria-hidden="true">
-  <div class="track" id="marquee"></div>
-</div>
+<div class="marquee" aria-hidden="true"><div class="track" id="marquee"></div></div>
 
-<!-- ========================================================= THE LOOP -->
+<main>
+<!-- LOOP -->
 <section class="sec" id="loop">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="kicker">// the loop</span>
-      <h2>A simple, elegant control loop — that never trusts a tool's word.</h2>
+    <div class="sec-head reveal"><span class="kicker">the loop</span>
+      <h2>A simple control loop —<br/>that never trusts a tool's word.</h2>
       <p class="lead">One refund run does exactly this, in order, tracing every step. Authority comes from the license; truth comes from reading the database back.</p>
     </div>
     <div class="flow">
-      <div class="step reveal"><span class="n">01</span><h3>License check</h3><p>Read the task class's rung on the ladder before doing anything.</p></div>
-      <div class="step reveal"><span class="n">02</span><h3>Execute or suggest</h3><p>Do only what the license authorises — suggest, draft, or auto-execute.</p></div>
-      <div class="step reveal"><span class="n">03</span><h3>Verify in SQLite</h3><p>Read the actual side effect back. The tool's response is never evidence.</p></div>
-      <div class="step reveal"><span class="n">04</span><h3>Update the dial</h3><p>A verified-clean run earns credit; the track record climbs the ladder.</p></div>
+      <div class="step reveal" data-d="0"><span class="n">01</span><h3>License check</h3><p>Read the task class's rung on the ladder before doing anything.</p></div>
+      <div class="step reveal" data-d="1"><span class="n">02</span><h3>Execute or suggest</h3><p>Do only what the license authorises — suggest, draft, or auto-execute.</p></div>
+      <div class="step reveal" data-d="2"><span class="n">03</span><h3>Verify in SQLite</h3><p>Read the actual side effect back. The tool's response is never evidence.</p></div>
+      <div class="step reveal" data-d="3"><span class="n">04</span><h3>Update the dial</h3><p>A verified-clean run earns credit; the track record climbs the ladder.</p></div>
     </div>
-    <div class="branch reveal">
-      <span class="tag">detection fires</span>
-      <p>If any detection fires, the class <b style="color:var(--red)">crashes to L0 and is quarantined</b> — then a human reviews one evidence packet and restores it with judgement, not a blind retry.</p>
-    </div>
+    <div class="branch reveal"><span class="tag">detection fires</span>
+      <p>If any detection fires, the class <b style="color:var(--red)">crashes to L0 and is quarantined</b> — then a human reviews one evidence packet and restores it with judgement, not a blind retry.</p></div>
   </div>
 </section>
 
-<!-- ========================================================= LADDER -->
-<section class="sec sec-cream" id="ladder">
+<!-- LADDER -->
+<section class="sec vivid" id="ladder">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="kicker">// the autonomy ladder</span>
+    <div class="sec-head reveal"><span class="kicker">the autonomy ladder</span>
       <h2>Four rungs. Earned one clean run at a time.</h2>
-      <p class="lead">Promotion is automatic after N consecutive verified-clean runs. Demotion is immediate on a detection. The dial is always the single source of truth.</p>
-    </div>
+      <p class="lead">Promotion is automatic after N consecutive verified-clean runs. Demotion is immediate on a detection. The dial is always the single source of truth.</p></div>
     <div class="cards">
-      <div class="lvl reveal"><span class="tag">rung 00</span><div class="big">L0</div><h3>Suggest only</h3><p>The agent recommends; a human does everything. Near-zero autonomy — the starting line.</p></div>
-      <div class="lvl reveal"><span class="tag">rung 01</span><div class="big">L1</div><h3>Draft + approve</h3><p>The agent prepares the change and holds. A human approves every execution.</p></div>
-      <div class="lvl reveal"><span class="tag">rung 02</span><div class="big">L2</div><h3>Auto under ceiling</h3><p>The agent acts automatically below a dollar ceiling. Humans spot-check.</p></div>
-      <div class="lvl reveal"><span class="tag">rung 03</span><div class="big">L3</div><h3>Full auto, audited</h3><p>Full autonomy with post-hoc audit sampling — earned, and revocable in an instant.</p></div>
+      <div class="lvl reveal" data-d="0"><span class="tag">rung 00</span><div class="big">L0</div><h3>Suggest only</h3><p>The agent recommends; a human does everything. Near-zero autonomy — the starting line.</p></div>
+      <div class="lvl reveal" data-d="1"><span class="tag">rung 01</span><div class="big">L1</div><h3>Draft + approve</h3><p>The agent prepares the change and holds. A human approves every execution.</p></div>
+      <div class="lvl reveal" data-d="2"><span class="tag">rung 02</span><div class="big">L2</div><h3>Auto under ceiling</h3><p>The agent acts automatically below a dollar ceiling. Humans spot-check.</p></div>
+      <div class="lvl reveal" data-d="3"><span class="tag">rung 03</span><div class="big">L3</div><h3>Full auto, audited</h3><p>Full autonomy with post-hoc audit sampling — earned, and revocable in an instant.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ========================================================= DETECTIONS -->
+<!-- DETECTIONS -->
 <section class="sec" id="detections">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="kicker">// detections drive demotion</span>
+    <div class="sec-head reveal"><span class="kicker">detections drive demotion</span>
       <h2>Three checks stand between the agent and your ledger.</h2>
-      <p class="lead">Pure, testable rules that fire on observed facts. When one fires, the dial drops — no exceptions, no overrides.</p>
-    </div>
+      <p class="lead">Pure, testable rules that fire on observed facts. When one fires, the dial drops — no exceptions, no overrides.</p></div>
     <div class="grid3">
-      <div class="det reveal">
-        <h3>state_mismatch</h3>
-        <div class="code">intended Δ $40.00<br/>sqlite moved $0.00</div>
-        <p>The verified change in the database doesn't equal what the agent intended — the signature of a quiet failure.</p>
-        <div class="fires">▸ demotes to L0</div>
-      </div>
-      <div class="det reveal">
-        <h3>policy_breach</h3>
-        <div class="code">authorised: DRAFT<br/>attempted: AUTO_EXECUTE</div>
-        <p>The agent executed beyond what the license authorised. The ceiling and level are folded into one decision.</p>
-        <div class="fires">▸ demotes to L0</div>
-      </div>
-      <div class="det reveal">
-        <h3>missing_verification</h3>
-        <div class="code">executed: true<br/>verified: false</div>
-        <p>An execution completed without ever reading SQLite back. If it wasn't verified, it didn't happen.</p>
-        <div class="fires">▸ demotes to L0</div>
-      </div>
+      <div class="det reveal" data-d="0"><h3>state_mismatch</h3><div class="code">intended delta $40.00<br/>sqlite moved $0.00</div><p>The verified change in the database doesn't equal what the agent intended — the signature of a quiet failure.</p><div class="fires">▸ demotes to L0</div></div>
+      <div class="det reveal" data-d="1"><h3>policy_breach</h3><div class="code">authorised: DRAFT<br/>attempted: AUTO_EXECUTE</div><p>The agent executed beyond what the license authorised. Level and ceiling fold into one decision.</p><div class="fires">▸ demotes to L0</div></div>
+      <div class="det reveal" data-d="2"><h3>missing_verification</h3><div class="code">executed: true<br/>verified: false</div><p>An execution completed without ever reading SQLite back. If it wasn't verified, it didn't happen.</p><div class="fires">▸ demotes to L0</div></div>
     </div>
   </div>
 </section>
 
-<!-- ========================================================= TOOLS -->
-<section class="sec sec-cream" id="tools">
+<!-- TOOLS -->
+<section class="sec vivid" id="tools">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="kicker">// load-bearing tool use</span>
+    <div class="sec-head reveal"><span class="kicker">load-bearing tool use</span>
       <h2>Three tools, each doing real work.</h2>
-      <p class="lead">Not logos on a slide — each tool carries a distinct, honest job in the loop.</p>
-    </div>
+      <p class="lead">Not logos on a slide — each tool carries a distinct, honest job in the loop.</p></div>
     <div class="grid3">
-      <div class="tool reveal">
-        <span class="eyebrow">observability</span>
-        <h3>neatlogs</h3>
-        <p>Traces every run as spans and fires the custom detections that move the dial.</p>
-        <ul><li>plan → execute → verify spans</li><li>3 custom detections as incidents</li><li>before/after numbers compared</li></ul>
-      </div>
-      <div class="tool reveal">
-        <span class="eyebrow">audit trail</span>
-        <h3>Entire</h3>
-        <p>Every promote, demote, and restore is a scoped git commit — the checkpoint graph of earned trust.</p>
-        <ul><li>reason + run id + trace id per commit</li><li>graph & explain the history</li><li>one evidence packet to restore</li></ul>
-      </div>
-      <div class="tool reveal">
-        <span class="eyebrow">economics</span>
-        <h3>cfo.ai</h3>
-        <p>Models the license level as a margin driver: supervision cost vs. the incident bill of over-trust.</p>
-        <ul><li>supervision-cost curve by level</li><li>over-promotion risk model</li><li>revenue, margin, runway</li></ul>
-      </div>
+      <div class="tool reveal" data-d="0"><span class="eyebrow">observability</span><h3>neatlogs</h3><p>Traces every run as spans and fires the custom detections that move the dial.</p><ul><li>plan → execute → verify spans</li><li>3 custom detections as incidents</li><li>before/after numbers compared</li></ul></div>
+      <div class="tool reveal" data-d="1"><span class="eyebrow">audit trail</span><h3>Entire</h3><p>Every promote, demote, and restore is a scoped git commit — the checkpoint graph of earned trust.</p><ul><li>reason + run id + trace id per commit</li><li>graph &amp; explain the history</li><li>one evidence packet to restore</li></ul></div>
+      <div class="tool reveal" data-d="2"><span class="eyebrow">economics</span><h3>cfo.ai</h3><p>Models the license level as a margin driver: supervision cost vs. the incident bill of over-trust.</p><ul><li>supervision-cost curve by level</li><li>over-promotion risk model</li><li>revenue, margin, runway</li></ul></div>
     </div>
   </div>
 </section>
 
-<!-- ========================================================= ECONOMICS -->
+<!-- ECONOMICS -->
 <section class="sec" id="economics">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="kicker">// the margin story</span>
-      <h2>Autonomy you earned is margin.<br/>Autonomy you grabbed is runway you set on fire.</h2>
-    </div>
+    <div class="sec-head reveal"><span class="kicker">the margin story</span>
+      <h2>Autonomy you earned is margin.<br/>Autonomy you grabbed is runway you set on fire.</h2></div>
     <div class="econ">
       <div class="reveal">
         <div class="stat-row">
@@ -491,29 +469,27 @@
   </div>
 </section>
 
-<!-- ========================================================= EVIDENCE -->
-<section class="sec" id="evidence">
+<!-- EVIDENCE -->
+<section class="sec vivid" id="evidence">
   <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="kicker">// recovery with judgement</span>
+    <div class="sec-head reveal"><span class="kicker">recovery with judgement</span>
       <h2>Every license change leaves a trail.</h2>
-      <p class="lead">The git-backed ledger is the checkpoint history a human — or Entire — reads to understand exactly when and why autonomy moved.</p>
-    </div>
+      <p class="lead">The git-backed ledger is the checkpoint history a human — or Entire — reads to understand exactly when and why autonomy moved.</p></div>
     <div class="term reveal">
       <div class="bar3"><i></i><i></i><i></i></div>
 <pre><span class="c">$ git log --oneline -- ledger/license_ledger.jsonl</span>
-<span class="g">c0f60cf</span> <span class="w">license(refund): promote L2 -&gt; L3</span>  <span class="c"># 3 clean runs earned it</span>
-<span class="r">8073847</span> <span class="w">license(refund): demote  L3 -&gt; L0</span>  <span class="c"># state_mismatch fired</span>
-<span class="g">c20d5fa</span> <span class="w">license(refund): restore L0 -&gt; L2</span>  <span class="c"># human reviewed evidence</span>
-<span class="r">ea24e56</span> <span class="w">license(refund): demote  L2 -&gt; L0</span>  <span class="c"># policy_breach fired</span></pre>
+<span class="g">df966e0</span> <span class="w">license(refund): promote L2 -&gt; L3</span>  <span class="c"># 3 clean runs earned it</span>
+<span class="r">e5836b7</span> <span class="w">license(refund): demote  L3 -&gt; L0</span>  <span class="c"># state_mismatch fired</span>
+<span class="g">484faf5</span> <span class="w">license(refund): restore L0 -&gt; L2</span>  <span class="c"># human reviewed evidence</span>
+<span class="r">2c1a9d3</span> <span class="w">license(refund): demote  L2 -&gt; L0</span>  <span class="c"># policy_breach fired</span></pre>
     </div>
   </div>
 </section>
 
-<!-- ========================================================= CTA -->
+<!-- CTA -->
 <section class="cta">
   <div class="wrap">
-    <span class="kicker">// agents you'd trust to run without you watching</span>
+    <span class="kicker" style="justify-content:center">agents you'd trust to run without you watching</span>
     <h2>Clone it. Run it.<br/>Watch it earn its license.</h2>
     <p class="lead">One command to seed, one to launch. Trigger a refund, inject a fault, watch the dial crash, restore from the evidence packet — all live.</p>
     <div class="cta-btns">
@@ -522,6 +498,7 @@
     </div>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap foot-row">
@@ -532,120 +509,51 @@
 
 <script>
 (() => {
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ---- nav scroll state ---- */
   const nav = document.getElementById('nav');
-  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 24);
-  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+  const onScroll = () => nav.classList.toggle('scrolled', scrollY > 24);
+  onScroll(); addEventListener('scroll', onScroll, {passive:true});
 
-  /* ---- hero custom media: show only if the file actually loads ---- */
-  const media = document.getElementById('heroMedia');
-  const vid = media.querySelector('video');
-  if (vid) {
-    vid.addEventListener('loadeddata', () => { media.hidden = false; });
-    // if neither source resolves, it stays hidden and the coded bg shows
-  }
-
-  /* ---- scroll reveal ---- */
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }});
-  }, {threshold:.16});
+  const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }}), {threshold:.15});
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-  /* ---- count-up stats ---- */
   const fmt = (n, el) => {
-    const pre = el.dataset.prefix || '', suf = el.dataset.suffix || '', sign = el.dataset.sign || '';
-    const dec = (el.dataset.count.indexOf('.') > -1) ? 1 : 0;
+    const pre=el.dataset.prefix||'', suf=el.dataset.suffix||'', sign=el.dataset.sign||'';
+    const dec = el.dataset.count.indexOf('.')>-1;
     const val = dec ? n.toFixed(1) : Math.round(n).toLocaleString('en-US');
-    return `${sign}${pre}${val}${suf}`;
+    return sign+pre+val+suf;
   };
-  const countUp = (el) => {
-    const target = parseFloat(el.dataset.count); const dur = 1400; const t0 = performance.now();
-    const tick = (t) => {
-      const p = Math.min((t - t0)/dur, 1); const eased = 1 - Math.pow(1-p, 3);
-      el.textContent = fmt(target*eased, el);
-      if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(target, el);
-    };
-    requestAnimationFrame(tick);
+  const countUp = (el) => { const target=parseFloat(el.dataset.count), dur=1500, t0=performance.now();
+    const tick=(t)=>{ const p=Math.min((t-t0)/dur,1), e=1-Math.pow(1-p,3); el.textContent=fmt(target*e,el);
+      if(p<1) requestAnimationFrame(tick); else el.textContent=fmt(target,el); }; requestAnimationFrame(tick); };
+  const sIO=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ reduce?e.target.textContent=fmt(parseFloat(e.target.dataset.count),e.target):countUp(e.target); sIO.unobserve(e.target);} }),{threshold:.6});
+  document.querySelectorAll('[data-count]').forEach(el=>sIO.observe(el));
+
+  const bIO=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.querySelectorAll('.col').forEach(c=>c.style.height=c.dataset.h); bIO.unobserve(e.target);} }),{threshold:.4});
+  const bars=document.getElementById('bars'); if(bars) bIO.observe(bars);
+
+  const terms=['earned autonomy','verify, don\'t trust','state_mismatch','one evidence packet','policy_breach','git-backed ledger','L0 → L1 → L2 → L3','demote on detection','supervision = cost','autonomy = lever','neatlogs','Entire','cfo.ai'];
+  const mk=()=>terms.map(t=>`<span>${t} <span class="s">/</span></span>`).join(' ');
+  document.getElementById('marquee').innerHTML = mk()+mk();
+
+  /* live autonomy dial (featured hero card) */
+  const rungs=[...document.querySelectorAll('#ladder .rung')];
+  const feed=document.getElementById('feed'), pill=document.getElementById('statusPill'), statusText=document.getElementById('statusText');
+  const NEED=3; let level=2, clean=0, crashed=false, oi=0;
+  const orders=[['ORD-1001','$25'],['ORD-1002','$40'],['ORD-1003','$15'],['ORD-1005','$45']];
+  const paint=()=>{ rungs.forEach(r=>{ const on=(+r.dataset.lv===level); r.dataset.on=on?'1':'0'; r.classList.toggle('crashed',crashed); });
+    pill.className='dpill '+(crashed?'alert':''); statusText.textContent=crashed?'quarantined':(level===3?'full auto':'earning'); };
+  const log=(cls,html)=>{ const d=document.createElement('div'); d.className='ln '+cls; d.innerHTML=html; feed.prepend(d); while(feed.children.length>3) feed.lastChild.remove(); };
+  const step=()=>{
+    if(crashed){ crashed=false; clean=0; level=2; log('ok','<b>✓</b> human restored → L2'); paint(); return; }
+    if(level>=2 && Math.random()<0.22){ crashed=true; level=0; clean=0; paint(); log('bad','<b>✗</b> state_mismatch → demoted to L0'); return; }
+    const [id,amt]=orders[oi++%orders.length]; log('ok',`<b>✓</b> ${id} refund ${amt} verified`); clean++;
+    if(clean>=NEED && level<3){ level++; clean=0; log('ok',`<b>▲</b> promoted → L${level}`); } paint();
   };
-  const statIO = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting){
-      if (reduce) e.target.textContent = fmt(parseFloat(e.target.dataset.count), e.target);
-      else countUp(e.target);
-      statIO.unobserve(e.target);
-    }});
-  }, {threshold:.6});
-  document.querySelectorAll('[data-count]').forEach(el => statIO.observe(el));
-
-  /* ---- economics bars ---- */
-  const barIO = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting){
-      e.target.querySelectorAll('.col').forEach(c => c.style.height = c.dataset.h);
-      barIO.unobserve(e.target);
-    }});
-  }, {threshold:.4});
-  const bars = document.getElementById('bars'); if (bars) barIO.observe(bars);
-
-  /* ---- marquee content ---- */
-  const terms = ['earned autonomy','verify, don\'t trust','state_mismatch','one evidence packet',
-    'policy_breach','git-backed ledger','L0 → L1 → L2 → L3','demote on detection',
-    'supervision = cost','autonomy = lever','neatlogs','Entire','cfo.ai'];
-  const mk = () => terms.map(t => `<span>${t} <span class="s">/</span></span>`).join(' ');
-  document.getElementById('marquee').innerHTML = mk() + mk();
-
-  /* ---- hero live autonomy dial (the showpiece state machine) ---- */
-  const rungs = [...document.querySelectorAll('#ladder .rung')];
-  const meter = document.getElementById('meter');
-  const fill = document.getElementById('meterFill');
-  const feed = document.getElementById('feed');
-  const pill = document.getElementById('statusPill');
-  const statusText = document.getElementById('statusText');
-  const NEED = 3;
-  let level = 2, clean = 0, crashed = false;
-  const orders = [['ORD-1001','$25'],['ORD-1002','$40'],['ORD-1003','$15'],['ORD-1005','$45']];
-  let oi = 0;
-
-  const paint = () => {
-    rungs.forEach(r => {
-      const on = (+r.dataset.lv === level);
-      r.dataset.on = on ? '1' : '0';
-      r.classList.toggle('crashed', crashed);
-    });
-    fill.style.width = (crashed ? 0 : (clean/NEED)*100) + '%';
-    meter.classList.toggle('crashed', crashed);
-    pill.className = 'pill ' + (crashed ? 'alert' : 'ok');
-    statusText.textContent = crashed ? 'quarantined' : (level===3 ? 'full auto' : 'earning');
-  };
-  const log = (cls, html) => {
-    const d = document.createElement('div'); d.className = 'ln ' + cls; d.innerHTML = html;
-    feed.prepend(d); while (feed.children.length > 5) feed.lastChild.remove();
-  };
-
-  const step = () => {
-    if (crashed) { crashed = false; clean = 0; level = 2; log('ok','<b>✓</b> human restored → L2'); paint(); return; }
-    // ~1 in 5 ticks after reaching higher trust, a detection fires
-    const willFail = (level >= 2) && Math.random() < 0.22;
-    if (willFail) {
-      crashed = true; level = 0; clean = 0; paint();
-      log('bad','<b>✗</b> state_mismatch — demoted to L0');
-      return;
-    }
-    const [id, amt] = orders[oi++ % orders.length];
-    log('ok', `<b>✓</b> ${id} refund ${amt} verified`);
-    clean++;
-    if (clean >= NEED && level < 3) { level++; clean = 0; log('ok', `<b>▲</b> promoted → L${level}`); }
-    paint();
-  };
-
   paint();
-  if (!reduce) {
-    log('ok','<b>✓</b> ORD-1001 refund $25 verified');
-    setInterval(step, 1700);
-  } else {
-    // static, legible snapshot for reduced-motion users
-    clean = 2; paint(); log('ok','L2 · 2/3 clean runs toward L3');
-  }
+  if(!reduce){ log('ok','<b>✓</b> ORD-1001 refund $25 verified'); setInterval(step,1800); }
+  else { paint(); log('ok','L2 · earning toward L3'); }
 })();
 </script>
 </body>
