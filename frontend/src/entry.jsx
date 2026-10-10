@@ -12,6 +12,7 @@ import { Orders } from './features/app/pages/Orders.jsx';
 import { Runs } from './features/app/pages/Runs.jsx';
 import { Ledger } from './features/app/pages/Ledger.jsx';
 import { Settings } from './features/app/pages/Settings.jsx';
+import { License } from './features/app/pages/License.jsx';
 import { SketchDefs } from './components/sketch/SketchDefs.jsx';
 import './styles/tokens.css';
 import './styles/base.css';
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:runId" element={<Runs />} />
           <Route path="ledger" element={<Ledger />} />
+          <Route path="license" element={<License />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

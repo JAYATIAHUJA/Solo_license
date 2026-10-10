@@ -21,6 +21,13 @@ SETTING_DEFAULTS: dict[str, float] = {
     "econ_incident_cost": cfo.INCIDENT_COST,
 }
 
+# A handful of demo runs must not swing the incident rate to 25%: shrink the
+# measured rate toward a 1% prior worth 50 runs (beta-binomial smoothing).
+PRIOR_INCIDENTS = 0.5
+PRIOR_RUNS = 50.0
+# Human time to read one evidence packet and decide a restore.
+REVIEW_MINUTES_PER_INCIDENT = 15.0
+
 
 @dataclass(frozen=True)
 class Assumptions:
@@ -54,19 +61,24 @@ def _measured(conn: sqlite3.Connection, task_class: str) -> dict:
         SELECT COUNT(*) AS runs,
                COALESCE(SUM(executed), 0) AS executed,
                COALESCE(SUM(status = 'clean'), 0) AS clean,
-               COALESCE(SUM(status = 'demoted'), 0) AS incidents
+               COALESCE(SUM(status = 'demoted'), 0) AS incidents,
+               COALESCE(SUM(executed = 1 AND status != 'demoted'
+                            AND ABS((after_refunded - before_refunded) - requested_amount) > 0.005),
+                        0) AS leaked
           FROM runs WHERE task_class = ?
         """,
         (task_class,),
     ).fetchone()
-    executed = int(row["executed"]) + int(row["incidents"])
+    attempts = int(row["executed"]) + int(row["incidents"])
+    incidents = int(row["incidents"])
     return {
         "runs": int(row["runs"]),
         "clean": int(row["clean"]),
-        "incidents": int(row["incidents"]),
-        # Every demoted run was caught by a detection *before* it was trusted;
-        # the rate is what would have leaked without verification.
-        "incident_rate": (int(row["incidents"]) / executed) if executed else 0.0,
+        "incidents": incidents,
+        # Executions whose read-back did not match and were *not* caught.
+        "leaked": int(row["leaked"]),
+        "incident_rate": round((incidents + PRIOR_INCIDENTS) / (attempts + PRIOR_RUNS), 4),
+        "leak_rate": round(int(row["leaked"]) / attempts, 4) if attempts else 0.0,
     }
 
 
@@ -77,12 +89,16 @@ def class_economics(
     volume = a.monthly_volume
     baseline = cost_per_action(0, a) * volume
     current = cost_per_action(effective_level, a) * volume
-    # Detections catch an incident before the dial trusts the run again, so
-    # the residual risk is the measured rate on the share of runs that execute
-    # without a human in the loop (L2/L3).
+    # Only actions that run without a human in the loop (L2/L3) can fail
+    # unattended. A *caught* incident costs a human review of its evidence
+    # packet; only a *leaked* one (verification missed it) costs the full loss.
     unattended = volume if effective_level >= 2 else 0.0
-    risk = measured["incident_rate"] * unattended * a.incident_cost
-    # What the same incident rate would cost if nobody verified side effects.
+    review_cost = REVIEW_MINUTES_PER_INCIDENT / 60.0 * a.hourly_cost
+    caught_cost = measured["incident_rate"] * unattended * review_cost
+    leaked_cost = measured["leak_rate"] * unattended * a.incident_cost
+    risk = caught_cost + leaked_cost
+    # The same fault rate with nobody verifying side effects: every incident
+    # reaches the customer at full cost. This is the risk verification avoids.
     blind_risk = measured["incident_rate"] * volume * a.incident_cost
     return {
         "task_class": task_class,
@@ -109,9 +125,12 @@ def workspace_economics(
             "monthly_volume_per_class": a.monthly_volume,
             "incident_cost": a.incident_cost,
             "minutes_per_action_by_level": cfo.SUPERVISION_MINUTES_PER_RUN,
+            "review_minutes_per_incident": REVIEW_MINUTES_PER_INCIDENT,
+            "incident_rate_prior": f"{PRIOR_INCIDENTS:g} incidents per {PRIOR_RUNS:g} runs",
         },
         "classes": classes,
         "supervision_saved_month": round(sum(c["supervision_saved_month"] for c in classes), 2),
         "risk_cost_month": round(sum(c["risk_cost_month"] for c in classes), 2),
         "net_saved_month": round(sum(c["net_saved_month"] for c in classes), 2),
+        "risk_avoided_month": round(sum(c["blind_autonomy_risk_month"] for c in classes), 2),
     }

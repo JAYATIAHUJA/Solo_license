@@ -56,3 +56,33 @@ export function Empty({ icon = 'inbox', title, children, action }) {
     </div>
   );
 }
+
+/** Task-class tag. Class identity is a label, never a colour. */
+export function ClassTag({ label, className = '' }) {
+  return <span className={`mc-tag mono ${className}`}>{label}</span>;
+}
+
+/** Server warnings (misconfigured keys, unreachable sinks…) as one banner. */
+export function WarningBanner({ warnings }) {
+  if (!warnings?.length) return null;
+  return (
+    <div className="mc-warn" role="status">
+      <HandIcon name="warn" size={16} />
+      <ul>{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+    </div>
+  );
+}
+
+/** Segmented picker over the workspace's task classes. */
+export function ClassPicker({ classes, value, onChange, label = 'Task class', allowAll = false }) {
+  const options = allowAll ? [{ key: 'all', label: 'All' }, ...classes] : classes;
+  return (
+    <div className="app-filters mc-class-picker" role="radiogroup" aria-label={label}>
+      {options.map((c) => (
+        <button key={c.key} type="button" role="radio" aria-checked={value === c.key} className={value === c.key ? 'is-on' : ''} onClick={() => onChange(c.key)}>
+          {c.label}
+        </button>
+      ))}
+    </div>
+  );
+}
