@@ -43,7 +43,11 @@ def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
     if config.llm_provider == "anthropic" and config.anthropic_api_key:
         import anthropic
 
-        client = anthropic.Anthropic(api_key=config.anthropic_api_key)
+        client = anthropic.Anthropic(
+            api_key=config.anthropic_api_key,
+            timeout=config.llm_timeout_seconds,
+            max_retries=config.llm_max_retries,
+        )
         msg = client.messages.create(
             model=config.anthropic_model,
             max_tokens=max_tokens,
@@ -53,7 +57,11 @@ def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
     if config.llm_provider == "openai" and config.openai_api_key:
         import openai
 
-        client = openai.OpenAI(api_key=config.openai_api_key)
+        client = openai.OpenAI(
+            api_key=config.openai_api_key,
+            timeout=config.llm_timeout_seconds,
+            max_retries=config.llm_max_retries,
+        )
         resp = client.chat.completions.create(
             model=config.openai_model,
             max_tokens=max_tokens,

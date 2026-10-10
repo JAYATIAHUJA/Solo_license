@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from sololicense.agent.intake import complete
 from sololicense.config import Config
 from sololicense.domain.license import Decision, LicenseState
 from sololicense.domain.models import RefundRequest
@@ -95,34 +96,6 @@ class Planner:
             f"({state.effective_level.label})."
         )
         try:
-            if self._config.llm_provider == "anthropic":
-                return self._anthropic(prompt)
-            if self._config.llm_provider == "openai":
-                return self._openai(prompt)
+            return complete(self._config, prompt, max_tokens=200)
         except Exception:  # pragma: no cover - network/credential issues
             return None
-        return None
-
-    def _anthropic(self, prompt: str) -> str:  # pragma: no cover - needs key
-        import anthropic
-
-        client = anthropic.Anthropic(api_key=self._config.anthropic_api_key)
-        msg = client.messages.create(
-            model=self._config.anthropic_model,
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return "".join(
-            block.text for block in msg.content if block.type == "text"
-        ).strip()
-
-    def _openai(self, prompt: str) -> str:  # pragma: no cover - needs key
-        import openai
-
-        client = openai.OpenAI(api_key=self._config.openai_api_key)
-        resp = client.chat.completions.create(
-            model=self._config.openai_model,
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return (resp.choices[0].message.content or "").strip()

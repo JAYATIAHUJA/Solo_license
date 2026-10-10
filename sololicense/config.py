@@ -38,6 +38,8 @@ class Config:
     l2_auto_refund_ceiling: float
     ledger_repo: Path
     settings_encryption_key: str
+    llm_timeout_seconds: float
+    llm_max_retries: int
 
     @property
     def llm_enabled(self) -> bool:
@@ -68,6 +70,8 @@ def load_config() -> Config:
         l2_auto_refund_ceiling=float(_get("L2_AUTO_REFUND_CEILING", "50")),
         ledger_repo=Path(_get("SOLO_LEDGER_REPO", "data/ledger-repo")),
         settings_encryption_key=_get("SOLO_SETTINGS_ENCRYPTION_KEY", ""),
+        llm_timeout_seconds=max(1.0, float(_get("LLM_TIMEOUT_SECONDS", "15"))),
+        llm_max_retries=max(0, int(_get("LLM_MAX_RETRIES", "2"))),
     )
 
 
