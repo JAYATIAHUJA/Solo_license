@@ -36,6 +36,7 @@ class Config:
     openai_model: str
     promotion_clean_runs: int
     l2_auto_refund_ceiling: float
+    ledger_repo: Path
 
     @property
     def llm_enabled(self) -> bool:
@@ -64,6 +65,7 @@ def load_config() -> Config:
         openai_model=_get("OPENAI_MODEL", "gpt-4o"),
         promotion_clean_runs=int(_get("PROMOTION_CLEAN_RUNS", "3")),
         l2_auto_refund_ceiling=float(_get("L2_AUTO_REFUND_CEILING", "50")),
+        ledger_repo=Path(_get("SOLO_LEDGER_REPO", "data/ledger-repo")),
     )
 
 

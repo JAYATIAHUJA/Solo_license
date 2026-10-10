@@ -52,3 +52,15 @@ def verify_refund(
         intended_delta=intended_delta,
         verified=True,
     )
+
+
+def missing_refund_verification(
+    *, before: float, intended_delta: float
+) -> VerificationResult:
+    """Represent an execution whose read-back did not run or complete."""
+    return VerificationResult(
+        before=before,
+        after=before,
+        intended_delta=intended_delta,
+        verified=False,
+    )

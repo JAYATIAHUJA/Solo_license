@@ -27,7 +27,7 @@ from sololicense.config import Config
 from sololicense.db.repositories import detections as detections_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
-from sololicense.domain.models import RefundRequest, RunStatus
+from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.faults.injector import FaultInjector, effects_for
 from sololicense.observability import detections as rules
 from sololicense.observability.detections import Detection
@@ -87,24 +87,25 @@ class RefundWorker:
         state = self._licenses.get_or_create(task_class)
         # Peek, don't consume: an armed fault only bends a run that actually
         # executes, so a draft or suggestion leaves it armed for the next one.
-        effects = effects_for(self._faults.peek(task_class))
+        armed_effects = effects_for(self._faults.peek(task_class))
         trace = self._tracer.start_trace("refund")
         trace.span(
             "license.check",
             level=state.effective_level.name,
             quarantined=state.quarantined,
-            fault=effects.mode.value,
+            fault=armed_effects.mode.value,
         )
 
         authorized = self._authorize(state, request, approved)
-        attempted = self._attempt(authorized, state, effects)
+        attempted = self._attempt(authorized, state, armed_effects)
         plan = self._planner.plan(request, authorized, state)
         trace.span("plan", source=plan.source, rationale=plan.rationale)
 
         before = verification.read_refunded(self._conn, request.order_id)
         will_execute = attempted in _EXECUTING
-        if will_execute and effects.active:
-            self._faults.consume_effects(task_class)
+        effects = effects_for(FaultMode.NONE)
+        if will_execute and armed_effects.active:
+            effects = self._faults.consume_effects(task_class)
         intended_delta = request.amount if will_execute else 0.0
 
         if will_execute:
@@ -112,12 +113,18 @@ class RefundWorker:
         else:
             trace.span("execute.skipped", reason=attempted.name)
 
-        result = verification.verify_refund(
-            self._conn,
-            order_id=request.order_id,
-            before=before,
-            intended_delta=intended_delta,
-        )
+        if will_execute and effects.skip_verification:
+            result = verification.missing_refund_verification(
+                before=before,
+                intended_delta=intended_delta,
+            )
+        else:
+            result = verification.verify_refund(
+                self._conn,
+                order_id=request.order_id,
+                before=before,
+                intended_delta=intended_delta,
+            )
         trace.span(
             "verify.readback",
             before=result.before,
@@ -125,6 +132,7 @@ class RefundWorker:
             actual_delta=result.actual_delta,
             intended_delta=intended_delta,
             matched=result.matched,
+            verified=result.verified,
         )
 
         found = self._run_detections(
@@ -232,7 +240,9 @@ class RefundWorker:
         candidates = [
             rules.detect_policy_breach(authorized=authorized, attempted=attempted),
             rules.detect_state_mismatch(
-                intended_delta=intended_delta, actual_delta=result.actual_delta
+                intended_delta=intended_delta,
+                actual_delta=result.actual_delta,
+                verified=result.verified,
             ),
             rules.detect_missing_verification(verified=result.verified),
         ]

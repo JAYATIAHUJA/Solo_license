@@ -33,10 +33,12 @@ class Detection:
 
 
 def detect_state_mismatch(
-    *, intended_delta: float, actual_delta: float
+    *, intended_delta: float, actual_delta: float, verified: bool = True
 ) -> Detection | None:
     """Fire when the verified change in ``refunded_amount`` does not equal the
     refund the agent intended to make (the signature of a quiet failure)."""
+    if not verified:
+        return None
     if abs(intended_delta - actual_delta) > 1e-9:
         return Detection(
             rule="state_mismatch",

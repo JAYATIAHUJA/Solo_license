@@ -17,6 +17,8 @@ env/
 *.sqlite
 *.sqlite3
 data/*.db
+data/*.db-wal
+data/*.db-shm
 
 # OS / editor
 .DS_Store

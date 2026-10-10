@@ -108,3 +108,32 @@ def test_fault_stays_armed_through_a_run_that_does_not_execute(harness):
     caught = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "defective"))
     assert caught.status is RunStatus.DEMOTED
     assert harness.fault_injector.peek("refund") is FaultMode.NONE
+
+
+def test_skip_verification_demotes_with_missing_verification_only(harness):
+    harness.fault_injector.arm("refund", FaultMode.SKIP_VERIFICATION)
+
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective")
+    )
+
+    assert result.status is RunStatus.DEMOTED
+    assert [d.rule for d in result.detections] == ["missing_verification"]
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 25.0
+    assert _dial(harness).level is LicenseLevel.L0
+
+
+def test_fault_mode_is_recorded_only_when_consumed(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+
+    held = harness.worker.run_refund(RefundRequest("ORD-1004", "Kat", 120.0, "over ceiling"))
+    held_row = harness.conn.execute(
+        "SELECT fault_mode FROM runs WHERE id = ?", (held.run_id,)
+    ).fetchone()
+    assert held_row["fault_mode"] == FaultMode.NONE.value
+
+    consumed = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "defective"))
+    consumed_row = harness.conn.execute(
+        "SELECT fault_mode FROM runs WHERE id = ?", (consumed.run_id,)
+    ).fetchone()
+    assert consumed_row["fault_mode"] == FaultMode.QUIET_FAILURE.value

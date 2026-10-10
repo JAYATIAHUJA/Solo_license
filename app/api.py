@@ -23,7 +23,7 @@ from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.seed import SEED_ORDERS, seed
 from sololicense.domain.license import LicenseLevel, LicenseState
-from sololicense.domain.models import FaultMode, RefundRequest
+from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.services.evidence import build_packet
 
 TASK_CLASS = "refund"
@@ -300,7 +300,8 @@ def approve_run(run_id: int) -> dict:
         result = _run(context, run["order_id"], run["requested_amount"],
                       "approved by human", approved=True)
         context.conn.execute(
-            "UPDATE runs SET status = 'approved' WHERE id = ?", (run_id,)
+            "UPDATE runs SET status = ? WHERE id = ?",
+            (RunStatus.APPROVED.value, run_id),
         )
         context.conn.commit()
         return dashboard_payload(context, result.run_id)

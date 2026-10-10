@@ -49,7 +49,8 @@ def build_app(
 
     # 3. Services and the agent.
     license_service = LicenseService(
-        conn, GitLedger(), promotion_threshold=config.promotion_clean_runs
+        conn, GitLedger(repo_root=config.ledger_repo),
+        promotion_threshold=config.promotion_clean_runs,
     )
     fault_injector = FaultInjector(conn)
     planner = Planner(config)

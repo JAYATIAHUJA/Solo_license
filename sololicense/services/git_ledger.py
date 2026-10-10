@@ -77,6 +77,13 @@ class GitLedger:
             check=False,
         )
 
+    def _ensure_repo(self) -> None:
+        self._repo_root.mkdir(parents=True, exist_ok=True)
+        if not (self._repo_root / ".git").exists():
+            self._run_git(["init", "-q"])
+        self._run_git(["config", "user.name", "Solo License"])
+        self._run_git(["config", "user.email", "solo-license@example.invalid"])
+
     def _append(self, entry: LedgerEntry) -> None:
         self._ledger_file.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(
@@ -95,6 +102,7 @@ class GitLedger:
             fh.write(line + "\n")
 
     def _commit(self, entry: LedgerEntry) -> str | None:
+        self._ensure_repo()
         rel = _LEDGER_RELPATH.as_posix()
         add = self._run_git(["add", "--", rel])
         if add.returncode != 0:

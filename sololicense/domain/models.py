@@ -17,6 +17,7 @@ class RunStatus(str, Enum):
     PENDING_APPROVAL = "pending_approval"  # L1 or over-ceiling: awaits a human
     CLEAN = "clean"                    # executed and verified against SQLite
     DEMOTED = "demoted"                # a detection fired; license crashed
+    APPROVED = "approved"              # superseded by a human-approved run
 
 
 class FaultMode(str, Enum):
@@ -25,6 +26,7 @@ class FaultMode(str, Enum):
     NONE = "none"
     QUIET_FAILURE = "quiet_failure"      # tool reports success, DB unchanged
     POLICY_VIOLATION = "policy_violation"  # action exceeds the current license
+    SKIP_VERIFICATION = "skip_verification"  # execute, then skip read-back
 
 
 @dataclass(frozen=True)
