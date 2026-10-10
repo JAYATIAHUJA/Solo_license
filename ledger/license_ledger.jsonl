@@ -7,3 +7,4 @@
 {"ts": "2026-10-10T23:06:46.227846+00:00", "task_class": "refund", "kind": "restore", "from_level": 0, "to_level": 2, "reason": "Guided demo baseline: start from an earned L2.", "run_id": null, "trace_id": null}
 {"ts": "2026-10-10T23:06:48.707081+00:00", "task_class": "refund", "kind": "restore", "from_level": 2, "to_level": 2, "reason": "I read what happened and the problem is understood.", "run_id": null, "trace_id": null}
 {"ts": "2026-10-10T23:07:01.968492+00:00", "task_class": "refund", "kind": "demote", "from_level": 2, "to_level": 0, "reason": "Idempotency key already executed; duplicate action blocked.", "run_id": 23, "trace_id": "b15bde81e3771e95c209fdb56ed65ed0"}
+{"ts": "2026-10-10T23:07:37.074587+00:00", "task_class": "refund", "kind": "restore", "from_level": 0, "to_level": 2, "reason": "Reviewed run #26: the problem was a practice problem from the guided demo. Resuming with limited freedom.", "run_id": null, "trace_id": null}
