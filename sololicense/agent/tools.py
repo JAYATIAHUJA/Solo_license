@@ -38,5 +38,4 @@ def execute_refund(
         return ToolResult(ok=True, message="Refund processed (reported).")
 
     orders_repo.apply_refund(conn, order_id, amount)
-    conn.commit()
     return ToolResult(ok=True, message="Refund processed.")

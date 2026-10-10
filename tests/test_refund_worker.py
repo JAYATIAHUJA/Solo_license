@@ -83,3 +83,28 @@ def test_restore_lifts_quarantine_to_chosen_level(harness):
     assert _dial(harness).level is LicenseLevel.L2
     assert _dial(harness).quarantined is False
     assert "restore" in _git_log(harness.repo)
+
+
+def test_custom_task_class_is_persisted_on_run(harness):
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective"),
+        task_class="vip_refund",
+        approved=True,
+    )
+
+    row = harness.conn.execute(
+        "SELECT task_class FROM runs WHERE id = ?", (result.run_id,)
+    ).fetchone()
+    assert row["task_class"] == "vip_refund"
+
+
+def test_fault_stays_armed_through_a_run_that_does_not_execute(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+
+    held = harness.worker.run_refund(RefundRequest("ORD-1004", "Kat", 120.0, "over ceiling"))
+    assert held.status is RunStatus.PENDING_APPROVAL
+    assert harness.fault_injector.peek("refund") is FaultMode.QUIET_FAILURE
+
+    caught = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "defective"))
+    assert caught.status is RunStatus.DEMOTED
+    assert harness.fault_injector.peek("refund") is FaultMode.NONE
