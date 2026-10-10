@@ -1,0 +1,18 @@
+# Solo License — runtime dependencies
+# Pinned to compatible lower bounds; install with: pip install -r requirements.txt
+
+# One-screen live UI
+streamlit>=1.33,<2.0
+
+# Observability: neatlogs Python SDK (agent tracing + detections).
+# The code degrades gracefully to a local span recorder if this import
+# is unavailable, so the demo always runs (see sololicense/observability).
+neatlogs>=0.1.0 ; python_version >= "3.11"
+
+# LLM planner. Either provider works; the agent falls back to a
+# deterministic planner when no API key is configured.
+anthropic>=0.39.0
+openai>=1.40.0
+
+# Config loading from .env
+python-dotenv>=1.0.0
