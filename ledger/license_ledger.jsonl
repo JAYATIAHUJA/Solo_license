@@ -5,3 +5,4 @@
 {"ts": "2026-10-10T22:57:44.862435+00:00", "task_class": "refund", "kind": "promote", "from_level": 2, "to_level": 3, "reason": "3 consecutive clean runs; earned L3 (Full auto (audited)).", "run_id": 21, "trace_id": "74229722a0a40b6303c0469608a11064"}
 {"ts": "2026-10-10T23:06:41.251246+00:00", "task_class": "refund", "kind": "demote", "from_level": 3, "to_level": 0, "reason": "Idempotency key already executed; duplicate action blocked.", "run_id": 22, "trace_id": "26d1213de7543216f9009071b95f262b"}
 {"ts": "2026-10-10T23:06:46.227846+00:00", "task_class": "refund", "kind": "restore", "from_level": 0, "to_level": 2, "reason": "Guided demo baseline: start from an earned L2.", "run_id": null, "trace_id": null}
+{"ts": "2026-10-10T23:06:48.707081+00:00", "task_class": "refund", "kind": "restore", "from_level": 2, "to_level": 2, "reason": "I read what happened and the problem is understood.", "run_id": null, "trace_id": null}
