@@ -98,3 +98,23 @@ CREATE TABLE IF NOT EXISTS armed_faults (
     mode        TEXT NOT NULL DEFAULT 'none',
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Operator-editable settings (onboarding + the Settings screen). Values here
+-- override environment defaults at startup; secrets are never echoed to the UI.
+CREATE TABLE IF NOT EXISTS settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Free-text customer requests handled by the intake agent.
+CREATE TABLE IF NOT EXISTS intakes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message     TEXT NOT NULL,
+    order_id    TEXT,
+    amount      REAL,
+    reason      TEXT,
+    source      TEXT NOT NULL DEFAULT 'deterministic',
+    run_id      INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);

@@ -12,7 +12,8 @@ from dataclasses import dataclass
 
 from sololicense.agent.planner import Planner
 from sololicense.agent.worker import RefundWorker
-from sololicense.config import Config, load_config
+from sololicense.config import Config, load_config, with_overrides
+from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.database import init_db
 from sololicense.faults.injector import FaultInjector
 from sololicense.observability.neatlogs_client import NeatlogsClient, init_neatlogs
@@ -38,13 +39,13 @@ def build_app(
 ) -> AppContext:
     config = config or load_config()
 
-    # 1. Observability first — instrument before any agent logic.
+    # 1. Persistence first, so operator settings can override the environment.
+    conn = init_db(config.db_path, check_same_thread=check_same_thread)
+    config = with_overrides(config, settings_repo.get_all(conn))
+
+    # 2. Observability — instrument before any agent logic.
     neatlogs = init_neatlogs(config)
     tracer = Tracer(neatlogs)
-
-    # 2. Persistence. The UI passes check_same_thread=False so a cached
-    #    connection can be reused across Streamlit's worker threads.
-    conn = init_db(config.db_path, check_same_thread=check_same_thread)
 
     # 3. Services and the agent.
     license_service = LicenseService(
