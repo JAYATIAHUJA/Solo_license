@@ -1,0 +1,31 @@
+/* Plain form pieces shared by Settings, onboarding, Orders and Resume.
+   Scoped under .pl-form so the landing page keeps its own look. */
+
+.pl-form { display: grid; gap: 16px; min-width: 0; }
+.pl-form .field { gap: 6px; min-width: 0; }
+.pl-form .field > span { font: 500 14px/1.3 var(--font-sans); text-transform: none; letter-spacing: 0; color: var(--ink); }
+.pl-form .field small { font-size: 13px; line-height: 1.4; }
+.pl-form .input { border: 1px solid rgba(14, 14, 13, 0.28); background: var(--card, #fff); height: 42px; font-size: 15px; width: 100%; min-width: 0; }
+.pl-form .input:focus { box-shadow: 0 0 0 3px rgba(14, 14, 13, 0.12); border-color: var(--ink); }
+.pl-form select.input { appearance: auto; padding: 0 10px; cursor: pointer; }
+.pl-form .btn { font-family: var(--font-sans); }
+
+.pl-fields { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; }
+.pl-field-narrow { max-width: 240px; }
+
+/* Radio cards. */
+.pl-choices { display: grid; gap: 8px; }
+.pl-choice { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); background: var(--card, #fff); cursor: pointer; text-align: left; }
+.pl-choice:hover { border-color: rgba(14, 14, 13, 0.35); }
+.pl-choice.is-on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.pl-choice input { margin: 3px 0 0; accent-color: var(--ink); flex: none; }
+.pl-choice b { font-weight: 600; }
+.pl-choice small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.pl-tag { display: inline-block; font-size: 12px; font-weight: 500; padding: 1px 8px; margin-left: 8px; background: var(--ok-bg); color: var(--ok); vertical-align: 1px; }
+.pl-tag.muted { background: var(--paper-2); color: var(--muted); }
+
+/* Inline test result. */
+.pl-test { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pl-test-ok, .pl-test-bad { font-size: 14px; overflow-wrap: anywhere; min-width: 0; }
+.pl-test-ok { color: var(--ok); }
+.pl-test-bad { color: var(--bad); }

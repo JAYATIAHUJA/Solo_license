@@ -2,17 +2,19 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
-import { HandIcon } from '../../../components/icons/HandIcon.jsx';
-import { PageHeader, Panel } from '../components/Bits.jsx';
-import { ModelFields, modelReady } from '../components/ModelFields.jsx';
+import { ModelFields, modelReady, providerLabel } from '../components/ModelFields.jsx';
 import {
   AlertFields, CEILING_FIELD, ECON_FIELDS, NeatlogsFields, formFromSettings, validWebhook,
 } from '../components/IntegrationFields.jsx';
+import { levelCopy } from '../../../lib/copy.js';
+import { jobsName, limitVerb, shortMoney } from '../components/words.js';
+import '../components/plain-form.css';
+import './settings.css';
 
 export function Settings() {
   const { data } = useStore();
   if (!data || !data.settings || !data.providers) {
-    return <p className="mono muted">Loading settings…</p>;
+    return <div className="pl-page"><p className="pl-muted">Loading settings…</p></div>;
   }
   return <SettingsForm data={data} />;
 }
@@ -27,6 +29,21 @@ function changedValues(form, initial) {
   return out;
 }
 
+function Section({ title, sub, status, children }) {
+  return (
+    <section className="pl-card st-section">
+      <div className="st-section-head">
+        <div>
+          <h2>{title}</h2>
+          {sub && <p>{sub}</p>}
+        </div>
+        {status}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function SettingsForm({ data }) {
   const { run, busy } = useStore();
   const { settings: s, providers, task_classes: taskClasses = [] } = data;
@@ -36,12 +53,17 @@ function SettingsForm({ data }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
   const changes = useMemo(() => changedValues(form, initial), [form, initial]);
-  const dirty = Object.keys(changes).length > 0;
+  const count = Object.keys(changes).length;
+  const dirty = count > 0;
   const nameOk = String(form.business_name).trim().length > 1;
   const modelOk = modelReady(providers, form, s);
   const webhookOk = validWebhook(form.alert_webhook_url);
   const canSave = dirty && nameOk && modelOk && webhookOk && !busy;
   const activeProvider = providers.find((p) => p.key === s.llm_provider);
+  const problem = !nameOk ? 'Add a business name (at least two letters).'
+    : !modelOk ? 'Finish the AI model details (key, model name) or choose “No AI model”.'
+      : !webhookOk ? 'The alert link should start with https://'
+        : '';
 
   async function save(e) {
     e.preventDefault();
@@ -54,98 +76,122 @@ function SettingsForm({ data }) {
     }
   }
 
-  function discard() {
-    setForm(initial);
-  }
+  const pill = (on, onText, offText) => <span className={`pl-status ${on ? 'ok' : 'muted'}`}>{on ? onText : offText}</span>;
 
   return (
-    <>
-      <PageHeader eyebrow="Settings" title={<>Tune the <em className="italic">rules.</em></>}>
-        Changes apply to the next run. Keys are encrypted at rest and never shown back in full.
-      </PageHeader>
+    <div className="pl-page st-page">
+      <header className="pl-head">
+        <div>
+          <h1>Settings</h1>
+          <p>The defaults work for most shops. Changes apply from the agent's next job.</p>
+        </div>
+      </header>
 
-      <form onSubmit={save} className="app-settings">
-        <Panel title="Workspace" icon="home">
-          <label className="field">
-            <span>Name</span>
+      <form onSubmit={save} className="pl-form st-form">
+        <Section title="Your workspace">
+          <label className="field st-narrow">
+            <span>Business name</span>
             <input className="input" value={form.business_name} onChange={(e) => set({ business_name: e.target.value })} maxLength={60} />
-            {!nameOk && <small>At least two characters.</small>}
+            <small>{nameOk ? 'Shown in the app and in alert messages.' : 'At least two letters.'}</small>
           </label>
-        </Panel>
+        </Section>
 
-        <Panel
-          title="Model"
-          icon="spark"
-          aside={<span className="mono muted">{s.llm_enabled ? `live · ${activeProvider?.label || s.llm_provider}` : 'built-in rules'}</span>}
+        <Section
+          title="AI model"
+          sub="Reads customer messages and writes a short plan. It never decides what the agent is allowed to do."
+          status={pill(s.llm_enabled, `Connected: ${providerLabel(activeProvider) || s.llm_provider}`, 'Simple rules')}
         >
           <ModelFields providers={providers} values={form} onChange={set} settings={s} />
-          {!modelOk && <p className="app-small muted">Add a key{providers.find((p) => p.key === form.llm_provider)?.needs_base_url ? ', model and https:// base URL' : ''} for this provider to save it.</p>}
-        </Panel>
+        </Section>
 
-        <Panel title="Autonomy rules" icon="dial">
-          <div className="app-form-grid">
+        <Section title="Rules" sub="When the agent earns more freedom, and how much it may hand out on its own.">
+          <div className="st-stack">
             <label className="field">
-              <span>Clean runs to promote</span>
-              <input className="input" type="number" min={1} max={20} value={form.promotion_clean_runs} onChange={(e) => set({ promotion_clean_runs: e.target.value })} />
-              <small>Consecutive verified runs to climb one rung, for every action type.</small>
+              <span>How many correct jobs before the agent gets more freedom</span>
+              <input className="input st-num" type="number" min={1} max={20} value={form.promotion_clean_runs} onChange={(e) => set({ promotion_clean_runs: e.target.value })} />
+              <small>In a row, double-checked, for each job type separately.</small>
             </label>
             {taskClasses.map((tc) => {
               const field = CEILING_FIELD[tc.key];
               if (!field) return null;
+              const level2 = levelCopy(2, shortMoney(form[field])).short;
               return (
                 <label key={tc.key} className="field">
-                  <span>{tc.label} · L2 ceiling ($)</span>
-                  <input className="input" type="number" min={0} step="5" value={form[field]} onChange={(e) => set({ [field]: e.target.value })} />
-                  <small>At L2, any {tc.label.toLowerCase()} above this waits for a human.</small>
+                  <span>Most the agent may {limitVerb(tc.key)} on its own ($)</span>
+                  <input className="input st-num" type="number" min={0} step="5" value={form[field]} onChange={(e) => set({ [field]: e.target.value })} />
+                  <small>{jobsName(data, tc.key)}: used at “{level2}”. Anything bigger waits for your OK.</small>
                 </label>
               );
             })}
           </div>
-        </Panel>
+        </Section>
 
-        <Panel title="Observability" icon="eye" aside={<span className="mono muted">{s.neatlogs_enabled ? 'neatlogs on' : 'local only'}</span>}>
-          <NeatlogsFields values={form} onChange={set} settings={s} />
-          <p className="muted app-small">Without a key, every trace is still recorded locally and shown in the evidence packet.</p>
-        </Panel>
+        <div className="st-group">
+          <h2 className="st-group-title">Connections <span className="pl-muted">(optional)</span></h2>
+          <Section
+            title="Activity recording (neatlogs)"
+            sub="Sends a step-by-step record of every agent action to neatlogs so you or an auditor can replay it. Without it, records are still kept in this app."
+            status={pill(s.neatlogs_enabled, 'On', 'Off')}
+          >
+            <NeatlogsFields values={form} onChange={set} settings={s} />
+          </Section>
+          <Section
+            title="Get notified when the agent is paused"
+            sub="Paste a Slack or Discord webhook link; we post a message when a job type is paused or resumed."
+            status={pill(s.alerts_enabled, 'On', 'Off')}
+          >
+            <AlertFields values={form} onChange={set} settings={s} />
+          </Section>
+        </div>
 
-        <Panel title="Alerts" icon="flag" aside={<span className="mono muted">{s.alerts_enabled ? 'on' : 'off'}</span>}>
-          <AlertFields values={form} onChange={set} settings={s} />
-        </Panel>
-
-        <Panel title="Unit economics" icon="ledger">
-          <p className="muted app-small">These assumptions drive the live savings meter: supervision time per action at each license level, priced at your hourly cost and scaled to your monthly volume, compared with handling everything by hand. Incidents caught by the detectors are priced at your cost per incident.</p>
-          <div className="app-form-grid">
-            {ECON_FIELDS.map((f) => (
-              <label key={f.key} className="field">
-                <span>{f.label}</span>
-                <input className="input" type="number" min={0} step={f.step} value={form[f.key]} onChange={(e) => set({ [f.key]: e.target.value })} />
-                <small>{f.note}</small>
-              </label>
-            ))}
+        <details className="pl-more st-advanced">
+          <summary>Advanced: savings estimate</summary>
+          <div className="st-advanced-body">
+            <p className="pl-muted pl-small">Used only to estimate savings on the Reports page. They don't change what the agent does.</p>
+            <div className="pl-fields">
+              {ECON_FIELDS.map((f) => (
+                <label key={f.key} className="field">
+                  <span>{f.label}</span>
+                  <input className="input" type="number" min={0} step={f.step} value={form[f.key]} onChange={(e) => set({ [f.key]: e.target.value })} />
+                  <small>{f.note}</small>
+                </label>
+              ))}
+            </div>
           </div>
-        </Panel>
+        </details>
 
-        <div className="app-save-bar">
-          <Link to="/onboarding" className="btn btn-ghost">Run setup again</Link>
-          {dirty && <button type="button" className="btn btn-ghost" onClick={discard}>Discard</button>}
-          <button className="btn btn-ink" disabled={!canSave}>
-            <HandIcon name="check" size={16} /> {dirty ? `Save ${Object.keys(changes).length} change${Object.keys(changes).length === 1 ? '' : 's'}` : 'Saved'}
-          </button>
+        <div className={`st-savebar ${dirty ? 'is-dirty' : ''}`} role="region" aria-label="Save changes">
+          <span className="pl-small">
+            {!dirty ? 'All changes saved.' : problem || `${count} unsaved change${count === 1 ? '' : 's'}.`}
+          </span>
+          {dirty && (
+            <div className="pl-actions">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setForm(initial)}>Discard</button>
+              <button className="btn btn-ink btn-sm" disabled={!canSave}>{busy ? 'Saving…' : `Save ${count} change${count === 1 ? '' : 's'}`}</button>
+            </div>
+          )}
         </div>
       </form>
 
-      <Panel title="Danger zone" icon="warn" className="app-block">
-        <p className="app-small">Reset wipes runs, detections and ledger rows, then reinstalls the sample orders and resets each license to its demo level. Settings and keys are kept. Git commits already made stay in history.</p>
+      <Section title="Start over">
+        <p className="pl-small">
+          <b>Reset demo data</b> — deletes all activity and history in this workspace and reloads sample orders. Your settings are kept.
+        </p>
         {!confirmReset ? (
-          <button className="btn btn-line" onClick={() => setConfirmReset(true)}><HandIcon name="refresh" size={14} /> Reset demo data…</button>
+          <div className="pl-actions">
+            <button type="button" className="btn btn-line btn-sm" onClick={() => setConfirmReset(true)}>Reset demo data…</button>
+            <Link to="/onboarding" className="btn btn-ghost btn-sm">Run the setup guide again</Link>
+          </div>
         ) : (
-          <div className="app-confirm">
-            <span>Wipe all runs and orders?</span>
-            <button className="btn btn-ink btn-sm" disabled={busy} onClick={() => run(api.reseed, 'Demo data reset.').then(() => setConfirmReset(false))}>Yes, reset</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmReset(false)}>Cancel</button>
+          <div className="pl-alert st-confirm">
+            <span>Delete all activity and history and reload the sample orders?</span>
+            <div className="pl-actions">
+              <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => run(api.reseed, 'Demo data reset.').then(() => setConfirmReset(false))}>Yes, reset</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmReset(false)}>Cancel</button>
+            </div>
           </div>
         )}
-      </Panel>
-    </>
+      </Section>
+    </div>
   );
 }

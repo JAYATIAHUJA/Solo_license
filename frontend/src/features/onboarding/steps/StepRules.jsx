@@ -1,47 +1,45 @@
-import { Ladder } from '../../../components/domain/Ladder.jsx';
-import { LEVELS } from '../../../lib/format.js';
+import { levelCopy } from '../../../lib/copy.js';
 import { CEILING_FIELD } from '../../app/components/IntegrationFields.jsx';
+import { jobsName, limitVerb, shortMoney } from '../../app/components/words.js';
+
+const RECOMMENDED = 1;
 
 export function StepRules({ form, set, data }) {
   const pickLevel = (key, id) => set({ starting_levels: { ...form.starting_levels, [key]: id } });
+  const threshold = Number(form.promotion_clean_runs) || 1;
   return (
     <>
-      <h1 className="ob-title serif">How much <em className="italic">trust</em> on day one?</h1>
-      <p className="ob-sub">Each kind of action earns its own license. Tap a rung to choose where it starts; clean, verified runs move it up.</p>
-
-      <label className="field ob-narrow">
-        <span>Clean runs to promote</span>
-        <input
-          className="input"
-          type="number"
-          min={1}
-          max={20}
-          value={form.promotion_clean_runs}
-          onChange={(e) => set({ promotion_clean_runs: Math.max(1, Number(e.target.value) || 1) })}
-        />
-        <small>Consecutive verified runs needed to climb one rung. Shared by every action type.</small>
-      </label>
+      <h1 className="ob-title">Where should the agent start?</h1>
+      <p className="ob-sub">
+        Each job type earns freedom on its own. After {threshold} correct job{threshold === 1 ? '' : 's'} in a row it moves up one step;
+        if anything goes wrong it is paused until you check.
+      </p>
 
       {data.task_classes.map((tc) => {
-        const level = form.starting_levels[tc.key] ?? 0;
-        const picked = LEVELS[level];
+        const level = form.starting_levels[tc.key] ?? RECOMMENDED;
         const field = CEILING_FIELD[tc.key];
+        const limit = shortMoney(field ? form[field] : tc.ceiling);
         return (
           <section key={tc.key} className="ob-section">
-            <h2 className="ob-section-title">{tc.label}</h2>
-            <p className="ob-section-sub">
-              The agent may {tc.description}. Starts at <b>{picked.code} — {picked.name}</b>: {picked.who.toLowerCase()}.
-            </p>
-            <Ladder
-              level={level}
-              cleanRuns={0}
-              threshold={Number(form.promotion_clean_runs) || 1}
-              compact
-              onPick={(id) => pickLevel(tc.key, id)}
-            />
+            <h2>{jobsName(data, tc.key)}</h2>
+            <div className="pl-choices" role="radiogroup" aria-label={`${jobsName(data, tc.key)}: starting point`}>
+              {[0, 1, 2, 3].map((id) => {
+                const words = levelCopy(id, limit);
+                return (
+                  <label key={id} className={`pl-choice ${level === id ? 'is-on' : ''}`}>
+                    <input type="radio" name={`start-${tc.key}`} checked={level === id} onChange={() => pickLevel(tc.key, id)} />
+                    <span>
+                      <b>{words.short}</b>
+                      {id === RECOMMENDED && <span className="pl-tag">Recommended</span>}
+                      <small>{words.long}</small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
             {field && (
               <label className="field ob-narrow">
-                <span>L2 auto-approve ceiling ($)</span>
+                <span>Most the agent may {limitVerb(tc.key)} on its own ($)</span>
                 <input
                   className="input"
                   type="number"
@@ -50,12 +48,27 @@ export function StepRules({ form, set, data }) {
                   value={form[field]}
                   onChange={(e) => set({ [field]: Math.max(0, Number(e.target.value) || 0) })}
                 />
-                <small>At L2, any {tc.label.toLowerCase()} above this waits for a human.</small>
+                <small>Anything bigger always waits for your OK.</small>
               </label>
             )}
           </section>
         );
       })}
+
+      <section className="ob-section">
+        <label className="field ob-narrow">
+          <span>Correct jobs needed before more freedom</span>
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={20}
+            value={form.promotion_clean_runs}
+            onChange={(e) => set({ promotion_clean_runs: Math.max(1, Number(e.target.value) || 1) })}
+          />
+          <small>In a row, double-checked. 3 is a good start.</small>
+        </label>
+      </section>
     </>
   );
 }

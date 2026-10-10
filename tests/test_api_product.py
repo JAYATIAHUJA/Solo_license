@@ -90,3 +90,13 @@ def test_demo_session_survives_api_restart(monkeypatch, harness):
     api_module._demo_sessions.clear()  # what a process restart does
 
     assert client.get("/api/session/me", headers=headers).json()["id"] == "demo:jayati"
+
+
+def test_dashboard_runs_carry_their_problems(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+    client.post("/api/faults", headers=headers, json={"mode": "quiet_failure"})
+
+    body = client.post("/api/runs", headers=headers, json={"order_id": "ORD-1001", "amount": 5}).json()
+
+    assert body["runs"][0]["problems"] == ["state_mismatch"]

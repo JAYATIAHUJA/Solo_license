@@ -1,0 +1,78 @@
+/* Plain UI primitives for the signed-in app.
+   The landing page carries the brand's sketchy, artful look; inside the app the
+   job is clarity. Rules: sans-serif type, one primary action per area, status
+   in words + a small coloured dot, details behind "Show details", generous
+   spacing, no decorative shaders, sketches, stamps or hard offset shadows. */
+
+:root {
+  --ok: #1f7a4d;
+  --ok-bg: #e6f2eb;
+  --wait: #9a6200;
+  --wait-bg: #f8eedb;
+  --bad: var(--signal);
+  --bad-bg: #fbe7e3;
+  --card: #ffffff;
+  --line: rgba(14, 14, 13, 0.12);
+}
+
+.pl-page { display: grid; gap: 24px; max-width: 1080px; width: 100%; }
+.pl-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.pl-head h1 { margin: 0; font: 600 26px/1.2 var(--font-sans); letter-spacing: -0.02em; }
+.pl-head p { margin: 4px 0 0; color: var(--ink-2); max-width: 62ch; }
+.pl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pl-section { display: grid; gap: 12px; }
+.pl-section > h2 { margin: 0; font: 600 16px/1.3 var(--font-sans); }
+.pl-section > p.pl-sub { margin: -6px 0 0; color: var(--muted); font-size: 14px; }
+
+.pl-card { background: var(--card); border: 1px solid var(--line); padding: 20px; display: grid; gap: 12px; }
+.pl-card h3 { margin: 0; font: 600 16px/1.3 var(--font-sans); }
+.pl-card p { margin: 0; }
+.pl-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+/* Status: words first, a dot for scanning. */
+.pl-status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; padding: 3px 10px; background: var(--paper-2); color: var(--ink); white-space: nowrap; }
+.pl-status::before { content: ""; width: 8px; height: 8px; background: currentColor; flex: none; }
+.pl-status.ok { background: var(--ok-bg); color: var(--ok); }
+.pl-status.wait { background: var(--wait-bg); color: var(--wait); }
+.pl-status.bad { background: var(--bad-bg); color: var(--bad); }
+.pl-status.muted { color: var(--muted); }
+
+/* Lists of things (runs, tasks, events) as readable rows. */
+.pl-list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); }
+.pl-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+.pl-row:first-child { border-top: 0; }
+.pl-row-main { display: grid; gap: 2px; min-width: 0; }
+.pl-row-main b { font-weight: 500; }
+.pl-row-main small { color: var(--muted); font-size: 13px; }
+.pl-row-side { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+a.pl-row:hover, button.pl-row:hover { background: var(--paper); }
+
+.pl-empty { padding: 28px 20px; text-align: center; color: var(--muted); background: var(--card); border: 1px dashed var(--line); }
+
+/* Gentle explainer box. */
+.pl-help { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--sheet); border-left: 3px solid var(--ink); font-size: 14px; color: var(--ink-2); }
+.pl-help b { color: var(--ink); }
+.pl-alert { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--bad-bg); border-left: 3px solid var(--bad); }
+
+/* Details on demand. */
+.pl-more { border-top: 1px solid var(--line); padding-top: 10px; }
+.pl-more > summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; }
+.pl-more > summary::before { content: "▸ "; }
+.pl-more[open] > summary::before { content: "▾ "; }
+.pl-more > summary::-webkit-details-marker { display: none; }
+
+/* Label / value pairs. */
+.pl-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+.pl-kv dt { color: var(--muted); }
+.pl-kv dd { margin: 0; }
+
+.pl-big { font: 600 32px/1.1 var(--font-sans); letter-spacing: -0.02em; }
+.pl-muted { color: var(--muted); }
+.pl-small { font-size: 13px; }
+
+@media (max-width: 640px) {
+  .pl-row { grid-template-columns: 1fr; }
+  .pl-row-side { justify-content: flex-start; }
+  .pl-head h1 { font-size: 22px; }
+}

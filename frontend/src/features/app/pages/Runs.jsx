@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../../../lib/store.jsx';
-import { classMeta, money, when } from '../../../lib/format.js';
-import { ClassPicker, ClassTag, Empty, PageHeader, Panel, StatusMark } from '../components/Bits.jsx';
+import { outcome } from '../../../lib/copy.js';
+import { when } from '../../../lib/format.js';
 import { EvidencePacket } from '../components/EvidencePacket.jsx';
-import { RestorePanels } from '../components/RestorePanel.jsx';
+import { RestorePanel } from '../components/RestorePanel.jsx';
 import { ApproveBar } from '../components/ApproveBar.jsx';
+import { isPractice, jobsName, pausedNow, personName, runSentence } from '../components/words.js';
+import '../components/activity.css';
 
+const WAITING = new Set(['pending_approval', 'suggested']);
 const FILTERS = [
-  ['all', 'All'],
-  ['pending_approval', 'Awaiting'],
-  ['demoted', 'Demoted'],
-  ['clean', 'Clean'],
-  ['suggested', 'Suggested'],
+  { id: 'all', label: 'All', test: () => true },
+  { id: 'waiting', label: 'Waiting for you', test: (r) => WAITING.has(r.status) },
+  { id: 'problems', label: 'Problems caught', test: (r) => r.status === 'demoted' },
 ];
 
+/** Activity: every job the agent did or suggested, newest first, and the
+ *  plain "What happened" for the one you pick. */
 export function Runs() {
   const { data, load } = useStore();
   const { runId } = useParams();
@@ -22,56 +25,117 @@ export function Runs() {
   const [filter, setFilter] = useState('all');
   const [cls, setCls] = useState('all');
   const selected = Number(runId) || data.runs[0]?.id;
-  const classes = useMemo(() => (data.task_classes || []).map((c) => ({ key: c.key, label: c.label })), [data.task_classes]);
+  const classes = useMemo(() => (data.task_classes || []).map((c) => c.key), [data.task_classes]);
 
+  // The background refresh brings back the latest job's record, so keep the
+  // last record for the selected job on screen and fetch it again quietly.
+  const [kept, setKept] = useState(null);
+  const asked = useRef({ id: null, at: 0 });
+  const fresh = data.packet?.run?.id === selected ? data.packet : null;
   useEffect(() => {
-    if (selected && data.packet?.run?.id !== selected) load(selected);
-  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (fresh) { setKept(fresh); return; }
+    if (!selected) return;
+    const now = Date.now();
+    // At most one quiet refetch every few seconds per job, so a missing job can't loop.
+    if (asked.current.id === selected && now - asked.current.at < 4000) return;
+    asked.current = { id: selected, at: now };
+    load(selected);
+  }, [selected, data.packet]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const list = data.runs.filter((r) => (filter === 'all' || r.status === filter) && (cls === 'all' || r.task_class === cls));
-  const packet = data.packet?.run?.id === selected ? data.packet : null;
+  const byClass = data.runs.filter((r) => cls === 'all' || r.task_class === cls);
+  const active = FILTERS.find((f) => f.id === filter) || FILTERS[0];
+  const list = byClass.filter(active.test);
+  const packet = fresh || (kept?.run?.id === selected ? kept : null);
+  const paused = Object.entries(data.licenses || {}).filter(([, l]) => l.quarantined).map(([k]) => k);
+  const pausedRun = (key) => data.runs.find((r) => r.task_class === key && r.status === 'demoted')?.id;
+  const detailClass = packet?.run?.task_class || 'refund';
 
   return (
-    <>
-      <PageHeader eyebrow="Runs & evidence" title={<>Every run, <em className="italic">on the record.</em></>}>
-        Pick a run to read its evidence packet: what was asked, what the license allowed, what the tool claimed, and what the database actually shows.
-      </PageHeader>
+    <div className={`pl-page act-page ${runId ? 'has-detail' : ''}`}>
+      <header className="pl-head">
+        <div>
+          <h1>Activity</h1>
+          <p>Everything the agent did or suggested. Pick one to see what happened.</p>
+        </div>
+      </header>
 
-      <RestorePanels />
+      {paused.map((key) => (
+        <div key={key} className="pl-alert">
+          <span>
+            <b>{pausedNow(data, key)}.</b> A problem was caught.{' '}
+            {pausedRun(key) && !(runId && Number(runId) === pausedRun(key))
+              ? <Link to={`/app/runs/${pausedRun(key)}`}>Review it and resume →</Link>
+              : 'Review it below, then resume.'}
+          </span>
+        </div>
+      ))}
 
-      <div className="app-cols app-cols-runs">
-        <Panel title="Runs" icon="layers" count={list.length} className="app-run-list">
-          {classes.length > 1 && <ClassPicker classes={classes} value={cls} onChange={setCls} allowAll label="Filter by task class" />}
-          <div className="app-filters">
-            {FILTERS.map(([id, label]) => (
-              <button key={id} className={filter === id ? 'is-on' : ''} onClick={() => setFilter(id)}>{label}</button>
-            ))}
-          </div>
-          {list.length === 0 ? <Empty icon="eye" title="Nothing here">{data.runs.length ? 'Try another filter.' : <Link to="/app/agent">Run the agent first.</Link>}</Empty> : (
-            <ul className="app-runs">
-              {list.map((r) => (
-                <li key={r.id}>
-                  <button className={r.id === selected ? 'is-on' : ''} onClick={() => navigate(`/app/runs/${r.id}`)}>
-                    <span className="mono">#{r.id}</span>
-                    <span><b>{r.order_id}</b> <span className="muted">{money(r.requested_amount)}</span></span>
-                    <StatusMark status={r.status} />
-                    <span className="muted app-small mc-run-meta"><ClassTag label={classMeta(data, r.task_class).label} /> L{r.level_at_run} · {when(r.created_at)}{r.fault_mode && r.fault_mode !== 'none' ? ' · fault' : ''}</span>
+      <div className="act-cols">
+        <section className="act-list-col" aria-label="Activity list">
+          <div className="act-filters">
+            <div className="act-tabs" role="tablist" aria-label="Show">
+              {FILTERS.map((f) => {
+                const n = byClass.filter(f.test).length;
+                return (
+                  <button key={f.id} type="button" role="tab" aria-selected={filter === f.id} className={filter === f.id ? 'is-on' : ''} onClick={() => setFilter(f.id)}>
+                    {f.label}{f.id !== 'all' && n > 0 ? <span className="act-count">{n}</span> : null}
                   </button>
-                </li>
-              ))}
+                );
+              })}
+            </div>
+            {classes.length > 1 && (
+              <select className="act-select" value={cls} onChange={(e) => setCls(e.target.value)} aria-label="Job type">
+                <option value="all">All job types</option>
+                {classes.map((k) => <option key={k} value={k}>{jobsName(data, k)}</option>)}
+              </select>
+            )}
+          </div>
+
+          {list.length === 0 ? (
+            <div className="pl-empty">
+              {data.runs.length
+                ? (filter === 'waiting' ? 'Nothing is waiting for you.' : filter === 'problems' ? 'No problems caught.' : 'Nothing here.')
+                : <>No activity yet. <Link to="/app/agent">Give the agent its first job →</Link></>}
+            </div>
+          ) : (
+            <ul className="act-list">
+              {list.map((r) => {
+                const out = outcome(r.status);
+                const who = personName(r.actor_id);
+                return (
+                  <li key={r.id}>
+                    <button type="button" className={`act-row ${r.id === selected ? 'is-on' : ''}`} onClick={() => navigate(`/app/runs/${r.id}`)} aria-current={r.id === selected ? 'true' : undefined}>
+                      <span className="pl-row-main">
+                        <b>{runSentence(data, r)}</b>
+                        <small>
+                          {who ? `by ${who} · ` : ''}{when(r.created_at)}
+                          {isPractice(r) && <span className="act-practice">practice</span>}
+                        </small>
+                      </span>
+                      <span className={`pl-status ${out.tone}`}>{out.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
-        </Panel>
+        </section>
 
-        <Panel title="Evidence packet" icon="eye">
-          {!packet ? <Empty icon="eye" title={selected ? 'Loading…' : 'No run selected'} /> : (
-            <>
+        <section className="act-detail-col" aria-label="What happened">
+          {runId && <Link className="act-back" to="/app/runs">← All activity</Link>}
+          {!selected ? null : !packet ? (
+            <div className="pl-empty">Loading…</div>
+          ) : (
+            <div className="pl-card act-detail-card">
               <EvidencePacket packet={packet} />
-              <ApproveBar run={packet.run} onDone={(id) => navigate(`/app/runs/${id}`)} />
-            </>
+              <ApproveBar run={packet.run} onDone={(id) => id && navigate(`/app/runs/${id}`)} />
+              {data.licenses?.[detailClass]?.quarantined && (
+                <RestorePanel taskClass={detailClass} evidenceRunId={packet.run.id} />
+              )}
+            </div>
           )}
-        </Panel>
+        </section>
       </div>
-    </>
+    </div>
   );
 }

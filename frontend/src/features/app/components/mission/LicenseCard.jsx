@@ -1,23 +1,24 @@
-import { useId, useRef, useState } from 'react';
-import { motion } from 'motion/react';
-import { LEVELS, humanize, money, stampDate } from '../../../../lib/format.js';
-import { HandIcon } from '../../../../components/icons/HandIcon.jsx';
-import { licenseFacts } from './derive.js';
-import { safeId } from './useCountUp.js';
+import { useRef, useState } from 'react';
+import { stampDate } from '../../../../lib/format.js';
+import { levelCopy } from '../../../../lib/copy.js';
+import { licenseFacts, limitOf } from './derive.js';
 
 /* The card is ONE self-contained SVG (literal colours, inline attributes, no
-   CSS variables or classes) so it serialises straight to a PNG. These mirror
-   styles/tokens.css. */
+   CSS variables or classes) so it serialises straight to a PNG. Colours mirror
+   styles/tokens.css and styles/plain.css. */
 const INK = '#0e0e0d';
+const INK_2 = '#3a3a37';
+const WHITE = '#ffffff';
 const PAPER = '#fbfaf7';
-const PAPER_2 = '#ebe8e1';
+const LINE = '#dcd9d2';
 const MUTED = '#76746e';
-const SIGNAL = '#d8341f';
-const SERIF = "'Instrument Serif', Georgia, 'Times New Roman', serif";
-const MONO = "'Geist Mono', ui-monospace, 'Courier New', monospace";
+const RED = '#d8341f';
+const RED_BG = '#fbe7e3';
 const SANS = "'Inter Tight', 'Helvetica Neue', Arial, sans-serif";
+const MONO = "'Geist Mono', ui-monospace, 'Courier New', monospace";
 const W = 640;
-const H = 404;
+const H = 400;
+const X = 28;
 
 const clip = (s, n) => (String(s || '').length > n ? `${String(s).slice(0, n - 1)}…` : String(s || ''));
 
@@ -27,7 +28,7 @@ function hash(s) {
   return h >>> 0;
 }
 
-/** Deterministic barcode bars from the ledger sha (decorative, but stable). */
+/** Deterministic barcode bars from the history record id (decorative, but stable). */
 function bars(seed, width) {
   const out = [];
   let x = 0;
@@ -43,42 +44,44 @@ function bars(seed, width) {
   return out;
 }
 
-function Field({ x, y, label, value, size = 15, font = SANS, color = INK, weight = 500 }) {
-  return (
-    <g>
-      <text x={x} y={y} fontFamily={MONO} fontSize="8.5" letterSpacing="1.2" fill={MUTED}>{label}</text>
-      <text x={x} y={y + size + 4} fontFamily={font} fontSize={size} fontWeight={weight} fill={color}>{value}</text>
-    </g>
-  );
+function Label({ x, y, children }) {
+  return <text x={x} y={y} fontFamily={MONO} fontSize="9.5" letterSpacing="1.2" fill={MUTED}>{children}</text>;
 }
 
-export function shareText({ business, card, facts, threshold }) {
-  const { meta, license } = card;
-  const lvl = LEVELS[license.effective_level] || LEVELS[0];
+function Value({ x, y, size = 13, color = INK, weight = 500, children }) {
+  return <text x={x} y={y} fontFamily={SANS} fontSize={size} fontWeight={weight} fill={color}>{children}</text>;
+}
+
+export function shareText({ business, card, threshold }) {
+  const { name, license, ceiling } = card;
+  const who = business ? `${business}'s` : 'Our';
   if (license.quarantined) {
-    const rule = facts.incidentFault ? humanize(facts.incidentFault) : 'fault';
-    return `Our ops agent just lost its ${meta.label} license. A ${rule} was caught by read-back and it fell from L${license.demoted_from ?? '?'} to L0 in a single run — zero false successes reached a customer. A human restores it from the evidence packet, and the whole thing is a git commit${facts.sha ? ` (${facts.sha.slice(0, 7)})` : ''}. Trust is earned per task, not configured. #neatHack`;
+    return `${who} AI agent was paused on ${name.toLowerCase()} the moment it hit a problem. Nothing wrong reached a customer, and a person decides when it can carry on. Freedom is earned, not assumed. #neatHack`;
   }
-  const streak = license.effective_level >= 3 ? 'top rung, every run audited' : `${license.clean_runs}/${threshold} verified-clean runs toward L${license.effective_level + 1}`;
-  return `${business ? `${business}'s` : 'Our'} ops agent holds an ${lvl.code} license for ${meta.label}: ${lvl.name}. ${streak}. Every result verified by read-back, every promotion a git commit${facts.sha ? ` (${facts.sha.slice(0, 7)})` : ''}. Trust is earned, not configured. #neatHack`;
+  const now = levelCopy(license.effective_level, limitOf(ceiling)).short;
+  const next = license.effective_level >= 3 ? 'It has reached the highest level.' : `It earns more freedom after ${threshold} correct jobs in a row.`;
+  return `${who} AI agent holds a license for ${name.toLowerCase()}: “${now}”. ${next} Every result is double-checked and every change is on record. #neatHack`;
 }
 
-/** The "Agent Driving License" for one task class. */
+/** The agent's license for one job type, plus download and share buttons below it. */
 export function LicenseCard({ data, card, threshold = 3 }) {
   const svgRef = useRef(null);
-  const uid = safeId(useId());
   const [note, setNote] = useState('');
-  const { key, meta, license, ceiling } = card;
+  const { key, name, license, ceiling } = card;
   const facts = licenseFacts(data, key);
-  const q = !!license.quarantined;
+  const paused = !!license.quarantined;
   const level = license.effective_level ?? 0;
-  const info = LEVELS[level] || LEVELS[0];
-  const business = data.settings?.business_name || 'Your workspace';
+  const copy = levelCopy(level, limitOf(ceiling));
+  const business = data.settings?.business_name || 'Your business';
   const number = `SL-${key.replace(/[^a-z]/gi, '').slice(0, 3).toUpperCase()}-${String(hash(`${business}:${key}`) % 100000).padStart(5, '0')}`;
-  const authorised = level === 0 ? 'Suggest only' : level === 1 ? 'Draft + human approve' : level === 2 ? `Auto up to ${money(ceiling)}` : 'Full auto, audited';
-  const streak = q ? '0 · quarantined' : level >= 3 ? 'Top rung' : `${Math.min(license.clean_runs, threshold)}/${threshold} → L${level + 1}`;
-  const incident = facts.lastIncident ? `${stampDate(facts.lastIncident.created_at)} · ${humanize(facts.incidentFault || 'detection')}` : 'None on record';
-  const code = bars(facts.sha || number, 150);
+  const allowed = paused ? 'Paused — suggests only until reviewed' : copy.short;
+  const progress = paused
+    ? 'On hold'
+    : level >= 3 ? 'Highest level' : `${Math.min(license.clean_runs || 0, threshold)} of ${threshold} correct jobs`;
+  const incident = facts.lastIncident
+    ? `${stampDate(facts.lastIncident.created_at)} · ${facts.incidentProblem?.title || 'Problem caught'}`
+    : 'None on record';
+  const code = bars(facts.sha || number, 120);
 
   async function download() {
     const svg = svgRef.current;
@@ -93,109 +96,92 @@ export function LicenseCard({ data, card, threshold = 3 }) {
       canvas.width = W * scale;
       canvas.height = H * scale;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#f3f1ec';
+      ctx.fillStyle = WHITE;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `solo-license-${key}-${q ? 'quarantined' : info.code.toLowerCase()}.png`;
+      a.download = `solo-license-${key}-${paused ? 'paused' : `level-${level}`}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      setNote('PNG saved.');
+      setNote('Image saved.');
     } catch {
-      setNote('Could not render the PNG in this browser.');
+      setNote('This browser could not create the image.');
     }
   }
 
-  async function copy() {
-    const text = shareText({ business: data.settings?.business_name, card, facts, threshold });
+  async function copyText() {
+    const text = shareText({ business: data.settings?.business_name, card, threshold });
     try {
       await navigator.clipboard.writeText(text);
-      setNote('Share text copied.');
+      setNote('Post text copied.');
     } catch {
       setNote(text);
     }
   }
 
   return (
-    <motion.figure className={`mc-lic ${q ? 'is-q' : ''}`} id={key} initial={{ opacity: 0, y: 12, rotate: -0.6 }} animate={{ opacity: 1, y: 0, rotate: 0 }}>
-      <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={`${meta.label} license: ${q ? 'quarantined' : info.code}`}>
-        <defs>
-          <pattern id={`${uid}-h`} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="7" height="7" fill={PAPER} />
-            <rect width="2.2" height="7" fill={SIGNAL} />
-          </pattern>
-          <pattern id={`${uid}-g`} width="14" height="14" patternUnits="userSpaceOnUse">
-            <path d="M0 7 L14 7 M7 0 L7 14" stroke={PAPER_2} strokeWidth="0.8" />
-          </pattern>
-        </defs>
+    <figure className="app-lic" id={key}>
+      <svg ref={svgRef} xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={`${name} license: ${paused ? 'paused' : copy.short}`}>
+        {/* card */}
+        <rect x="0.5" y="0.5" width={W - 1} height={H - 1} rx="14" fill={WHITE} stroke={LINE} />
 
-        {/* sheet */}
-        <rect x="1" y="1" width={W - 2} height={H - 2} fill={PAPER} stroke={INK} strokeWidth="2" />
-        <rect x="190" y="58" width={W - 210} height="250" fill={`url(#${uid}-g)`} />
-        <rect x="9" y="9" width={W - 18} height={H - 18} fill="none" stroke={INK} strokeWidth="0.6" />
+        {/* header */}
+        <path d={`M0.5 52 L0.5 14.5 Q0.5 0.5 14.5 0.5 L${W - 14.5} 0.5 Q${W - 0.5} 0.5 ${W - 0.5} 14.5 L${W - 0.5} 52 Z`} fill={INK} />
+        <text x={X} y="32" fontFamily={SANS} fontSize="15" fontWeight="700" fill={WHITE}>Solo License</text>
+        <text x={X + 108} y="32" fontFamily={SANS} fontSize="13" fill="#bdbab3">Agent license</text>
+        <text x={W - X} y="32" textAnchor="end" fontFamily={MONO} fontSize="11" letterSpacing="1" fill="#bdbab3">No. {number}</text>
 
-        {/* header band */}
-        <rect x="9" y="9" width={W - 18} height="38" fill={INK} />
-        <g fill={PAPER}>
-          <rect x="22" y="31" width="16" height="2.4" /><rect x="25" y="25" width="10" height="2.4" /><rect x="27" y="17" width="6" height="5" />
-        </g>
-        <text x="46" y="33" fontFamily={MONO} fontSize="12" fontWeight="700" letterSpacing="2.4" fill={PAPER}>SOLO LICENSE</text>
-        <text x={W - 22} y="33" textAnchor="end" fontFamily={MONO} fontSize="10" letterSpacing="1.6" fill={PAPER}>AGENT DRIVING LICENSE · № {number}</text>
-
-        {/* portrait = the level */}
-        <rect x="26" y="64" width="148" height="182" fill={q ? `url(#${uid}-h)` : INK} stroke={q ? SIGNAL : INK} strokeWidth="2" />
-        <text x="100" y="170" textAnchor="middle" fontFamily={SERIF} fontSize="104" fill={q ? SIGNAL : PAPER}>{q ? 'L0' : info.code}</text>
-        {[0, 1, 2, 3].map((r) => (
-          <rect key={r} x={58 + r * 22} y={222 - r * 6} width="14" height={10 + r * 6} fill={!q && r <= level ? PAPER : 'none'} stroke={q ? SIGNAL : PAPER} strokeWidth="1.4" />
-        ))}
-        <text x="100" y="268" textAnchor="middle" fontFamily={MONO} fontSize="9" letterSpacing="1.4" fill={MUTED}>CLASS {meta.key.toUpperCase()}</text>
-
-        {/* fields */}
-        <Field x={200} y={78} label="1 · HOLDER" value={clip(business, 30)} size={22} font={SERIF} weight={400} />
-        <Field x={200} y={126} label="2 · TASK CLASS" value={clip(meta.label, 22)} size={34} font={SERIF} weight={400} />
-        <Field x={200} y={184} label="3 · AUTHORISED TO" value={q ? 'Suggest only — quarantined' : `${authorised}`} size={15} color={q ? SIGNAL : INK} />
-        <Field x={200} y={226} label="4 · STREAK" value={streak} size={13} font={MONO} />
-        <Field x={340} y={226} label="5 · ISSUED" value={stampDate(facts.issued)} size={13} font={MONO} />
-        <Field x={480} y={226} label="6 · LAST CHANGE" value={stampDate(facts.lastChange)} size={13} font={MONO} />
-        <Field x={200} y={268} label="7 · LAST INCIDENT" value={clip(incident, 32)} size={13} font={MONO} color={facts.lastIncident ? SIGNAL : INK} />
-        <Field x={480} y={268} label="8 · LEDGER" value={facts.sha ? `git ${facts.sha.slice(0, 7)}` : 'no commit yet'} size={13} font={MONO} />
-
-        {/* footer: barcode + small print */}
-        <line x1="22" y1="318" x2={W - 22} y2="318" stroke={INK} strokeWidth="0.8" />
-        <g fill={INK}>{code.map(([bx, bw]) => <rect key={bx} x={26 + bx} y="330" width={bw} height="34" />)}</g>
-        <text x="26" y="378" fontFamily={MONO} fontSize="8" letterSpacing="1.2" fill={MUTED}>{(facts.sha || number).toUpperCase()}</text>
-        <text x="200" y="338" fontFamily={SANS} fontSize="10" fill={MUTED}>Promoted after {threshold} verified-clean runs.</text>
-        <text x="200" y="351" fontFamily={SANS} fontSize="10" fill={MUTED}>Any detection demotes to L0 at once.</text>
-        <text x="200" y="364" fontFamily={SANS} fontSize="10" fill={MUTED}>Every change is a git commit.</text>
-        <text x="200" y="378" fontFamily={MONO} fontSize="8" letterSpacing="1.2" fill={MUTED}>{facts.runs} RUNS ON RECORD · NEATHACK</text>
-
-        {/* stamp: verified by read-back */}
-        <g transform={`rotate(-8 ${W - 92} 346)`} opacity={q ? 0.35 : 0.92}>
-          <rect x={W - 168} y="320" width="152" height="52" fill="none" stroke={INK} strokeWidth="2.6" />
-          <rect x={W - 164} y="324" width="144" height="44" fill="none" stroke={INK} strokeWidth="0.9" />
-          <text x={W - 92} y="343" textAnchor="middle" fontFamily={MONO} fontSize="12.5" fontWeight="700" letterSpacing="2" fill={INK}>VERIFIED</text>
-          <text x={W - 92} y="360" textAnchor="middle" fontFamily={MONO} fontSize="9" fontWeight="600" letterSpacing="1.6" fill={INK}>BY READ-BACK</text>
-        </g>
-
-        {q && (
-          <g transform={`rotate(-14 ${W / 2} ${H / 2})`}>
-            <rect x={W / 2 - 220} y={H / 2 - 40} width="440" height="80" fill={PAPER} fillOpacity="0.82" stroke={SIGNAL} strokeWidth="5" />
-            <rect x={W / 2 - 212} y={H / 2 - 32} width="424" height="64" fill="none" stroke={SIGNAL} strokeWidth="1.5" />
-            <text x={W / 2} y={H / 2 + 6} textAnchor="middle" fontFamily={MONO} fontSize="38" fontWeight="700" letterSpacing="6" fill={SIGNAL}>QUARANTINED</text>
-            <text x={W / 2} y={H / 2 + 26} textAnchor="middle" fontFamily={MONO} fontSize="10" letterSpacing="2" fill={SIGNAL}>FELL FROM L{license.demoted_from ?? '?'} · HUMAN RESTORE REQUIRED</text>
+        {/* job type + paused badge */}
+        <Label x={X} y={86}>JOB TYPE</Label>
+        <Value x={X} y={120} size={30} weight={700}>{clip(name, 22)}</Value>
+        {paused && (
+          <g>
+            <rect x={W - X - 96} y="72" width="96" height="28" rx="14" fill={RED_BG} stroke={RED} />
+            <circle cx={W - X - 78} cy="86" r="4" fill={RED} />
+            <text x={W - X - 66} y="90.5" fontFamily={SANS} fontSize="12.5" fontWeight="700" letterSpacing="0.8" fill={RED}>PAUSED</text>
           </g>
         )}
+
+        <Label x={X} y={150}>BUSINESS</Label>
+        <Value x={X} y={170} size={15} color={INK_2}>{clip(business, 48)}</Value>
+
+        {/* what it may do, with the level as a small chip */}
+        <Label x={X} y={202}>ALLOWED TO</Label>
+        <rect x={X + 84} y="191" width="54" height="15" rx="7.5" fill={PAPER} stroke={LINE} />
+        <text x={X + 111} y="202" textAnchor="middle" fontFamily={MONO} fontSize="9" fill={MUTED}>LEVEL {level}</text>
+        <Value x={X} y={230} size={20} weight={600} color={paused ? RED : INK}>{clip(allowed, 44)}</Value>
+
+        <line x1={X} y1="250" x2={W - X} y2="250" stroke={LINE} />
+
+        {/* facts */}
+        <Label x={X} y={274}>PROGRESS</Label>
+        <Value x={X} y={293}>{progress}</Value>
+        <Label x={232} y={274}>ISSUED</Label>
+        <Value x={232} y={293}>{stampDate(facts.issued)}</Value>
+        <Label x={432} y={274}>LAST CHANGE</Label>
+        <Value x={432} y={293}>{stampDate(facts.lastChange)}</Value>
+
+        <Label x={X} y={322}>LAST PROBLEM</Label>
+        <Value x={X} y={341} color={facts.lastIncident ? RED : INK}>{clip(incident, 58)}</Value>
+        <Label x={432} y={322}>RECORD</Label>
+        <Value x={432} y={341}>{facts.sha ? `Saved · ${facts.sha.slice(0, 7)}` : 'Not saved yet'}</Value>
+
+        {/* footer */}
+        <line x1={X} y1="358" x2={W - X} y2="358" stroke={LINE} />
+        <text x={X} y="377" fontFamily={SANS} fontSize="10.5" fill={MUTED}>Earns more freedom after {threshold} correct jobs. Paused the moment a problem is caught.</text>
+        <text x={X} y="391" fontFamily={SANS} fontSize="10.5" fill={MUTED}>Every change is saved in history.</text>
+        <g fill={INK}>{code.map(([bx, bw]) => <rect key={bx} x={W - X - 120 + bx} y="366" width={bw} height="24" />)}</g>
       </svg>
-      <figcaption className="mc-lic-actions">
-        <button className="btn btn-ink btn-sm" onClick={download}><HandIcon name="arrow-right" size={13} /> Download PNG</button>
-        <button className="btn btn-line btn-sm" onClick={copy}><HandIcon name="copy" size={13} /> Copy share text</button>
-        {note && <span className="app-small muted mc-lic-note" role="status">{note}</span>}
+      <figcaption className="app-lic-actions">
+        <button type="button" className="btn btn-line btn-sm" onClick={download}>Download image</button>
+        <button type="button" className="btn btn-line btn-sm" onClick={copyText}>Copy post text</button>
+        {note && <span className="pl-small pl-muted app-lic-note" role="status">{note}</span>}
       </figcaption>
-    </motion.figure>
+    </figure>
   );
 }

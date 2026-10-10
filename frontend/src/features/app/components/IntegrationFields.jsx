@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { api } from '../../../lib/api.js';
-import { HandIcon } from '../../../components/icons/HandIcon.jsx';
-import { savedHint } from './ModelFields.jsx';
+import { plainError, savedHint } from './ModelFields.jsx';
+import './plain-form.css';
 import './integration-fields.css';
 
-/** Which setting holds the L2 auto-approve ceiling for each task class. */
+/** Which setting holds the "works alone up to $X" limit for each job type. */
 export const CEILING_FIELD = {
   refund: 'l2_auto_refund_ceiling',
   store_credit: 'l2_auto_credit_ceiling',
 };
 
-/** Unit-economics assumptions behind the live savings meter. */
+/** Cost assumptions used only to estimate savings on the Reports page. */
 export const ECON_FIELDS = [
-  { key: 'econ_hourly_cost', label: 'Loaded hourly cost ($)', step: '1', note: 'What an hour of a person handling tickets costs, all-in.' },
-  { key: 'econ_monthly_volume', label: 'Monthly actions per class', step: '100', note: 'How many refunds (or credits) your team handles a month.' },
-  { key: 'econ_incident_cost', label: 'Cost per incident ($)', step: '5', note: 'What one wrong refund or credit costs to clean up.' },
+  { key: 'econ_hourly_cost', label: 'What an hour of your time costs ($)', step: '1', note: 'Used to price the time the agent saves you.' },
+  { key: 'econ_monthly_volume', label: 'Jobs per month, per job type', step: '100', note: 'Roughly how many refunds (or store credits) you handle in a month.' },
+  { key: 'econ_incident_cost', label: 'Cost of one mistake ($)', step: '5', note: 'What it costs you to fix one wrong refund or credit.' },
 ];
 
 const SECRET_FIELDS = ['neatlogs_api_key', 'alert_webhook_url'];
@@ -55,7 +55,7 @@ export function SecretInput({ label, field, values, onChange, settings, placehol
         type={type}
         autoComplete="off"
         spellCheck={false}
-        placeholder={hint ? `Saved ${hint} — leave blank to keep` : placeholder}
+        placeholder={hint ? 'Saved — leave blank to keep' : placeholder}
         value={values[field] || ''}
         onChange={(e) => onChange({ [field]: e.target.value })}
       />
@@ -64,28 +64,30 @@ export function SecretInput({ label, field, values, onChange, settings, placehol
   );
 }
 
-/** A "test" button with an inline ok / failed result line. */
-export function TestRow({ label, icon = 'refresh', disabled, onTest }) {
+/** A "Test" button with a plain one-line result. `okText` replaces the
+ *  server's success message; failures are translated by plainError. */
+export function TestRow({ label = 'Test', okText = 'Connected', disabled, onTest }) {
   const [result, setResult] = useState(null);
   const [testing, setTesting] = useState(false);
   async function go() {
     setTesting(true); setResult(null);
     try {
-      setResult(await onTest());
+      const res = await onTest();
+      setResult(res.ok ? { ok: true, text: okText } : { ok: false, text: plainError(res.message), raw: res.message });
     } catch (cause) {
-      setResult({ ok: false, message: cause.message });
+      setResult({ ok: false, text: plainError(cause.message), raw: cause.message });
     } finally {
       setTesting(false);
     }
   }
   return (
-    <div className="if-test">
+    <div className="pl-test">
       <button type="button" className="btn btn-line btn-sm" onClick={go} disabled={testing || disabled}>
-        <HandIcon name={icon} size={14} /> {testing ? 'Working…' : label}
+        {testing ? 'Testing…' : label}
       </button>
       {result && (
-        <span className={result.ok ? 'if-ok' : 'if-bad'} role="status">
-          <HandIcon name={result.ok ? 'check' : 'warn'} size={14} /> {result.message}
+        <span className={result.ok ? 'pl-test-ok' : 'pl-test-bad'} role="status" title={result.raw || undefined}>
+          {result.ok ? '✓ ' : '✗ '}{result.text}
         </span>
       )}
     </div>
@@ -94,29 +96,27 @@ export function TestRow({ label, icon = 'refresh', disabled, onTest }) {
 
 const has = (values, settings, field) => Boolean(String(values[field] || '').trim() || savedHint(settings, field));
 
-/** neatlogs API key + project + probe. */
+/** neatlogs API key + project + test. */
 export function NeatlogsFields({ values, onChange, settings = {} }) {
   return (
-    <div className="if-block">
-      <div className="if-grid">
+    <div className="pl-form">
+      <div className="pl-fields">
         <SecretInput
           label="neatlogs API key"
           field="neatlogs_api_key"
           values={values}
           onChange={onChange}
           settings={settings}
-          placeholder="Optional"
-          note="Encrypted at rest and never shown back in full."
+          placeholder="Paste your neatlogs key"
+          note="From your neatlogs account. Stored encrypted."
         />
         <label className="field">
-          <span>Project</span>
+          <span>Project ID</span>
           <input className="input" spellCheck={false} value={values.neatlogs_project || ''} onChange={(e) => onChange({ neatlogs_project: e.target.value })} />
-          <small>The neatlogs project that receives run traces.</small>
+          <small>Which neatlogs project receives the records. Leave as is unless neatlogs gave you another.</small>
         </label>
       </div>
       <TestRow
-        label="Test neatlogs"
-        icon="eye"
         disabled={!has(values, settings, 'neatlogs_api_key')}
         onTest={() => api.testNeatlogs({ neatlogs_api_key: values.neatlogs_api_key, neatlogs_project: values.neatlogs_project })}
       />
@@ -126,24 +126,24 @@ export function NeatlogsFields({ values, onChange, settings = {} }) {
 
 export const validWebhook = (url) => !String(url || '').trim() || /^https:\/\/\S+$/.test(String(url).trim());
 
-/** Slack / Discord incoming webhook + test message. */
+/** Slack / Discord webhook link + test message. */
 export function AlertFields({ values, onChange, settings = {} }) {
   const ok = validWebhook(values.alert_webhook_url);
   return (
-    <div className="if-block">
+    <div className="pl-form">
       <SecretInput
-        label="Alert webhook URL (Slack or Discord)"
+        label="Slack or Discord webhook link"
         field="alert_webhook_url"
         type="url"
         values={values}
         onChange={onChange}
         settings={settings}
         placeholder="https://hooks.slack.com/services/…"
-        note={ok ? 'Posts a message whenever an agent’s license changes (promotion, demotion, quarantine). Stored encrypted.' : 'The webhook must start with https://.'}
+        note={ok ? 'In Slack or Discord, create an “incoming webhook” for a channel and paste its link here.' : 'The link should start with https://'}
       />
       <TestRow
-        label="Send test alert"
-        icon="flag"
+        label="Send a test message"
+        okText="Sent — check your channel."
         disabled={!ok || !has(values, settings, 'alert_webhook_url')}
         onTest={() => api.testAlert({ alert_webhook_url: values.alert_webhook_url })}
       />

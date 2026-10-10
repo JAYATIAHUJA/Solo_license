@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 import { money } from '../../../lib/format.js';
 
 const EMPTY = { order_id: '', customer: '', amount: '' };
@@ -7,6 +6,7 @@ const ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{2,31}$/;
 
 export function StepOrders({ form, set, data }) {
   const [draft, setDraft] = useState(EMPTY);
+  const [adding, setAdding] = useState(form.orders.length > 0);
   const existing = data.orders || [];
   const id = draft.order_id.trim().toUpperCase();
   const duplicate = Boolean(id) && (
@@ -24,46 +24,48 @@ export function StepOrders({ form, set, data }) {
 
   return (
     <>
-      <h1 className="ob-title serif">Something to <em className="italic">act on.</em></h1>
-      <p className="ob-sub">Orders are what the agent refunds or credits against. Every action is checked against its order before it is allowed.</p>
+      <h1 className="ob-title">Sample orders</h1>
+      <p className="ob-sub">The agent needs some orders to refund or credit. Start with our sample set — you can add your own too.</p>
 
       {existing.length > 0 ? (
-        <p className="ob-note">
-          <HandIcon name="check" size={14} /> This workspace already has {existing.length} order{existing.length === 1 ? '' : 's'}. Add more below if you like.
-        </p>
+        <p className="pl-help">This workspace already has {existing.length} order{existing.length === 1 ? '' : 's'}.</p>
       ) : (
-        <label className="ob-check">
+        <label className={`pl-choice ${form.load_sample_orders ? 'is-on' : ''}`}>
           <input type="checkbox" checked={form.load_sample_orders} onChange={(e) => set({ load_sample_orders: e.target.checked })} />
-          <span className="ob-check-box">{form.load_sample_orders && <HandIcon name="check" size={16} />}</span>
           <span>
             <b>Load sample orders</b>
-            <small>A small set of realistic orders across price points, so you can try every level right away.</small>
+            <span className="pl-tag">Recommended</span>
+            <small>A handful of realistic orders at different prices, so you can try everything right away.</small>
           </span>
         </label>
       )}
 
-      <form className="ob-order-form" onSubmit={add}>
-        <label className="field">
-          <span>Order id</span>
-          <input className="input" placeholder="ORD-2001" maxLength={32} value={draft.order_id} onChange={(e) => setDraft({ ...draft, order_id: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Customer</span>
-          <input className="input" placeholder="Jane Doe" maxLength={80} value={draft.customer} onChange={(e) => setDraft({ ...draft, customer: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Amount ($)</span>
-          <input className="input" type="number" min="0.01" step="0.01" placeholder="35.00" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} />
-        </label>
-        <button className="btn btn-line" disabled={!valid}><HandIcon name="plus" size={14} /> Add</button>
-      </form>
-      {duplicate && <p className="ob-error"><HandIcon name="warn" size={14} /> That order id is already taken.</p>}
+      {!adding ? (
+        <div><button type="button" className="btn btn-line btn-sm" onClick={() => setAdding(true)}>Add your own order</button></div>
+      ) : (
+        <form className="ob-order-form" onSubmit={add}>
+          <label className="field">
+            <span>Order number</span>
+            <input className="input" placeholder="ORD-2001" maxLength={32} value={draft.order_id} onChange={(e) => setDraft({ ...draft, order_id: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Customer</span>
+            <input className="input" placeholder="Jane Doe" maxLength={80} value={draft.customer} onChange={(e) => setDraft({ ...draft, customer: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Amount paid ($)</span>
+            <input className="input" type="number" min="0.01" step="0.01" placeholder="35.00" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} />
+          </label>
+          <button className="btn btn-line" disabled={!valid}>Add</button>
+        </form>
+      )}
+      {duplicate && <p className="ob-error">That order number is already used.</p>}
 
       {form.orders.length > 0 && (
         <ul className="ob-orders">
           {form.orders.map((o) => (
             <li key={o.order_id}>
-              <code className="mono">{o.order_id}</code>
+              <span>{o.order_id}</span>
               <span>{o.customer}</span>
               <span>{money(o.amount)}</span>
               <button
@@ -72,13 +74,12 @@ export function StepOrders({ form, set, data }) {
                 aria-label={`Remove ${o.order_id}`}
                 onClick={() => set({ orders: form.orders.filter((x) => x.order_id !== o.order_id) })}
               >
-                <HandIcon name="cross" size={14} />
+                Remove
               </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="ob-sub">Orders you add here are saved together with the rest of setup when you finish.</p>
     </>
   );
 }

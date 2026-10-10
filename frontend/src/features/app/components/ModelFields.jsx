@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../../lib/api.js';
-import { HandIcon } from '../../../components/icons/HandIcon.jsx';
-import { SketchBox } from '../../../components/sketch/Sketch.jsx';
+import './plain-form.css';
 import './model-fields.css';
 
 /** UI-only hint: the provider we nudge first-time users toward. */
@@ -33,13 +32,33 @@ export function providerValues(provider, values) {
   return out;
 }
 
-function describe(p) {
-  if (!p.needs_key) return 'No key. Rule-based intake and template plans.';
-  if (p.needs_base_url) return 'Any OpenAI-style endpoint: your key, base URL and model.';
-  return p.default_model ? `Your API key · default ${p.default_model}` : 'Your API key.';
+/** A provider's name in plain words. */
+export function providerLabel(p) {
+  if (!p) return '';
+  if (!p.needs_key) return 'No AI model (simple rules)';
+  if (p.needs_base_url) return 'Other (OpenAI-compatible)';
+  return p.label;
 }
 
-/** Provider picker + key + model (+ base URL) + live connection test.
+/** Turn a raw connection error into something a shop owner can act on. */
+export function plainError(message = '') {
+  const m = String(message);
+  if (/401|403|unauthori[sz]ed|forbidden|invalid.*key|api.?key|permission|credential/i.test(m)) return 'That key was not accepted. Check you copied all of it and try again.';
+  if (/429|quota|rate.?limit|exhausted/i.test(m)) return 'The service says you have hit a usage limit. Try again later or check your plan.';
+  if (/404|not.?found|model/i.test(m)) return 'The service did not recognise that model name.';
+  if (/timeout|timed out|connect|resolve|network|unreachable|ssl/i.test(m)) return 'Could not reach the service. Check the address and your internet connection.';
+  if (/add .*first|https:\/\//i.test(m)) return m;
+  return 'That did not work. Check the details and try again.';
+}
+
+const ABOUT = {
+  deterministic: 'Works without a key. Understands simple, clearly written requests only.',
+  gemini: 'Has a free tier. Get a key at aistudio.google.com.',
+  anthropic: 'Get a key at console.anthropic.com.',
+  openai: 'Get a key at platform.openai.com.',
+};
+
+/** Provider picker + key + model (+ address) + a plain connection test.
  *  Driven entirely by `providers` (data.providers). `settings` (data.settings)
  *  supplies masked hints for keys already stored. */
 export function ModelFields({ providers = [], values, onChange, settings = {} }) {
@@ -48,7 +67,9 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
   const provider = providers.find((p) => p.key === values.llm_provider) || null;
   const hint = provider ? savedHint(settings, provider.key_field) : '';
 
-  function pick(p) {
+  function pick(key) {
+    const p = providers.find((x) => x.key === key);
+    if (!p) return;
     const patch = { llm_provider: p.key };
     if (p.model_field && !String(values[p.model_field] || '').trim() && p.default_model) {
       patch[p.model_field] = p.default_model;
@@ -60,44 +81,35 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
   async function runTest() {
     setTesting(true); setTest(null);
     try {
-      setTest(await api.testLlm(providerValues(provider, values)));
+      const result = await api.testLlm(providerValues(provider, values));
+      setTest(result.ok ? { ok: true, text: 'Connected' } : { ok: false, text: plainError(result.message), raw: result.message });
     } catch (cause) {
-      setTest({ ok: false, message: cause.message });
+      setTest({ ok: false, text: plainError(cause.message), raw: cause.message });
     } finally {
       setTesting(false);
     }
   }
 
   const canTest = provider && (!provider.needs_key || String(values[provider.key_field] || '').trim() || hint);
+  const about = provider ? ABOUT[provider.key] || (provider.needs_base_url ? 'For services like Groq, OpenRouter or GLM. You need their key, address and model name.' : '') : '';
 
   return (
-    <div className="mf">
-      <div className="mf-providers" role="radiogroup" aria-label="Model provider">
-        {providers.map((p, i) => {
-          const on = provider?.key === p.key;
-          return (
-            <SketchBox
-              key={p.key}
-              as="button"
-              type="button"
-              role="radio"
-              aria-checked={on}
-              seed={70 + i}
-              fill={on ? 'solid' : undefined}
-              className={`mf-provider ${on ? 'is-on' : ''}`}
-              onClick={() => pick(p)}
-            >
-              {p.key === RECOMMENDED && <em className="mf-badge mono">Recommended · free tier</em>}
-              <b>{p.label}</b>
-              <span>{describe(p)}</span>
-              {p.key_field && savedHint(settings, p.key_field) && <span className="mf-saved mono">Key saved</span>}
-            </SketchBox>
-          );
-        })}
-      </div>
+    <div className="pl-form mf">
+      <label className="field">
+        <span>Which AI model?</span>
+        <select className="input" value={provider?.key || ''} onChange={(e) => pick(e.target.value)}>
+          {!provider && <option value="">Choose one</option>}
+          {providers.map((p) => (
+            <option key={p.key} value={p.key}>
+              {providerLabel(p)}{p.key === RECOMMENDED ? ' — Recommended' : ''}
+            </option>
+          ))}
+        </select>
+        {about && <small>{about}</small>}
+      </label>
 
       {provider && provider.needs_key && (
-        <div className="mf-grid">
+        <div className="pl-fields">
           <label className="field">
             <span>API key</span>
             <input
@@ -105,28 +117,28 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder={hint ? `Saved ${hint} — leave blank to keep` : 'Paste your key'}
+              placeholder={hint ? `Saved (ends ${hint.replace(/^•+/, '')}) — leave blank to keep` : 'Paste your key'}
               value={values[provider.key_field] || ''}
               onChange={(e) => { onChange({ [provider.key_field]: e.target.value }); setTest(null); }}
             />
-            <small>Encrypted at rest and never shown back in full.</small>
+            <small>Stored encrypted. We never show it again.</small>
           </label>
           {provider.model_field && (
             <label className="field">
-              <span>Model</span>
+              <span>Model name</span>
               <input
                 className="input"
                 spellCheck={false}
-                placeholder={provider.default_model || 'e.g. glm-4.6, llama-3.3-70b'}
+                placeholder={provider.default_model || 'e.g. llama-3.3-70b'}
                 value={values[provider.model_field] || ''}
                 onChange={(e) => { onChange({ [provider.model_field]: e.target.value }); setTest(null); }}
               />
-              {provider.default_model && <small>Default: {provider.default_model}</small>}
+              <small>{provider.default_model ? 'Already filled in. Change it only if you know you need to.' : 'The exact model name from your provider.'}</small>
             </label>
           )}
           {provider.needs_base_url && (
             <label className="field mf-wide">
-              <span>Base URL</span>
+              <span>Service address</span>
               <input
                 className="input"
                 type="url"
@@ -135,23 +147,23 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
                 value={values.compat_base_url || ''}
                 onChange={(e) => { onChange({ compat_base_url: e.target.value }); setTest(null); }}
               />
-              <small>The provider's API root, usually ending in /v1. Must start with https://.</small>
+              <small>From your provider's docs, usually ending in /v1. Starts with https://.</small>
             </label>
           )}
-          <div className="mf-test">
-            <button type="button" className="btn btn-line btn-sm" onClick={runTest} disabled={testing || !canTest}>
-              <HandIcon name="refresh" size={14} /> {testing ? 'Testing…' : 'Test connection'}
-            </button>
-            {test && (
-              <span className={test.ok ? 'mf-ok' : 'mf-bad'} role="status">
-                <HandIcon name={test.ok ? 'check' : 'warn'} size={14} /> {test.message}
-              </span>
-            )}
-          </div>
         </div>
       )}
-      {provider && !provider.needs_key && (
-        <p className="mf-note">The agent parses messages with fixed rules and writes template plans. Good for a dry run; switch to a model any time in Settings.</p>
+
+      {provider && provider.needs_key && (
+        <div className="pl-test">
+          <button type="button" className="btn btn-line btn-sm" onClick={runTest} disabled={testing || !canTest}>
+            {testing ? 'Testing…' : 'Test'}
+          </button>
+          {test && (
+            <span className={test.ok ? 'pl-test-ok' : 'pl-test-bad'} role="status" title={test.raw || undefined}>
+              {test.ok ? '✓ ' : '✗ '}{test.text}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

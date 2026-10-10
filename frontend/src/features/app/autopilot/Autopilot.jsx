@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
-import { HandIcon } from '../../../components/icons/HandIcon.jsx';
-import { money } from '../../../lib/format.js';
+import { moneyWhole } from '../../../lib/format.js';
+import { levelCopy } from '../../../lib/copy.js';
+import { jobIs, jobName, limitOf } from '../components/mission/derive.js';
 import './autopilot.css';
 
 const PAUSE_MS = 2600;
+/** Each demo action is a new request; without a fresh key a replayed demo
+ *  would (correctly) be caught as a duplicate action. */
+const demoKey = () => `demo:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
 const sleep = (ms) => new Promise((resolve) => { window.setTimeout(resolve, ms); });
 
 /** Pick an order with balance left, sized under the class's L2 ceiling. */
@@ -26,26 +29,26 @@ function classInfo(data, key) {
   return { spec, state: data.licenses[spec.key], ceiling: data.config.ceilings[spec.key] };
 }
 
-/** The guided demo: a narrated, real run of the whole product loop against the
- *  live API. Nothing is simulated — every step calls the same endpoints a user
- *  would, so traces, ledger commits and economics are genuine. Injected faults
- *  are labelled as injected in the run record. */
+/** The 1-minute demo: a narrated, real run of the whole product loop against
+ *  the live API. Nothing is simulated — every step calls the same endpoints a
+ *  person would, so history and numbers are genuine. Practice problems are
+ *  labelled as practice in the run record. */
 function buildScript(primary) {
+  const nameOf = (d) => jobName(classInfo(d, primary).spec);
   return [
     {
       id: 'intro',
-      tool: 'Solo License',
-      title: 'An agent on a license',
+      title: 'Meet your agent',
       say: (d) => {
-        const { spec, state } = classInfo(d, primary);
-        return `The ${spec.label.toLowerCase()} agent currently holds L${state.effective_level}. It only acts alone at L2+, and only under the $${classInfo(d, primary).ceiling} ceiling. Every other class keeps its own, separate license.`;
+        const { state, ceiling } = classInfo(d, primary);
+        const now = state.quarantined ? 'paused' : `set to “${levelCopy(state.effective_level, limitOf(ceiling)).short}”`;
+        return `Your agent handles ${nameOf(d).toLowerCase()} for the shop. Right now it is ${now}. Each kind of job earns its own freedom, one correct job at a time.`;
       },
     },
     {
       id: 'baseline',
-      tool: 'Setup',
-      title: 'Start from an earned L2',
-      say: () => 'If the class is quarantined or below L2 we restore it to L2 (logged as a guided-demo restore) and top up demo orders so there is work to do.',
+      title: 'Start with some earned freedom',
+      say: (d) => `For this demo, the agent is allowed to handle ${nameOf(d).toLowerCase()} up to ${limitOf(classInfo(d, primary).ceiling)} on its own. We also add a few sample orders so there is work to do.`,
       run: async (ctx) => {
         const { spec, state } = classInfo(ctx.data(), primary);
         if (state.quarantined || state.effective_level < 2) {
@@ -58,12 +61,11 @@ function buildScript(primary) {
     },
     {
       id: 'clean',
-      tool: 'neatlogs',
-      title: 'Clean runs earn the next rung',
+      title: 'Correct jobs earn more freedom',
       say: (d) => {
         const { state } = classInfo(d, primary);
         const need = state.level >= 3 ? 1 : Math.max(1, d.config.promotion_clean_runs - state.clean_runs);
-        return `Running ${need} real action${need > 1 ? 's' : ''}. Each one opens a neatlogs trace (license.check → plan → tool → verify.readback). The tool's "success" is ignored; the verifier reads SQLite back and only a matching delta counts as clean.`;
+        return `The agent now handles ${need} real job${need > 1 ? 's' : ''}. After each one we re-read the order to double-check the money actually moved. Only double-checked jobs count toward more freedom.`;
       },
       run: async (ctx) => {
         const { spec, state, ceiling } = classInfo(ctx.data(), primary);
@@ -77,7 +79,7 @@ function buildScript(primary) {
           }
           if (!pick) break;
           used.add(pick.order_id);
-          await ctx.call(() => api.runAction({ ...pick, reason: `Guided demo clean run ${i + 1}`, task_class: spec.key }));
+          await ctx.call(() => api.runAction({ ...pick, reason: `Guided demo clean run ${i + 1}`, task_class: spec.key, idempotency_key: demoKey() }));
           await sleep(700);
         }
         ctx.go('/app');
@@ -85,9 +87,8 @@ function buildScript(primary) {
     },
     {
       id: 'fault',
-      tool: 'neatlogs',
-      title: 'A quiet failure: the tool lies',
-      say: () => 'We arm a quiet failure: the next tool call reports "Processed" but writes nothing. Watch the read-back catch it — state_mismatch fires and the dial crashes to L0 + quarantine.',
+      title: 'Something goes wrong',
+      say: () => 'We make the payment tool pretend it worked while changing nothing. The agent believes it is done, but the double-check sees that the money never moved.',
       run: async (ctx) => {
         const { spec, ceiling } = classInfo(ctx.data(), primary);
         ctx.mem.savedBefore = ctx.data().economics.net_saved_month;
@@ -97,7 +98,7 @@ function buildScript(primary) {
           await ctx.call(() => api.topUp(spec.key, 4));
           pick = pickOrder(ctx.data(), ceiling);
         }
-        const result = await ctx.call(() => api.runAction({ ...pick, reason: 'Guided demo: injected quiet failure', task_class: spec.key }));
+        const result = await ctx.call(() => api.runAction({ ...pick, reason: 'Guided demo: injected quiet failure', task_class: spec.key, idempotency_key: demoKey() }));
         const runId = result?.runs?.[0]?.id;
         ctx.mem.demotedRun = runId;
         if (runId) ctx.go(`/app/runs/${runId}`);
@@ -105,32 +106,29 @@ function buildScript(primary) {
     },
     {
       id: 'evidence',
-      tool: 'neatlogs',
-      title: 'One evidence packet',
-      say: () => 'This is the packet a human reviews: intended vs verified delta, the detection, every span, and the git-backed license history. With a neatlogs key it links straight to the trace.',
+      title: 'Paused right away',
+      say: (d) => `${jobIs(nameOf(d))} now paused. The agent can only suggest until a person looks. This page shows what it meant to do, what really happened, and why it stopped.`,
     },
     {
       id: 'money',
-      tool: 'cfo model',
-      title: 'Autonomy is a margin driver',
+      title: 'What the pause costs',
       say: (d, mem) => {
         const before = mem.savedBefore;
         const after = d.economics.net_saved_month;
-        const delta = before !== undefined ? ` — net savings moved from ${money(before)} to ${money(after)} per month` : '';
-        return `Back at L0 a human reviews every action again, so supervision cost jumps${delta}. The incident rate in this model is measured from real runs, not assumed.`;
+        const delta = before !== undefined ? ` Estimated savings went from ${moneyWhole(before)} to ${moneyWhole(after)} a month.` : '';
+        return `While paused, people check every job again, so you save less time.${delta} That is the trade: safety first, freedom earned back.`;
       },
-      run: async (ctx) => ctx.go('/app'),
+      run: async (ctx) => ctx.go('/app/reports'),
     },
     {
       id: 'restore',
-      tool: 'Entire',
-      title: 'Human restores with judgement',
-      say: () => 'A human read the packet, confirmed the fault was injected, and restores to L2 — one level below where it was, not a blind retry. That decision is a git commit Entire can explain.',
+      title: 'A person resumes it',
+      say: () => 'A person reviews what happened and gives back some freedom — not all of it. The decision and the reason are saved in History.',
       run: async (ctx) => {
         const { spec } = classInfo(ctx.data(), primary);
         await ctx.call(() => api.restore(
           2,
-          `Reviewed evidence packet for run #${ctx.mem.demotedRun ?? '?'}: quiet failure was injected by the guided demo. Restoring to L2.`,
+          `Reviewed run #${ctx.mem.demotedRun ?? '?'}: the problem was a practice problem from the guided demo. Resuming with limited freedom.`,
           spec.key,
         ));
         ctx.go('/app/ledger');
@@ -138,22 +136,25 @@ function buildScript(primary) {
     },
     {
       id: 'close',
-      tool: 'Solo License',
-      title: 'Earned. Revocable. Priced.',
+      title: 'That is the whole idea',
       say: (d) => {
         const others = d.task_classes.filter((t) => t.key !== primary)
-          .map((t) => `${t.label} stayed at L${d.licenses[t.key].effective_level}`).join(', ');
-        return `Every promote, demote and restore above is in the ledger with its reason, run and trace.${others ? ` ${others} — licenses are per task class.` : ''} An agent you'd trust to run without you watching.`;
+          .map((t) => `${jobName(t)} kept its own level the whole time.`).join(' ');
+        return `Freedom is earned job by job, taken away the moment something goes wrong, and every change is written down.${others ? ` ${others}` : ''}`;
       },
       run: async (ctx) => ctx.go('/app'),
     },
   ];
 }
 
+/** Open the demo panel from anywhere (e.g. the Home page button). */
+export function openDemo() {
+  window.dispatchEvent(new Event('solo-demo-open'));
+}
+
 export function Autopilot() {
   const { data, run } = useStore();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(-1);
   const [working, setWorking] = useState(false);
@@ -214,91 +215,77 @@ export function Autopilot() {
   const stop = () => { playingRef.current = false; setPlaying(false); };
   const reset = () => { stop(); setIndex(-1); setError(''); mem.current = {}; };
 
-  if (!data || !primary) return null;
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener('solo-demo-open', show);
+    return () => window.removeEventListener('solo-demo-open', show);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle('demo-open', open);
+    return () => document.body.classList.remove('demo-open');
+  }, [open]);
+
+  if (!data || !primary || !open) return null;
 
   return (
-    <>
-      {!open && !pathname.startsWith('/app/settings') && (
-        <button className="ap-launch btn btn-ink" onClick={() => setOpen(true)}>
-          <HandIcon name="play" size={14} /> Guided demo
-        </button>
-      )}
-      <AnimatePresence>
-        {open && (
-          <motion.aside
-            className="ap"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            aria-label="Guided demo"
-          >
-            <header className="ap-head">
-              <span className="mono">Guided demo · {index + 1 > 0 ? `${index + 1}/${script.length}` : `${script.length} steps`}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => { stop(); setOpen(false); }} aria-label="Close guided demo">
-                <HandIcon name="cross" size={14} />
-              </button>
-            </header>
+    <aside className="ap" aria-label="1-minute demo">
+      <header className="ap-head">
+        <b>1-minute demo</b>
+        <span className="pl-small pl-muted">{index >= 0 ? `Step ${index + 1} of ${script.length}` : `${script.length} steps`}</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => { stop(); setOpen(false); }} aria-label="Close demo">Close</button>
+      </header>
 
-            <ol className="ap-steps">
-              {script.map((s, i) => (
-                <li key={s.id} className={i === index ? 'is-on' : i < index ? 'is-done' : ''}>
-                  <button disabled={working || playing} onClick={() => execute(i)}>
-                    <i>{i < index ? '✓' : i + 1}</i> {s.title}
-                  </button>
-                </li>
-              ))}
-            </ol>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={step?.id || 'start'}
-                className="ap-say"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                {step ? (
-                  <>
-                    <span className="ap-tool mono">{step.tool}</span>
-                    <h3 className="serif">{step.title}</h3>
-                    <p>{step.say(data, mem.current)}</p>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="serif">Show the whole loop in ~60 seconds.</h3>
-                    <p>
-                      Real runs against this workspace: clean runs → promotion → injected quiet
-                      failure → demotion → evidence → cost → human restore. Injected faults are
-                      labelled in every run record.
-                    </p>
-                  </>
-                )}
-                {working && <p className="mono ap-working">Running…</p>}
-                {error && <p className="ap-error"><HandIcon name="warn" size={14} /> {error}</p>}
-              </motion.div>
-            </AnimatePresence>
-
-            <footer className="ap-foot">
-              {playing ? (
-                <button className="btn btn-line btn-sm" onClick={stop}><HandIcon name="pause" size={14} /> Pause</button>
-              ) : (
-                <button className="btn btn-ink btn-sm" disabled={working} onClick={() => play(index + 1 >= script.length ? 0 : index + 1)}>
-                  <HandIcon name="play" size={14} /> {index < 0 ? 'Play all' : 'Play from here'}
-                </button>
-              )}
-              <button
-                className="btn btn-line btn-sm"
-                disabled={working || playing || index >= script.length - 1}
-                onClick={() => execute(index + 1)}
-              >
-                Next step <HandIcon name="arrow-right" size={14} />
-              </button>
-              <button className="btn btn-ghost btn-sm" disabled={working} onClick={reset}>Reset</button>
-            </footer>
-          </motion.aside>
+      <div className="ap-say" aria-live="polite">
+        {step ? (
+          <>
+            <h3>{step.title}</h3>
+            <p>{step.say(data, mem.current)}</p>
+          </>
+        ) : (
+          <>
+            <h3>See the whole idea in about a minute</h3>
+            <p>
+              The demo uses this workspace for real: the agent does a few jobs, earns freedom,
+              hits a practice problem, gets paused, and a person resumes it. Practice problems
+              are labelled as practice in your history.
+            </p>
+          </>
         )}
-      </AnimatePresence>
-    </>
+        {working && <p className="pl-muted ap-working">Working…</p>}
+        {error && <p className="ap-error">{error}</p>}
+      </div>
+
+      <details className="pl-more ap-steps-wrap">
+        <summary>All steps</summary>
+        <ol className="ap-steps">
+          {script.map((s, i) => (
+            <li key={s.id} className={i === index ? 'is-on' : i < index ? 'is-done' : ''}>
+              <button type="button" disabled={working || playing} onClick={() => execute(i)}>
+                <i>{i + 1}</i> {s.title}
+              </button>
+            </li>
+          ))}
+        </ol>
+      </details>
+
+      <footer className="ap-foot">
+        {playing ? (
+          <button className="btn btn-line btn-sm" onClick={stop}>Pause</button>
+        ) : (
+          <button className="btn btn-ink btn-sm" disabled={working} onClick={() => play(index + 1 >= script.length ? 0 : index + 1)}>
+            {index < 0 ? 'Start the demo' : index + 1 >= script.length ? 'Play again' : 'Continue'}
+          </button>
+        )}
+        <button
+          className="btn btn-line btn-sm"
+          disabled={working || playing || index >= script.length - 1}
+          onClick={() => execute(index + 1)}
+        >
+          Next step
+        </button>
+        <button className="btn btn-ghost btn-sm" disabled={working} onClick={reset}>Start over</button>
+      </footer>
+    </aside>
   );
 }

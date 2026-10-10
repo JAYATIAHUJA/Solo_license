@@ -395,6 +395,16 @@ def _observability(context: AppContext) -> dict:
 
 def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -> dict:
     runs = [dict(row) for row in runs_repo.list_recent(context.conn, limit=100)]
+    if runs:
+        marks = ",".join("?" * len(runs))
+        rules: dict[int, list[str]] = {}
+        for row in context.conn.execute(
+            f"SELECT run_id, rule FROM detections WHERE run_id IN ({marks}) ORDER BY id",
+            [r["id"] for r in runs],
+        ):
+            rules.setdefault(row["run_id"], []).append(row["rule"])
+        for r in runs:
+            r["problems"] = rules.get(r["id"], [])
     selected = selected_run_id or (runs[0]["id"] if runs else None)
     intakes = [
         dict(r) for r in context.conn.execute(

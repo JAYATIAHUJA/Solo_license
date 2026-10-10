@@ -1,55 +1,80 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
-import { LEVELS, classMeta } from '../../../lib/format.js';
-import { HandIcon } from '../../../components/icons/HandIcon.jsx';
-import { Panel } from './Bits.jsx';
+import { jobsName, levelWords, pausedNow } from './words.js';
+import './plain-form.css';
+import './activity.css';
 
-/** Human restore of one quarantined task class after reviewing the evidence.
- *  The reason is written to the git ledger. */
+const DEFAULT_REASON = 'I read what happened and the problem is understood.';
+
+/** Resume one paused job type after a person has read what happened.
+ *  The chosen level and reason are recorded in the permission history. */
 export function RestorePanel({ taskClass = 'refund', evidenceRunId }) {
   const { data, run, busy } = useStore();
-  const [level, setLevel] = useState(1);
-  const [reason, setReason] = useState('');
   const license = data.licenses?.[taskClass];
+  const fell = license?.demoted_from;
+  const recommended = Math.max(0, (fell ?? 2) - 1);
+  const [level, setLevel] = useState(recommended);
+  const [reason, setReason] = useState(DEFAULT_REASON);
+  useEffect(() => setLevel(recommended), [recommended]);
   if (!license?.quarantined) return null;
-  const meta = classMeta(data, taskClass);
-  const fell = license.demoted_from;
+  const jobs = jobsName(data, taskClass);
   const evidence = evidenceRunId ?? data.runs.find((r) => r.task_class === taskClass && r.status === 'demoted')?.id;
 
+  function resume() {
+    const words = levelWords(data, taskClass, level);
+    run(() => api.restore(level, reason.trim(), taskClass), `${jobs} resumed at “${words.short}”.`)
+      .then((ok) => ok && setReason(DEFAULT_REASON));
+  }
+
   return (
-    <Panel title={`Restore · ${meta.label}`} icon="refresh" tone="raised" className="app-restore" aside={evidence ? <Link className="app-link" to={`/app/runs/${evidence}`}>Evidence #{evidence} →</Link> : null}>
-      <p>The <b>{meta.label.toLowerCase()}</b> class fell from <b>L{fell ?? '?'}</b> and is quarantined. Read the evidence, then choose how much trust to give back.</p>
-      <div className="app-seg" role="radiogroup" aria-label="Restore level">
-        {LEVELS.map((l) => (
-          <button key={l.id} type="button" role="radio" aria-checked={level === l.id} className={level === l.id ? 'is-on' : ''} onClick={() => setLevel(l.id)}>
-            <b>{l.code}</b><span>{l.name}</span>
-          </button>
-        ))}
+    <section className="pl-card act-resume pl-form" aria-label={`Resume ${jobs}`}>
+      <div>
+        <h3>Resume {jobs.toLowerCase()}</h3>
+        <p className="pl-muted">
+          {pausedNow(data, taskClass)}. Read what happened{evidenceRunId == null && evidence ? <> (<Link to={`/app/runs/${evidence}`}>open it</Link>)</> : ' above'}.
+          {' '}Choose how much freedom to give back — you can always lower it later.
+        </p>
       </div>
+
+      <div className="pl-choices" role="radiogroup" aria-label="How much freedom to give back">
+        {[0, 1, 2, 3].map((id) => {
+          const words = levelWords(data, taskClass, id);
+          return (
+            <label key={id} className={`pl-choice ${level === id ? 'is-on' : ''}`}>
+              <input type="radio" name={`resume-${taskClass}`} checked={level === id} onChange={() => setLevel(id)} />
+              <span>
+                <b>{words.short}</b>
+                {id === recommended && <span className="pl-tag">Recommended</span>}
+                {fell === id && <span className="pl-tag muted">Where it was</span>}
+                <small>{words.long}</small>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
       <label className="field">
-        <span>Reason (goes in the git ledger)</span>
-        <input className="input" placeholder="e.g. Tool bug fixed in v1.4; verified on staging" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} />
+        <span>Why are you resuming?</span>
+        <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} />
+        <small>Saved in the permission history.</small>
       </label>
-      <button
-        className="btn btn-ink"
-        disabled={busy || reason.trim().length < 4}
-        onClick={() => run(() => api.restore(level, reason.trim(), taskClass), `${meta.label} restored to L${level}. Committed to the ledger.`).then((ok) => ok && setReason(''))}
-      >
-        <HandIcon name="check" size={16} /> Restore {meta.label.toLowerCase()} to L{level}
-      </button>
-    </Panel>
+
+      <div className="pl-actions">
+        <button className="btn btn-ink" disabled={busy || reason.trim().length < 4} onClick={resume}>Resume</button>
+      </div>
+    </section>
   );
 }
 
-/** Every quarantined class's restore panel, side by side. */
+/** A resume card for every paused job type. Kept for screens that list them all. */
 export function RestorePanels() {
   const { data } = useStore();
   const keys = Object.entries(data.licenses || {}).filter(([, l]) => l.quarantined).map(([k]) => k);
   if (!keys.length) return null;
   return (
-    <div className="mc-restores">
+    <div className="act-resumes">
       {keys.map((k) => <RestorePanel key={k} taskClass={k} />)}
     </div>
   );

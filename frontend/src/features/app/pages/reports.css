@@ -1,0 +1,23 @@
+/* Reports: permission chart and license cards. Plain lines, no art. */
+.app-per { font-size: 16px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+
+.app-charts { display: grid; gap: 16px; }
+.app-chart { margin: 0; padding: 16px; background: var(--card); border: 1px solid var(--line); display: grid; gap: 12px; min-width: 0; }
+.app-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.app-chart-head b { font-weight: 600; }
+.app-chart-body { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); gap: 12px; height: 132px; }
+.app-chart-axis { list-style: none; margin: 0; padding: 0; display: grid; grid-template-rows: repeat(4, 1fr); font-size: 12px; color: var(--muted); }
+.app-chart-axis li { display: flex; align-items: center; justify-content: flex-end; text-align: right; line-height: 1.2; }
+.app-chart-body svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+.app-lic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 24px; align-items: start; }
+.app-lic { margin: 0; display: grid; gap: 12px; scroll-margin-top: 80px; min-width: 0; }
+.app-lic svg { width: 100%; height: auto; display: block; }
+.app-lic-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app-lic-note { flex-basis: 100%; overflow-wrap: anywhere; }
+
+@media (max-width: 480px) {
+  .app-chart-body { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .app-chart-axis { font-size: 11px; }
+}
+#licenses { scroll-margin-top: 72px; }
