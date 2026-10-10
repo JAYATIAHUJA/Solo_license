@@ -1,7 +1,10 @@
 """Git-backed license ledger.
 
 Every autonomy change (promote / demote / restore) appends one line to
-``ledger/license_ledger.jsonl`` and commits *only that file*. The commit is the
+``ledger/license_ledger.jsonl`` inside the configured ledger repository
+(``SOLO_LEDGER_REPO``: ``.`` commits into this project so Entire can explain
+the history; the default is a separate local repo) and commits *only that
+file*. The commit is the
 Entire-compatible checkpoint: its history is the graph of how a task class
 earned and lost its license, and each message explains the change.
 
@@ -79,10 +82,21 @@ class GitLedger:
 
     def _ensure_repo(self) -> None:
         self._repo_root.mkdir(parents=True, exist_ok=True)
+        # Check for .git here, not `rev-parse`: a ledger repo nested inside the
+        # project must get its own repository, never commit into the parent.
         if not (self._repo_root / ".git").exists():
             self._run_git(["init", "-q"])
-        self._run_git(["config", "user.name", "Solo License"])
-        self._run_git(["config", "user.email", "solo-license@example.invalid"])
+
+    def _identity_args(self) -> list[str]:
+        """Commit as the repository's configured identity (the operator); only
+        a fresh ledger repo with no identity gets a service fallback. Never
+        rewrites the repository's own git config."""
+        args: list[str] = []
+        if not self._run_git(["config", "user.name"]).stdout.strip():
+            args += ["-c", "user.name=Solo License"]
+        if not self._run_git(["config", "user.email"]).stdout.strip():
+            args += ["-c", "user.email=solo-license@example.invalid"]
+        return args
 
     def _append(self, entry: LedgerEntry) -> None:
         self._ledger_file.parent.mkdir(parents=True, exist_ok=True)
@@ -107,7 +121,9 @@ class GitLedger:
         add = self._run_git(["add", "--", rel])
         if add.returncode != 0:
             return None
-        commit = self._run_git(["commit", "-m", _commit_message(entry), "--", rel])
+        commit = self._run_git(
+            [*self._identity_args(), "commit", "-q", "-m", _commit_message(entry), "--", rel]
+        )
         if commit.returncode != 0:
             return None
         sha = self._run_git(["rev-parse", "--short", "HEAD"])

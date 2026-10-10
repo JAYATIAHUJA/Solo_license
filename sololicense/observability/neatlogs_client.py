@@ -31,14 +31,19 @@ class NeatlogsClient:
     project: str
     _sdk: object | None = None
 
-    def start_workflow(self, trace_id: str) -> "NeatlogsWorkflow | None":
-        """Open the remote root for one licensed refund run."""
+    def start_workflow(
+        self, trace_id: str, attributes: dict[str, Any] | None = None
+    ) -> "NeatlogsWorkflow | None":
+        """Open the remote root for one licensed run."""
         if not self.enabled or self._sdk is None:
             return None
         try:  # pragma: no cover - requires live SDK + key
-            context = self._sdk.trace("refund.run", kind="WORKFLOW")
+            task_class = str((attributes or {}).get("task_class", "refund"))
+            context = self._sdk.trace(f"{task_class}.run", kind="WORKFLOW")
             root = context.__enter__()
             root.set_attribute("sololicense.trace_id", trace_id)
+            for key, value in _safe_attributes(attributes or {}).items():
+                root.set_attribute(f"sololicense.{key}", value)
             return NeatlogsWorkflow(context=context, root=root)
         except Exception:
             return None
@@ -58,6 +63,8 @@ class NeatlogsClient:
                 span.set_attribute("sololicense.status", status)
                 for key, value in _safe_attributes(attributes).items():
                     span.set_attribute(f"sololicense.{key}", value)
+                if status == "error":
+                    _mark_error(span, str(attributes.get("message", name)))
         except Exception:
             return
 
@@ -85,6 +92,25 @@ class NeatlogsWorkflow:
     context: Any
     root: Any
 
+    @property
+    def trace_id(self) -> str | None:
+        """The OpenTelemetry trace id neatlogs indexes this run under."""
+        try:  # pragma: no cover - requires live SDK
+            value = self.root.get_span_context().trace_id
+            return f"{value:032x}" if value else None
+        except Exception:
+            return None
+
+
+def _mark_error(span: Any, message: str) -> None:
+    """Flag the span as failed so neatlogs surfaces it as an error/incident."""
+    try:  # pragma: no cover - requires the OpenTelemetry SDK span
+        from opentelemetry.trace import Status, StatusCode
+
+        span.set_status(Status(StatusCode.ERROR, message[:200]))
+    except Exception:
+        return
+
 
 def _span_kind(name: str) -> str:
     if name == "plan":
@@ -107,6 +133,20 @@ def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | bool | int |
     return safe
 
 
+_ACTIVE_SDK: Any = None
+_ACTIVE_KEY: str = ""
+
+
+def wrap_llm_client(client: Any) -> Any:
+    """Auto-trace an LLM client's calls when neatlogs is live; else unchanged."""
+    if _ACTIVE_SDK is None:
+        return client
+    try:  # pragma: no cover - requires live SDK + key
+        return _ACTIVE_SDK.wrap(client)
+    except Exception:
+        return client
+
+
 def init_neatlogs(config: Config) -> NeatlogsClient:
     """Initialise neatlogs before agent logic. Safe with no key/package."""
     if not config.neatlogs_enabled:
@@ -115,14 +155,21 @@ def init_neatlogs(config: Config) -> NeatlogsClient:
     try:  # pragma: no cover - requires the optional dependency + key
         import neatlogs  # type: ignore
 
+        global _ACTIVE_SDK, _ACTIVE_KEY
         init = getattr(neatlogs, "init", None)
-        if callable(init):
+        if callable(init) and _ACTIVE_KEY != config.neatlogs_api_key:
+            # init() is process-wide: settings rebuilds reuse the exporter and
+            # only a changed key flushes it and starts a fresh one.
+            if _ACTIVE_SDK is not None:
+                _ACTIVE_SDK.shutdown()
             init(
                 api_key=config.neatlogs_api_key,
-                endpoint="https://ingest.neatlogs.com",
-                workflow_name="refund-agent",
+                endpoint=config.neatlogs_endpoint,
+                workflow_name="solo-license",
+                tags=[config.neatlogs_project, "neatHack"],
                 capture_logs=True,
             )
+        _ACTIVE_SDK, _ACTIVE_KEY = neatlogs, config.neatlogs_api_key
         return NeatlogsClient(
             enabled=True, project=config.neatlogs_project, _sdk=neatlogs
         )

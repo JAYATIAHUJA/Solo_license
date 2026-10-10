@@ -7,7 +7,14 @@ from types import SimpleNamespace
 import pytest
 
 from sololicense.domain.models import RefundRequest
+from sololicense.observability import neatlogs_client
 from sololicense.observability.neatlogs_client import init_neatlogs
+
+
+@pytest.fixture(autouse=True)
+def _fresh_sdk(monkeypatch):
+    monkeypatch.setattr(neatlogs_client, "_ACTIVE_SDK", None)
+    monkeypatch.setattr(neatlogs_client, "_ACTIVE_KEY", "")
 
 
 class _Span:
@@ -56,7 +63,8 @@ def test_client_initializes_one_refund_workflow_and_child_span(monkeypatch, harn
     assert init_calls == [{
         "api_key": "project-key",
         "endpoint": "https://ingest.neatlogs.com",
-        "workflow_name": "refund-agent",
+        "workflow_name": "solo-license",
+        "tags": [config.neatlogs_project, "neatHack"],
         "capture_logs": True,
     }]
     assert [(call["name"], call["kind"]) for call in calls] == [
@@ -87,7 +95,7 @@ class _TracerSpy:
     def __init__(self) -> None:
         self.trace = _TraceSpy()
 
-    def start_trace(self, name: str) -> _TraceSpy:
+    def start_trace(self, name: str, **_attributes: object) -> _TraceSpy:
         assert name == "refund"
         return self.trace
 

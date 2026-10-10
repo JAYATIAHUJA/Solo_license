@@ -77,3 +77,57 @@ def test_anthropic_completion_uses_configured_timeout_and_retries(monkeypatch, h
 
     assert complete(config, "status?", max_tokens=10) == "ready"
     assert calls == [{"api_key": "test-key", "timeout": 12.5, "max_retries": 3}]
+
+
+def test_parse_llm_response_accepts_fenced_json_and_action():
+    parsed = parse_llm_response(
+        '```json\n{"action": "store_credit", "order_id": "ORD-1002", "amount": 10,'
+        ' "reason": "late", "confidence": 0.9, "needs_human": false}\n```',
+        model="gemini-2.5-flash",
+    )
+
+    assert parsed is not None
+    assert parsed.task_class == "store_credit"
+    assert parsed.needs_human is False
+
+
+def test_parse_llm_response_unknown_action_needs_human():
+    parsed = parse_llm_response(
+        json.dumps({"action": "wire_money", "order_id": "ORD-1", "amount": 5,
+                    "reason": "x", "confidence": 0.99}),
+        model="m",
+    )
+
+    assert parsed is not None
+    assert parsed.needs_human is True
+
+
+def test_gemini_completion_uses_configured_model(monkeypatch, harness):
+    calls = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(text=" ready ")
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            calls["client"] = kwargs
+            self.models = FakeModels()
+
+    fake_types = SimpleNamespace(
+        HttpOptions=lambda **kw: kw, GenerateContentConfig=lambda **kw: kw,
+        ThinkingConfig=lambda **kw: kw,
+    )
+    google = SimpleNamespace(genai=SimpleNamespace(Client=FakeClient, types=fake_types))
+    monkeypatch.setitem(sys.modules, "google", google)
+    monkeypatch.setitem(sys.modules, "google.genai", google.genai)
+    monkeypatch.setitem(sys.modules, "google.genai.types", fake_types)
+    config = replace(
+        harness.config, llm_provider="gemini", gemini_api_key="g-key",
+        gemini_model="gemini-test",
+    )
+
+    assert complete(config, "status?", max_tokens=10) == "ready"
+    assert calls["model"] == "gemini-test"
+    assert calls["client"]["api_key"] == "g-key"

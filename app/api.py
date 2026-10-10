@@ -6,10 +6,12 @@ and the git-backed ledger remain the implementation in ``sololicense``.
 
 from __future__ import annotations
 
-import re
 import os
-from hashlib import sha256
+import re
+import secrets
+from contextlib import asynccontextmanager
 from dataclasses import replace
+from hashlib import sha256
 from threading import RLock
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -18,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from sololicense.agent.intake import complete, parse_message
 from sololicense.bootstrap import AppContext, build_app
+from sololicense.config import PROVIDERS
 from sololicense.db.repositories import events as events_repo
 from sololicense.db.repositories import license as license_repo
 from sololicense.db.repositories import orders as orders_repo
@@ -26,18 +29,38 @@ from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.seed import SEED_ORDERS, seed
 from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
-from sololicense.services.evidence import build_packet
+from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
+from sololicense.services import economics
+from sololicense.services.alerts import AlertNotifier, valid_webhook_url
+from sololicense.services.evidence import build_packet
 
-TASK_CLASS = "refund"
-SECRET_KEYS = ("anthropic_api_key", "openai_api_key", "neatlogs_api_key")
+SECRET_KEYS = tuple(sorted(settings_repo.SECRET_KEYS))
+ECON_KEYS = tuple(economics.SETTING_DEFAULTS)
 SETTING_KEYS = (
-    "business_name", "llm_provider", "anthropic_model", "openai_model",
-    "promotion_clean_runs", "l2_auto_refund_ceiling", "neatlogs_project",
-    *SECRET_KEYS,
+    "business_name", "llm_provider",
+    *(spec.model_field for spec in PROVIDERS.values() if spec.model_field),
+    "compat_base_url",
+    "promotion_clean_runs", "l2_auto_refund_ceiling", "l2_auto_credit_ceiling",
+    "neatlogs_project", *ECON_KEYS, *SECRET_KEYS,
 )
+_NUMERIC_KEYS = ("promotion_clean_runs", "l2_auto_refund_ceiling", "l2_auto_credit_ceiling", *ECON_KEYS)
 
-app = FastAPI(title="Solo License API")
+_context: AppContext | None = None
+_authenticator: TokenAuthenticator | None = None
+_demo_sessions: dict[str, Actor] = {}
+_lock = RLock()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    # Flush remote traces when the long-running API process exits.
+    if _context is not None:
+        _context.neatlogs.shutdown()
+
+
+app = FastAPI(title="Solo License API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -49,24 +72,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_context: AppContext | None = None
-_authenticator: TokenAuthenticator | None = None
-_lock = RLock()
-
-
-@app.on_event("shutdown")
-def shutdown_neatlogs() -> None:
-    """Flush remote traces when the long-running API process exits."""
-    if _context is not None:
-        _context.neatlogs.shutdown()
-
 
 # --- payloads -------------------------------------------------------------
+
+def _task_class_field():
+    return Field(default=DEFAULT_TASK_CLASS, max_length=40)
+
 
 class RefundPayload(BaseModel):
     order_id: str
     amount: float | None = Field(default=None, ge=0)
-    reason: str = "customer refund"
+    reason: str = "customer request"
+    task_class: str = _task_class_field()
     idempotency_key: str | None = Field(default=None, max_length=120)
 
 
@@ -77,11 +94,13 @@ class IntakePayload(BaseModel):
 
 class FaultPayload(BaseModel):
     mode: FaultMode
+    task_class: str = _task_class_field()
 
 
 class RestorePayload(BaseModel):
     level: int
     reason: str = "Human restored after evidence review."
+    task_class: str = _task_class_field()
 
 
 class OrderPayload(BaseModel):
@@ -97,8 +116,19 @@ class SettingsPayload(BaseModel):
 class OnboardingPayload(BaseModel):
     business_name: str = ""
     starting_level: int = 0
+    starting_levels: dict[str, int] = {}
     load_sample_orders: bool = True
+    orders: list[OrderPayload] = []
     values: dict[str, str | int | float | None] = {}
+
+
+class DemoSessionPayload(BaseModel):
+    name: str = Field(default="", max_length=40)
+
+
+class TopUpPayload(BaseModel):
+    task_class: str = _task_class_field()
+    count: int = Field(default=4, ge=1, le=12)
 
 
 # --- context --------------------------------------------------------------
@@ -121,6 +151,10 @@ def reset_context() -> None:
     _context = None
 
 
+def _token_auth_configured() -> bool:
+    return bool(os.environ.get("SOLO_API_TOKENS", "").strip())
+
+
 def get_authenticator() -> TokenAuthenticator:
     """Load deployment-owned API tokens once, never from SQLite settings."""
     global _authenticator
@@ -139,6 +173,11 @@ def current_actor(authorization: str | None = Header(default=None)) -> Actor:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not token:
         raise HTTPException(status_code=401, detail="Bearer authentication is required.")
+    for issued, actor in _demo_sessions.items():
+        if secrets.compare_digest(issued, token):
+            return actor
+    if not _token_auth_configured():
+        raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
     actor = get_authenticator().authenticate(token)
     if actor is None:
         raise HTTPException(status_code=401, detail="Invalid API token.")
@@ -154,34 +193,80 @@ def require_role(required: Role):
     return dependency
 
 
+def _task_class(value: str) -> str:
+    key = value.strip().lower()
+    if key not in TASK_CLASSES:
+        raise HTTPException(status_code=422, detail=f"Unknown task class '{value}'.")
+    return key
+
+
+# --- serialization ----------------------------------------------------------
+
 def _mask(value: str) -> str:
     return f"••••{value[-4:]}" if len(value) > 4 else ("••••" if value else "")
+
+
+def serialize_providers() -> list[dict]:
+    return [
+        {
+            "key": key,
+            "label": spec.label,
+            "needs_key": spec.key_field is not None,
+            "key_field": spec.key_field,
+            "model_field": spec.model_field,
+            "default_model": spec.default_model,
+            "needs_base_url": key == "openai_compatible",
+        }
+        for key, spec in PROVIDERS.items()
+    ]
+
+
+def serialize_task_classes(context: AppContext) -> list[dict]:
+    return [
+        {
+            "key": spec.key,
+            "label": spec.label,
+            "verb": spec.verb,
+            "description": spec.description,
+            "effect_column": spec.effect_column,
+            "ceiling": context.config.ceiling_for(spec.key),
+        }
+        for spec in TASK_CLASSES.values()
+    ]
 
 
 def serialize_settings(context: AppContext) -> dict:
     stored = settings_repo.get_all(context.conn)
     cfg = context.config
-    return {
+    out = {
         "onboarded": stored.get("onboarded") == "1",
         "business_name": stored.get("business_name", ""),
         "llm_provider": cfg.llm_provider,
         "llm_enabled": cfg.llm_enabled,
-        "anthropic_model": cfg.anthropic_model,
-        "openai_model": cfg.openai_model,
+        "llm_model": cfg.llm_model,
+        "compat_base_url": cfg.compat_base_url,
         "promotion_clean_runs": cfg.promotion_clean_runs,
         "l2_auto_refund_ceiling": cfg.l2_auto_refund_ceiling,
+        "l2_auto_credit_ceiling": cfg.l2_auto_credit_ceiling,
         "neatlogs_project": cfg.neatlogs_project,
         "neatlogs_enabled": cfg.neatlogs_enabled,
-        "has_anthropic_key": bool(cfg.anthropic_api_key),
-        "has_openai_key": bool(cfg.openai_api_key),
-        "anthropic_key_hint": _mask(cfg.anthropic_api_key),
-        "openai_key_hint": _mask(cfg.openai_api_key),
-        "neatlogs_key_hint": _mask(cfg.neatlogs_api_key),
+        "alerts_enabled": valid_webhook_url(cfg.alert_webhook_url),
+        "demo_mode": cfg.demo_mode,
     }
+    for spec in PROVIDERS.values():
+        if spec.model_field:
+            out[spec.model_field] = getattr(cfg, spec.model_field)
+    for key in SECRET_KEYS:
+        value = getattr(cfg, key, "")
+        out[f"has_{key}"] = bool(value)
+        out[f"{key}_hint"] = _mask(value)
+    assumptions = economics.Assumptions.from_settings(stored)
+    for key in ECON_KEYS:
+        out[key] = getattr(assumptions, key.removeprefix("econ_"))
+    return out
 
 
-def serialize_state(context: AppContext) -> dict:
-    state = context.license_service.get_or_create(TASK_CLASS)
+def serialize_state(state: LicenseState) -> dict:
     return {
         "task_class": state.task_class,
         "level": int(state.level),
@@ -212,47 +297,121 @@ def serialize_packet(context: AppContext, run_id: int | None) -> dict | None:
     }
 
 
-def _stats(context: AppContext) -> dict:
-    row = context.conn.execute(
-        """
-        SELECT COUNT(*) AS total,
-               SUM(status = 'clean') AS clean,
-               SUM(status = 'demoted') AS demoted,
-               SUM(status = 'pending_approval') AS pending,
-               COALESCE(SUM(after_refunded - before_refunded), 0) AS refunded
-          FROM runs
-        """
-    ).fetchone()
+_STATS_SQL = """
+    SELECT COUNT(*) AS total,
+           SUM(status = 'clean') AS clean,
+           SUM(status = 'demoted') AS demoted,
+           SUM(status = 'pending_approval') AS pending,
+           SUM(status = 'suggested') AS suggested,
+           SUM(executed) AS executed,
+           SUM(fault_mode != 'none') AS faulted,
+           COALESCE(SUM(CASE WHEN status = 'clean'
+                             THEN after_refunded - before_refunded END), 0) AS paid
+      FROM runs
+"""
+
+
+def _stats_row(row) -> dict:
     return {
         "total_runs": row["total"] or 0,
         "clean_runs": row["clean"] or 0,
         "demotions": row["demoted"] or 0,
         "pending_approval": row["pending"] or 0,
-        "refunded_total": round(row["refunded"] or 0, 2),
+        "suggested": row["suggested"] or 0,
+        "executed": row["executed"] or 0,
+        "faults_injected": row["faulted"] or 0,
+        # Every injected fault that executed was caught (it demoted) — the
+        # false-success count that reached the customer is the difference.
+        "paid_out": round(row["paid"] or 0, 2),
+    }
+
+
+def _stats(context: AppContext) -> dict:
+    overall = _stats_row(context.conn.execute(_STATS_SQL).fetchone())
+    overall["refunded_total"] = overall["paid_out"]  # legacy key
+    overall["by_class"] = {
+        key: _stats_row(context.conn.execute(_STATS_SQL + " WHERE task_class = ?", (key,)).fetchone())
+        for key in TASK_CLASSES
+    }
+    return overall
+
+
+def _licenses(context: AppContext) -> dict[str, LicenseState]:
+    return {key: context.license_service.get_or_create(key) for key in TASK_CLASSES}
+
+
+def _observability(context: AppContext) -> dict:
+    cfg = context.config
+    ledger = context.conn.execute(
+        "SELECT COUNT(*) AS n, SUM(git_sha IS NOT NULL) AS committed FROM license_events"
+    ).fetchone()
+    return {
+        "neatlogs": {
+            "enabled": cfg.neatlogs_enabled,
+            "project": cfg.neatlogs_project,
+            "app_url": cfg.neatlogs_app_url,
+        },
+        "llm": {
+            "provider": cfg.llm_provider,
+            "label": PROVIDERS.get(cfg.llm_provider, PROVIDERS["deterministic"]).label,
+            "model": cfg.llm_model,
+            "enabled": cfg.llm_enabled,
+        },
+        "ledger": {
+            "repo": str(cfg.ledger_repo),
+            "events": ledger["n"] or 0,
+            "commits": ledger["committed"] or 0,
+        },
+        "alerts": {"enabled": valid_webhook_url(cfg.alert_webhook_url)},
     }
 
 
 def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -> dict:
-    runs = [dict(row) for row in runs_repo.list_recent(context.conn, limit=50)]
+    runs = [dict(row) for row in runs_repo.list_recent(context.conn, limit=100)]
     selected = selected_run_id or (runs[0]["id"] if runs else None)
     intakes = [
         dict(r) for r in context.conn.execute(
             "SELECT * FROM intakes ORDER BY id DESC LIMIT 20"
         ).fetchall()
     ]
+    licenses = _licenses(context)
+    stored = settings_repo.get_all(context.conn)
+    orders = []
+    for row in orders_repo.list_orders(context.conn):
+        order = dict(row)
+        order["remaining"] = orders_repo.remaining_balance(row)
+        orders.append(order)
+    events = [
+        dict(e) for e in context.conn.execute(
+            "SELECT * FROM license_events ORDER BY id DESC LIMIT 60"
+        ).fetchall()
+    ]
+    armed = {key: context.fault_injector.peek(key).value for key in TASK_CLASSES}
     return {
         "settings": serialize_settings(context),
-        "license": serialize_state(context),
+        "warnings": list(context.warnings),
+        "providers": serialize_providers(),
+        "task_classes": serialize_task_classes(context),
+        "licenses": {key: serialize_state(state) for key, state in licenses.items()},
+        "license": serialize_state(licenses[DEFAULT_TASK_CLASS]),
         "config": {
             "promotion_clean_runs": context.config.promotion_clean_runs,
             "l2_auto_refund_ceiling": context.config.l2_auto_refund_ceiling,
+            "ceilings": {key: context.config.ceiling_for(key) for key in TASK_CLASSES},
         },
         "stats": _stats(context),
-        "orders": [dict(row) for row in orders_repo.list_orders(context.conn)],
+        "economics": economics.workspace_economics(
+            context.conn,
+            {key: int(state.effective_level) for key, state in licenses.items()},
+            stored,
+        ),
+        "observability": _observability(context),
+        "orders": orders,
         "runs": runs,
         "intakes": intakes,
-        "events": [dict(e) for e in events_repo.list_events(context.conn, TASK_CLASS, limit=30)],
-        "armed_fault": context.fault_injector.peek(TASK_CLASS).value,
+        "events": events,
+        "armed_faults": armed,
+        "armed_fault": armed[DEFAULT_TASK_CLASS],
         "packet": serialize_packet(context, selected),
     }
 
@@ -263,25 +422,59 @@ def make_idempotency_key(namespace: str, *parts: object) -> str:
 
 
 def _run(context: AppContext, order_id: str, amount: float | None, reason: str,
-         *, approved: bool = False, idempotency_key: str | None = None,
-         actor: Actor):
+         *, task_class: str = DEFAULT_TASK_CLASS, approved: bool = False,
+         idempotency_key: str | None = None, actor: Actor):
     order = orders_repo.get_order(context.conn, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found.")
-    value = float(order["amount"]) if amount is None else float(amount)
-    remaining = float(order["amount"]) - float(order["refunded_amount"])
+    remaining = orders_repo.remaining_balance(order)
+    value = remaining if amount is None else float(amount)
+    if value <= 0:
+        raise HTTPException(status_code=422, detail=f"{order_id} has nothing left to pay out.")
     if value > remaining + 1e-9:
         raise HTTPException(
             status_code=422,
-            detail=f"Refund ${value:.2f} exceeds the ${remaining:.2f} still refundable on {order_id}.",
+            detail=f"${value:.2f} exceeds the ${remaining:.2f} still payable on {order_id}.",
         )
     return context.worker.run_refund(
         RefundRequest(order["order_id"], order["customer"], value, reason),
-        task_class=TASK_CLASS,
+        task_class=task_class,
         approved=approved,
         idempotency_key=idempotency_key,
         actor=actor,
     )
+
+
+# --- session ----------------------------------------------------------------
+
+@app.get("/api/session")
+def session_info() -> dict:
+    """Public: which sign-in paths this deployment offers."""
+    with _lock:
+        demo = get_context().config.demo_mode
+    return {"demo_enabled": demo, "token_auth": _token_auth_configured()}
+
+
+@app.post("/api/session/demo")
+def start_demo_session(payload: DemoSessionPayload) -> dict:
+    """Local demo only (SOLO_DEMO_MODE=1): issue a short-lived admin session so
+    a judge can try the product without a deployment token. The name is
+    recorded as the actor on every run and license change."""
+    with _lock:
+        if not get_context().config.demo_mode:
+            raise HTTPException(status_code=404, detail="Demo sessions are disabled.")
+        slug = re.sub(r"[^a-z0-9]+", "-", payload.name.strip().lower()).strip("-")[:24]
+        actor = Actor(actor_id=f"demo:{slug or 'guest'}", role=Role.ADMIN)
+        token = secrets.token_urlsafe(32)
+        if len(_demo_sessions) > 200:
+            _demo_sessions.clear()
+        _demo_sessions[token] = actor
+        return {"token": token, "actor": {"id": actor.actor_id, "role": actor.role.value}}
+
+
+@app.get("/api/session/me")
+def whoami(actor: Actor = Depends(current_actor)) -> dict:
+    return {"id": actor.actor_id, "role": actor.role.value}
 
 
 # --- read -----------------------------------------------------------------
@@ -304,17 +497,19 @@ def get_settings(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
 # --- agent ----------------------------------------------------------------
 
 @app.post("/api/refunds")
-def run_refund(
+@app.post("/api/runs")
+def run_action(
     payload: RefundPayload, actor: Actor = Depends(require_role(Role.OPERATOR))
 ) -> dict:
     with _lock:
         context = get_context()
+        task_class = _task_class(payload.task_class)
         order_id = payload.order_id.strip().upper()
         key = payload.idempotency_key or make_idempotency_key(
-            "manual", order_id, payload.amount or "", payload.reason
+            "manual", task_class, order_id, payload.amount or "", payload.reason
         )
         result = _run(context, order_id, payload.amount, payload.reason,
-                      idempotency_key=key, actor=actor)
+                      task_class=task_class, idempotency_key=key, actor=actor)
         return dashboard_payload(context, result.run_id)
 
 
@@ -330,16 +525,18 @@ def intake(
         error = None
         if payload.run:
             if parsed.needs_human:
-                error = "The intake needs human review before execution."
+                error = "The intake agent flagged this message for human review."
             elif not parsed.order_id or parsed.amount is None:
                 error = "Could not find an order id and amount in that message."
             else:
                 try:
                     key = make_idempotency_key(
-                        "intake", payload.message, parsed.order_id, parsed.amount
+                        "intake", payload.message, parsed.task_class,
+                        parsed.order_id, parsed.amount,
                     )
                     result = _run(
                         context, parsed.order_id, parsed.amount, parsed.reason,
+                        task_class=parsed.task_class,
                         idempotency_key=key,
                         actor=actor,
                     )
@@ -356,6 +553,7 @@ def intake(
         body["intake"] = {
             "order_id": parsed.order_id, "amount": parsed.amount,
             "reason": parsed.reason, "source": parsed.source,
+            "task_class": parsed.task_class,
             "confidence": parsed.confidence,
             "needs_human": parsed.needs_human,
             "run_id": run_id, "error": error,
@@ -377,10 +575,11 @@ def approve_run(
             raise HTTPException(status_code=404, detail="Run not found.")
         if run["status"] not in ("pending_approval", "suggested"):
             raise HTTPException(status_code=409, detail="Run is not awaiting approval.")
-        if context.license_service.get_or_create(TASK_CLASS).quarantined:
+        task_class = run["task_class"]
+        if context.license_service.get_or_create(task_class).quarantined:
             raise HTTPException(status_code=409, detail="The class is quarantined. Restore it before approving runs.")
         result = _run(context, run["order_id"], run["requested_amount"],
-                      "approved by human", approved=True,
+                      "approved by human", task_class=task_class, approved=True,
                       idempotency_key=make_idempotency_key("approval", run_id),
                       actor=actor)
         context.conn.execute(
@@ -397,7 +596,7 @@ def arm_fault(
 ) -> dict:
     with _lock:
         context = get_context()
-        context.fault_injector.arm(TASK_CLASS, payload.mode)
+        context.fault_injector.arm(_task_class(payload.task_class), payload.mode)
         return dashboard_payload(context)
 
 
@@ -412,12 +611,24 @@ def restore_license(
         except ValueError as error:
             raise HTTPException(status_code=422, detail="Unknown license level.") from error
         context.license_service.restore_license(
-            TASK_CLASS, target, reason=payload.reason, actor=actor
+            _task_class(payload.task_class), target, reason=payload.reason, actor=actor
         )
         return dashboard_payload(context)
 
 
 # --- orders ---------------------------------------------------------------
+
+def _insert_order(context: AppContext, payload: OrderPayload) -> None:
+    order_id = payload.order_id.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{2,31}", order_id):
+        raise HTTPException(status_code=422, detail="Order id may use letters, digits and dashes.")
+    if orders_repo.get_order(context.conn, order_id) is not None:
+        raise HTTPException(status_code=409, detail=f"{order_id} already exists.")
+    context.conn.execute(
+        "INSERT INTO orders (order_id, customer, amount) VALUES (?, ?, ?)",
+        (order_id, payload.customer.strip(), round(payload.amount, 2)),
+    )
+
 
 @app.post("/api/orders")
 def add_order(
@@ -425,15 +636,7 @@ def add_order(
 ) -> dict:
     with _lock:
         context = get_context()
-        order_id = payload.order_id.strip().upper()
-        if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{2,31}", order_id):
-            raise HTTPException(status_code=422, detail="Order id may use letters, digits and dashes.")
-        if orders_repo.get_order(context.conn, order_id) is not None:
-            raise HTTPException(status_code=409, detail=f"{order_id} already exists.")
-        context.conn.execute(
-            "INSERT INTO orders (order_id, customer, amount) VALUES (?, ?, ?)",
-            (order_id, payload.customer.strip(), round(payload.amount, 2)),
-        )
+        _insert_order(context, payload)
         context.conn.commit()
         return dashboard_payload(context)
 
@@ -444,6 +647,7 @@ def delete_order(
 ) -> dict:
     with _lock:
         context = get_context()
+        order_id = order_id.strip().upper()
         used = context.conn.execute(
             "SELECT 1 FROM runs WHERE order_id = ? LIMIT 1", (order_id,)
         ).fetchone()
@@ -465,12 +669,17 @@ def _clean_values(values: dict) -> dict[str, str]:
         if key in SECRET_KEYS and (not text or text.startswith("••")):
             continue  # blank / masked -> keep the stored secret
         out[key] = text
-    if "llm_provider" in out and out["llm_provider"] not in ("deterministic", "anthropic", "openai"):
+    if "llm_provider" in out and out["llm_provider"] not in PROVIDERS:
         raise HTTPException(status_code=422, detail="Unknown LLM provider.")
+    if out.get("compat_base_url") and not out["compat_base_url"].startswith("https://"):
+        raise HTTPException(status_code=422, detail="The OpenAI-compatible base URL must use https://.")
+    if out.get("alert_webhook_url") and not valid_webhook_url(out["alert_webhook_url"]):
+        raise HTTPException(status_code=422, detail="The alert webhook must be an https:// URL.")
     try:
+        for key in _NUMERIC_KEYS:
+            if key in out and float(out[key]) < 0:
+                raise ValueError
         if "promotion_clean_runs" in out and int(out["promotion_clean_runs"]) < 1:
-            raise ValueError
-        if "l2_auto_refund_ceiling" in out and float(out["l2_auto_refund_ceiling"]) < 0:
             raise ValueError
     except ValueError as error:
         raise HTTPException(status_code=422, detail="Invalid numeric setting.") from error
@@ -499,6 +708,15 @@ def update_settings(
         return dashboard_payload(get_context())
 
 
+def _config_with_form(context: AppContext, cleaned: dict[str, str]):
+    """The saved config with unsaved form values overlaid (for tests)."""
+    changes = {
+        key: value for key, value in cleaned.items()
+        if key in context.config.__dataclass_fields__ and key not in _NUMERIC_KEYS
+    }
+    return replace(context.config, **changes)
+
+
 @app.post("/api/settings/test-llm")
 def test_llm(
     payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
@@ -506,26 +724,61 @@ def test_llm(
     """Try a provider/key (from the form, before saving) with a tiny call."""
     with _lock:
         context = get_context()
-        cleaned = _clean_values(payload.values)
-        cfg = context.config
-        provider = cleaned.get("llm_provider", cfg.llm_provider)
-        cfg = replace(
-            cfg,
-            llm_provider=provider,
-            anthropic_api_key=cleaned.get("anthropic_api_key", cfg.anthropic_api_key),
-            openai_api_key=cleaned.get("openai_api_key", cfg.openai_api_key),
-            anthropic_model=cleaned.get("anthropic_model", cfg.anthropic_model),
-            openai_model=cleaned.get("openai_model", cfg.openai_model),
+        cfg = _config_with_form(context, _clean_values(payload.values))
+    if cfg.llm_provider == "deterministic":
+        return {"ok": True, "message": "Built-in rules need no key."}
+    if not cfg.llm_enabled:
+        return {"ok": False, "message": "Add an API key (and base URL) for this provider first."}
+    try:
+        reply = complete(cfg, "Reply with the single word: ready", max_tokens=10)
+        return {"ok": True, "message": f"Connected to {cfg.llm_model}. Model replied: {reply[:40]}"}
+    except Exception as error:  # surfaced to the operator; key never echoed
+        return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
+
+
+@app.post("/api/settings/test-neatlogs")
+def test_neatlogs(
+    payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """Send neatlogs' own doctor probe trace with the (unsaved) key."""
+    with _lock:
+        context = get_context()
+        cfg = _config_with_form(context, _clean_values(payload.values))
+    if not cfg.neatlogs_api_key:
+        return {"ok": False, "message": "Add a neatlogs API key first."}
+    try:
+        import neatlogs
+
+        report = neatlogs.doctor_probe_v2(
+            api_key=cfg.neatlogs_api_key, endpoint=cfg.neatlogs_endpoint, timeout_seconds=12,
         )
-        if provider == "deterministic":
-            return {"ok": True, "message": "Deterministic mode needs no key."}
-        if not cfg.llm_enabled:
-            return {"ok": False, "message": "Add an API key for this provider first."}
-        try:
-            reply = complete(cfg, "Reply with the single word: ready", max_tokens=10)
-            return {"ok": True, "message": f"Connected. Model replied: {reply[:40]}"}
-        except Exception as error:  # surfaced to the operator; key never echoed
-            return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
+    except Exception as error:
+        return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
+    if report.get("status") == "pass":
+        return {"ok": True, "message": "Connected. A probe trace was ingested and read back."}
+    failure = report.get("first_failure") or "unknown"
+    stages = [check.get("details", {}) for check in report.get("checks", [])]
+    accepted = any(stage.get("last_successful_stage") for stage in stages)
+    if accepted:
+        return {"ok": True, "message": "Connected. neatlogs accepted the probe trace (still processing)."}
+    return {"ok": False, "message": f"neatlogs probe failed: {failure}"}
+
+
+@app.post("/api/settings/test-alert")
+def test_alert(
+    payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    with _lock:
+        context = get_context()
+        cfg = _config_with_form(context, _clean_values(payload.values))
+        business = settings_repo.get_all(context.conn).get("business_name", "")
+    notifier = AlertNotifier(url=cfg.alert_webhook_url, business=business)
+    if not notifier.enabled:
+        return {"ok": False, "message": "Add an https:// webhook URL first."}
+    ok, status = notifier.send(
+        f"✅ {business or 'Solo License'} alerts are connected. You'll hear here when an agent loses its license."
+    )
+    return {"ok": ok, "message": f"Delivered ({status})." if ok else f"Delivery failed ({status})."}
 
 
 @app.post("/api/onboarding/complete")
@@ -534,7 +787,18 @@ def complete_onboarding(
 ) -> dict:
     with _lock:
         context = get_context()
+        # Validate everything before writing anything, so a bad request can
+        # never leave a half-onboarded workspace behind.
         values = _clean_values(payload.values)
+        levels: dict[str, LicenseLevel] = {}
+        try:
+            for key in TASK_CLASSES:
+                levels[key] = LicenseLevel(payload.starting_levels.get(key, payload.starting_level))
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail="Unknown license level.") from error
+        for key in payload.starting_levels:
+            _task_class(key)
+
         values["business_name"] = payload.business_name.strip()
         values["onboarded"] = "1"
         _save_settings(context, values)
@@ -545,11 +809,11 @@ def complete_onboarding(
                 "INSERT INTO orders (order_id, customer, amount) VALUES (?, ?, ?)",
                 [(o.order_id, o.customer, o.amount) for o in SEED_ORDERS],
             )
-        try:
-            level = LicenseLevel(payload.starting_level)
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail="Unknown license level.") from error
-        license_repo.upsert_state(context.conn, LicenseState(task_class=TASK_CLASS, level=level))
+        for order in payload.orders:
+            if orders_repo.get_order(context.conn, order.order_id.strip().upper()) is None:
+                _insert_order(context, order)
+        for key, level in levels.items():
+            license_repo.upsert_state(context.conn, LicenseState(task_class=key, level=level))
         context.conn.commit()
         return dashboard_payload(context)
 
@@ -560,4 +824,30 @@ def reseed_demo(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
     with _lock:
         context = get_context()
         seed(context.conn, context.config)
+        return dashboard_payload(context)
+
+
+@app.post("/api/demo/top-up")
+def top_up_demo_orders(
+    payload: TopUpPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """Add fresh under-ceiling orders so the guided demo always has work to do."""
+    with _lock:
+        context = get_context()
+        ceiling = context.config.ceiling_for(_task_class(payload.task_class))
+        base = context.conn.execute("SELECT COUNT(*) AS n FROM orders").fetchone()["n"]
+        amounts = [round(max(1.0, ceiling * f), 2) for f in (0.3, 0.5, 0.4, 0.6, 0.2, 0.7)]
+        added = 0
+        n = base
+        while added < payload.count:
+            n += 1
+            order_id = f"DEMO-{2000 + n}"
+            if orders_repo.get_order(context.conn, order_id) is not None:
+                continue
+            context.conn.execute(
+                "INSERT INTO orders (order_id, customer, amount) VALUES (?, ?, ?)",
+                (order_id, f"Demo customer {n}", amounts[added % len(amounts)]),
+            )
+            added += 1
+        context.conn.commit()
         return dashboard_payload(context)

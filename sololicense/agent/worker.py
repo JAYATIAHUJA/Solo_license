@@ -29,6 +29,7 @@ from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
+from sololicense.domain.task_classes import get_spec
 from sololicense.faults.injector import FaultInjector, effects_for
 from sololicense.observability import detections as rules
 from sololicense.observability.detections import Detection
@@ -88,7 +89,11 @@ class RefundWorker:
         idempotency_key: str | None = None,
         actor: Actor = SYSTEM_ACTOR,
     ) -> RunResult:
-        trace = self._tracer.start_trace("refund")
+        get_spec(task_class)  # fail fast on an unknown class
+        trace = self._tracer.start_trace(
+            task_class, order_id=request.order_id, amount=request.amount,
+            actor=actor.actor_id,
+        )
         try:
             return self._run_refund(
                 request,
@@ -114,6 +119,7 @@ class RefundWorker:
         trace,
     ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
+        column = get_spec(task_class).effect_column
         # Peek, don't consume: an armed fault only bends a run that actually
         # executes, so a draft or suggestion leaves it armed for the next one.
         armed_effects = effects_for(self._faults.peek(task_class))
@@ -129,7 +135,7 @@ class RefundWorker:
         plan = self._planner.plan(request, authorized, state)
         trace.span("plan", source=plan.source, rationale=plan.rationale)
 
-        before = verification.read_refunded(self._conn, request.order_id)
+        before = verification.read_refunded(self._conn, request.order_id, column)
         will_execute = attempted in _EXECUTING
         duplicate = (
             bool(idempotency_key)
@@ -147,7 +153,7 @@ class RefundWorker:
         intended_delta = request.amount if will_execute else 0.0
 
         if will_execute:
-            self._do_execute(trace, request, effects)
+            self._do_execute(trace, request, effects, task_class, column)
         else:
             trace.span("execute.skipped", reason=attempted.name)
 
@@ -162,6 +168,7 @@ class RefundWorker:
                 order_id=request.order_id,
                 before=before,
                 intended_delta=intended_delta,
+                column=column,
             )
         trace.span(
             "verify.readback",
@@ -244,7 +251,8 @@ class RefundWorker:
                 else Decision.AUTO_EXECUTE
             )
         return decide(
-            state, request.amount, l2_ceiling=self._config.l2_auto_refund_ceiling
+            state, request.amount,
+            l2_ceiling=self._config.ceiling_for(state.task_class),
         )
 
     def _attempt(self, authorized: Decision, state, effects) -> Decision:
@@ -258,9 +266,11 @@ class RefundWorker:
             )
         return authorized
 
-    def _do_execute(self, trace, request: RefundRequest, effects) -> None:
+    def _do_execute(
+        self, trace, request: RefundRequest, effects, task_class: str, column: str
+    ) -> None:
         trace.span(
-            "tool.execute_refund",
+            f"tool.execute_{task_class}",
             order_id=request.order_id,
             amount=request.amount,
             suppress_write=effects.suppress_write,
@@ -270,6 +280,7 @@ class RefundWorker:
             order_id=request.order_id,
             amount=request.amount,
             suppress_write=effects.suppress_write,
+            column=column,
         )
         # The tool's claim is recorded but explicitly marked untrusted.
         trace.span(

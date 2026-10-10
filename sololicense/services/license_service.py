@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from typing import Callable
 
 from sololicense.db.repositories import events as events_repo
 from sololicense.db.repositories import license as license_repo
@@ -50,10 +51,12 @@ class LicenseService:
         ledger: GitLedger,
         *,
         promotion_threshold: int,
+        on_transition: Callable[..., None] | None = None,
     ) -> None:
         self._conn = conn
         self._ledger = ledger
         self._threshold = promotion_threshold
+        self._on_transition = on_transition
 
     def get_or_create(self, task_class: str) -> LicenseState:
         """Return the task class's state, seeding a fresh L0 row if absent."""
@@ -176,5 +179,15 @@ class LicenseService:
         if git_sha:
             events_repo.set_git_sha(self._conn, event_id, git_sha)
             self._conn.commit()
+
+        if self._on_transition is not None:
+            try:
+                self._on_transition(
+                    task_class=new.task_class, kind=kind,
+                    from_level=int(old.level), to_level=int(new.level),
+                    reason=reason, run_id=run_id, git_sha=git_sha,
+                )
+            except Exception:  # alerts are best-effort; the dial already moved
+                pass
 
         return Transition(old=old, new=new, kind=kind, git_sha=git_sha)

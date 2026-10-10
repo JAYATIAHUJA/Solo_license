@@ -40,3 +40,4 @@ tmp/
 .tmp_pytest*/
 .entire/logs/
 data/ledger-repo/
+data/.settings.key

@@ -61,8 +61,11 @@ class Tracer:
     def __init__(self, client: NeatlogsClient) -> None:
         self._client = client
 
-    def start_trace(self, name: str) -> Trace:
-        trace = Trace(trace_id=uuid.uuid4().hex, client=self._client)
-        trace.remote_workflow = self._client.start_workflow(trace.trace_id)
-        trace.span("trace.start", kind=name)
+    def start_trace(self, name: str, **attributes) -> Trace:
+        local_id = uuid.uuid4().hex
+        remote = self._client.start_workflow(local_id, {"task_class": name, **attributes})
+        # Prefer neatlogs' own trace id so the evidence packet deep-links to it.
+        trace_id = (remote.trace_id if remote is not None else None) or local_id
+        trace = Trace(trace_id=trace_id, client=self._client, remote_workflow=remote)
+        trace.span("trace.start", kind=name, **attributes)
         return trace

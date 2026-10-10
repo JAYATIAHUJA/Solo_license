@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import subprocess
 
+import pytest
+
 from sololicense.db.repositories import license as license_repo
 from sololicense.db.repositories import orders as orders_repo
 from sololicense.domain.license import LicenseLevel
@@ -86,17 +88,36 @@ def test_restore_lifts_quarantine_to_chosen_level(harness):
     assert "restore" in _git_log(harness.repo)
 
 
-def test_custom_task_class_is_persisted_on_run(harness):
+def test_store_credit_class_verifies_its_own_column(harness):
     result = harness.worker.run_refund(
-        RefundRequest("ORD-1001", "Ada", 25.0, "defective"),
-        task_class="vip_refund",
+        RefundRequest("ORD-1001", "Ada", 10.0, "late delivery"),
+        task_class="store_credit",
         approved=True,
     )
 
     row = harness.conn.execute(
         "SELECT task_class FROM runs WHERE id = ?", (result.run_id,)
     ).fetchone()
-    assert row["task_class"] == "vip_refund"
+    assert row["task_class"] == "store_credit"
+    assert result.status is RunStatus.CLEAN
+    assert orders_repo.get_effect_amount(harness.conn, "ORD-1001", "credit_issued") == 10.0
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 0.0
+
+
+def test_store_credit_ladder_is_independent_of_refund(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+    caught = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "x"))
+    assert caught.status is RunStatus.DEMOTED
+
+    credit = harness.license_service.get_or_create("store_credit")
+    assert credit.quarantined is False
+
+
+def test_unknown_task_class_is_rejected(harness):
+    with pytest.raises(ValueError, match="Unknown task class"):
+        harness.worker.run_refund(
+            RefundRequest("ORD-1001", "Ada", 25.0, "x"), task_class="vip_refund"
+        )
 
 
 def test_fault_stays_armed_through_a_run_that_does_not_execute(harness):

@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS orders (
     order_id         TEXT PRIMARY KEY,
     customer         TEXT NOT NULL,
     amount           REAL NOT NULL,            -- original order total
-    refunded_amount  REAL NOT NULL DEFAULT 0,  -- verified side effect
+    refunded_amount  REAL NOT NULL DEFAULT 0,  -- verified side effect (refund)
+    credit_issued    REAL NOT NULL DEFAULT 0,  -- verified side effect (store_credit)
     status           TEXT NOT NULL DEFAULT 'paid',
     updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
