@@ -89,3 +89,12 @@ CREATE TABLE IF NOT EXISTS spans (
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_spans_trace ON spans (trace_id);
+
+-- Armed fault for the next run of a task class. The UI sets a row here; the
+-- worker consumes and clears it, so a fault deterministically affects exactly
+-- one run. Default 'none' means run normally.
+CREATE TABLE IF NOT EXISTS armed_faults (
+    task_class  TEXT PRIMARY KEY,
+    mode        TEXT NOT NULL DEFAULT 'none',
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
