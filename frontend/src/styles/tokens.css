@@ -1,0 +1,24 @@
+/* Design tokens — black & white, paper, straight edges.
+   No gradients, no border-radius. Status is expressed with fill patterns
+   (solid / hatched / outline), not colour. */
+:root {
+  --paper: #f3f1ec;
+  --paper-2: #ebe8e1;
+  --sheet: #fbfaf7;
+  --ink: #0e0e0d;
+  --ink-2: #3a3a37;
+  --muted: #76746e;
+  --faint: #a9a69e;
+  --rule: #0e0e0d;
+  --hair: rgba(14, 14, 13, 0.14);
+  --signal: #d8341f; /* used only for a live detection, never decoration */
+
+  --font-sans: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-hand: "Caveat", "Comic Sans MS", cursive;
+
+  --gutter: clamp(16px, 4vw, 56px);
+  --max: 1360px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}

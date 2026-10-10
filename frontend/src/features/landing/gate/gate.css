@@ -1,0 +1,42 @@
+.gate { position: fixed; inset: 0; z-index: 200; background: var(--paper); display: grid; place-items: center; overflow: hidden; }
+.gate-shader { position: absolute !important; inset: 0; opacity: 0.22; }
+.gate-skip { position: absolute; top: 22px; right: var(--gutter); z-index: 3; }
+.gate-skip:hover { text-decoration: underline; }
+.gate-card { position: relative; z-index: 2; display: grid; justify-items: center; gap: clamp(16px, 3vh, 32px); text-align: center; padding: 0 var(--gutter); }
+.gate-kicker { color: var(--muted); }
+
+/* split display type */
+.split-title { margin: 0; font: 400 clamp(52px, min(9vw, 12vh), 150px)/0.92 var(--font-serif); letter-spacing: -0.02em; text-transform: uppercase; }
+.split-line { position: relative; display: block; }
+.split-ghost { visibility: hidden; }
+.split-half { position: absolute; left: 0; right: 0; top: 0; }
+.split-top { clip-path: inset(0 0 50% 0); }
+.split-bottom { clip-path: inset(50% 0 0 0); }
+
+.gate-choices { display: flex; gap: 0; border: 1px solid var(--ink); }
+.gate-choice { min-width: 160px; height: 64px; font: 400 28px var(--font-serif); letter-spacing: 0.02em; text-transform: uppercase; transition: background 0.2s, color 0.2s; }
+.gate-choice + .gate-choice { border-left: 1px solid var(--ink); }
+.gate-choice:hover { background: var(--ink); color: var(--paper); }
+.gate-answer { font-size: clamp(26px, 3.4vw, 40px); margin: 0; min-height: 64px; }
+
+.gate-sign { width: min(900px, 100%); }
+.gate-sign-title { margin: 0; font-size: clamp(44px, min(7vw, 10vh), 104px); line-height: 0.95; }
+.gate-sign-sub { margin: -6px 0 0; color: var(--ink-2); }
+.gate-sign-body { position: relative; width: 100%; }
+.gate-stamp { position: absolute; right: 8%; top: 18%; }
+
+.sig { display: grid; gap: 14px; width: 100%; }
+.sig-pad { background: var(--sheet); }
+.sig-svg { position: relative; z-index: 1; width: 100%; aspect-ratio: 3 / 1; touch-action: none; cursor: crosshair; }
+.sig-base { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 6; }
+.sig-x { font: 400 26px var(--font-serif); fill: var(--ink); }
+.sig-ink { fill: none; stroke: var(--ink); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; filter: url(#ink-wobble); }
+.sig-hint { position: absolute; left: 50%; top: 40%; translate: -50% -50%; font-size: 26px; color: var(--faint); pointer-events: none; z-index: 1; }
+.sig-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+.gate-flood { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; }
+
+@media (max-width: 640px) {
+  .gate-choice { min-width: 120px; height: 56px; font-size: 22px; }
+  .gate-stamp { right: 2%; top: 4%; transform: scale(0.7); }
+}

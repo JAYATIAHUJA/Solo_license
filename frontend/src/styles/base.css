@@ -1,0 +1,66 @@
+*, *::before, *::after { box-sizing: border-box; border-radius: 0 !important; }
+html, body, #root { margin: 0; min-height: 100%; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1.5 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+::selection { background: var(--ink); color: var(--paper); }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+img, svg { display: block; }
+
+/* type */
+.serif { font-family: var(--font-serif); font-weight: 400; letter-spacing: -0.01em; }
+.italic { font-style: italic; }
+.mono { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+.hand { font-family: var(--font-hand); font-weight: 600; letter-spacing: 0; }
+.muted { color: var(--muted); }
+
+/* buttons — straight edges, ink fill or outline */
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  height: 44px; padding: 0 20px;
+  border: 1px solid var(--ink);
+  font-size: 14px; font-weight: 500; letter-spacing: -0.01em;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), transform 0.2s var(--ease);
+  white-space: nowrap;
+}
+.btn:active { transform: translate(1px, 1px); }
+.btn-ink { background: var(--ink); color: var(--paper); }
+.btn-ink:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
+.btn-line { background: transparent; color: var(--ink); }
+.btn-line:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+.btn-sm { height: 34px; padding: 0 14px; font-size: 13px; }
+.btn-ghost { border-color: transparent; padding: 0 10px; }
+.btn-ghost:hover:not(:disabled) { border-color: var(--ink); }
+
+/* form fields */
+.field { display: grid; gap: 8px; }
+.field > span { font: 500 11.5px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.input {
+  height: 46px; width: 100%; padding: 0 14px;
+  background: var(--sheet); border: 1px solid var(--ink);
+  outline: none; transition: box-shadow 0.15s;
+}
+.input:focus { box-shadow: 4px 4px 0 var(--ink); }
+textarea.input { height: auto; min-height: 120px; padding: 12px 14px; resize: vertical; line-height: 1.5; }
+.field small { color: var(--muted); font-size: 12.5px; }
+
+/* status patterns */
+.pat-solid { background: var(--ink); }
+.pat-hatch { background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 6px); }
+.pat-dots { background-image: radial-gradient(var(--ink) 1px, transparent 1.2px); background-size: 6px 6px; }
+.pat-none { background: transparent; }
+
+.rule-t { border-top: 1px solid var(--rule); }
+.rule-b { border-bottom: 1px solid var(--rule); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
