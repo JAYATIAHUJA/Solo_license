@@ -5,9 +5,11 @@ import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole } from '../../../lib/format.js';
 import { levelCopy } from '../../../lib/copy.js';
 import { jobIs, jobName, limitOf } from '../components/mission/derive.js';
+import { Spotlight } from './Spotlight.jsx';
 import './autopilot.css';
 
-const PAUSE_MS = 2600;
+/** Reading time per step when auto-playing. */
+const PAUSE_MS = 7000;
 /** Each demo action is a new request; without a fresh key a replayed demo
  *  would (correctly) be caught as a duplicate action. */
 const demoKey = () => `demo:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
@@ -39,6 +41,7 @@ function buildScript(primary) {
     {
       id: 'intro',
       title: 'Meet your agent',
+      where: () => ({ route: '/app', target: `[data-tour="job-${primary}"]` }),
       say: (d) => {
         const { state, ceiling } = classInfo(d, primary);
         const now = state.quarantined ? 'paused' : `set to “${levelCopy(state.effective_level, limitOf(ceiling)).short}”`;
@@ -48,20 +51,26 @@ function buildScript(primary) {
     {
       id: 'baseline',
       title: 'Start with some earned freedom',
+      where: () => ({ route: '/app', target: `[data-tour="job-${primary}"]` }),
       say: (d) => `For this demo, the agent is allowed to handle ${nameOf(d).toLowerCase()} up to ${limitOf(classInfo(d, primary).ceiling)} on its own. We also add a few sample orders so there is work to do.`,
       run: async (ctx) => {
         const { spec, state } = classInfo(ctx.data(), primary);
+        // A practice problem left armed earlier would trip the "correct jobs"
+        // step; start every tour from a clean slate.
+        if (ctx.data().armed_faults?.[spec.key] && ctx.data().armed_faults[spec.key] !== 'none') {
+          await ctx.call(() => api.arm('none', spec.key));
+        }
         if (state.quarantined || state.effective_level < 2) {
           await ctx.call(() => api.restore(2, 'Guided demo baseline: start from an earned L2.', spec.key));
         }
         const open = ctx.data().orders.filter((o) => o.remaining > 0.5).length;
         if (open < 6) await ctx.call(() => api.topUp(spec.key, 6));
-        ctx.go('/app');
       },
     },
     {
       id: 'clean',
       title: 'Correct jobs earn more freedom',
+      where: () => ({ route: '/app', target: '[data-tour="recent"]' }),
       say: (d) => {
         const { state } = classInfo(d, primary);
         const need = state.level >= 3 ? 1 : Math.max(1, d.config.promotion_clean_runs - state.clean_runs);
@@ -82,13 +91,13 @@ function buildScript(primary) {
           await ctx.call(() => api.runAction({ ...pick, reason: `Guided demo clean run ${i + 1}`, task_class: spec.key, idempotency_key: demoKey() }));
           await sleep(700);
         }
-        ctx.go('/app');
       },
     },
     {
       id: 'fault',
       title: 'Something goes wrong',
-      say: () => 'We make the payment tool pretend it worked while changing nothing. The agent believes it is done, but the double-check sees that the money never moved.',
+      where: () => ({ route: '/app', target: `[data-tour="paused-${primary}"]` }),
+      say: () => 'We made the payment tool pretend it worked while changing nothing. The double-check saw that the money never moved, so the agent was stopped and this warning appeared.',
       run: async (ctx) => {
         const { spec, ceiling } = classInfo(ctx.data(), primary);
         ctx.mem.savedBefore = ctx.data().economics.net_saved_month;
@@ -99,31 +108,38 @@ function buildScript(primary) {
           pick = pickOrder(ctx.data(), ceiling);
         }
         const result = await ctx.call(() => api.runAction({ ...pick, reason: 'Guided demo: injected quiet failure', task_class: spec.key, idempotency_key: demoKey() }));
-        const runId = result?.runs?.[0]?.id;
-        ctx.mem.demotedRun = runId;
-        if (runId) ctx.go(`/app/runs/${runId}`);
+        const caught = result?.runs?.find((r) => r.task_class === spec.key && r.status === 'demoted');
+        ctx.mem.demotedRun = caught?.id ?? result?.runs?.[0]?.id;
       },
     },
     {
       id: 'evidence',
       title: 'Paused right away',
+      where: (d, mem) => ({ route: mem.demotedRun ? `/app/runs/${mem.demotedRun}` : '/app/runs', target: '[data-tour="what-happened"]' }),
       say: (d) => `${jobIs(nameOf(d))} now paused. The agent can only suggest until a person looks. This page shows what it meant to do, what really happened, and why it stopped.`,
     },
     {
       id: 'money',
       title: 'What the pause costs',
+      where: () => ({ route: '/app/reports', target: '[data-tour="savings"]' }),
       say: (d, mem) => {
         const before = mem.savedBefore;
         const after = d.economics.net_saved_month;
         const delta = before !== undefined ? ` Estimated savings went from ${moneyWhole(before)} to ${moneyWhole(after)} a month.` : '';
         return `While paused, people check every job again, so you save less time.${delta} That is the trade: safety first, freedom earned back.`;
       },
-      run: async (ctx) => ctx.go('/app/reports'),
+    },
+    {
+      id: 'review',
+      title: 'You decide what happens next',
+      where: (d, mem) => ({ route: mem.demotedRun ? `/app/runs/${mem.demotedRun}` : '/app/runs', target: '[data-tour="resume"]' }),
+      say: (d) => `Nothing runs on its own again until a person reads what happened and chooses how much freedom to give back. In the next step we choose “${levelCopy(2, limitOf(classInfo(d, primary).ceiling)).short}”.`,
     },
     {
       id: 'restore',
       title: 'A person resumes it',
-      say: () => 'A person reviews what happened and gives back some freedom — not all of it. The decision and the reason are saved in History.',
+      where: () => ({ route: '/app/ledger', target: '[data-tour="history"]' }),
+      say: () => 'Resumed with limited freedom. Every change — who made it, when and why — is written into Permission history and into your code repository.',
       run: async (ctx) => {
         const { spec } = classInfo(ctx.data(), primary);
         await ctx.call(() => api.restore(
@@ -131,18 +147,17 @@ function buildScript(primary) {
           `Reviewed run #${ctx.mem.demotedRun ?? '?'}: the problem was a practice problem from the guided demo. Resuming with limited freedom.`,
           spec.key,
         ));
-        ctx.go('/app/ledger');
       },
     },
     {
       id: 'close',
       title: 'That is the whole idea',
+      where: () => ({ route: '/app', target: '[data-tour="jobs"]' }),
       say: (d) => {
         const others = d.task_classes.filter((t) => t.key !== primary)
           .map((t) => `${jobName(t)} kept its own level the whole time.`).join(' ');
         return `Freedom is earned job by job, taken away the moment something goes wrong, and every change is written down.${others ? ` ${others}` : ''}`;
       },
-      run: async (ctx) => ctx.go('/app'),
     },
   ];
 }
@@ -160,6 +175,8 @@ export function Autopilot() {
   const [working, setWorking] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState('');
+  const [focus, setFocus] = useState(null);
+  const [wide, setWide] = useState(() => window.innerWidth >= 700);
   const latest = useRef(data);
   const mem = useRef({});
   const playingRef = useRef(false);
@@ -174,7 +191,15 @@ export function Autopilot() {
     if (!target) return false;
     setIndex(i);
     setError('');
-    if (!target.run) return true;
+    setFocus(null);
+    const show = () => {
+      const w = target.where?.(latest.current, mem.current);
+      if (w) {
+        navigate(w.route);
+        setFocus(w.target);
+      }
+    };
+    if (!target.run) { show(); return true; }
     setWorking(true);
     try {
       const ctx = {
@@ -189,6 +214,7 @@ export function Autopilot() {
         },
       };
       await target.run(ctx);
+      show();
       return true;
     } catch (cause) {
       setError(cause.message);
@@ -213,7 +239,13 @@ export function Autopilot() {
   }, [execute, script.length]);
 
   const stop = () => { playingRef.current = false; setPlaying(false); };
-  const reset = () => { stop(); setIndex(-1); setError(''); mem.current = {}; };
+  const reset = () => { stop(); setIndex(-1); setError(''); setFocus(null); mem.current = {}; };
+
+  useEffect(() => {
+    const onResize = () => setWide(window.innerWidth >= 700);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const show = () => setOpen(true);
@@ -229,63 +261,60 @@ export function Autopilot() {
   if (!data || !primary || !open) return null;
 
   return (
-    <aside className="ap" aria-label="1-minute demo">
-      <header className="ap-head">
-        <b>1-minute demo</b>
-        <span className="pl-small pl-muted">{index >= 0 ? `Step ${index + 1} of ${script.length}` : `${script.length} steps`}</span>
-        <button className="btn btn-ghost btn-sm" onClick={() => { stop(); setOpen(false); }} aria-label="Close demo">Close</button>
-      </header>
+    <>
+      {step && (
+        <Spotlight
+          selector={working ? null : focus}
+          label={`Step ${index + 1} of ${script.length}`}
+          title={step.title}
+          text={step.say(data, mem.current)}
+          busy={working}
+          reserveRight={wide ? 420 : 0}
+        />
+      )}
+      <aside className="ap" aria-label="1-minute demo">
+        <header className="ap-head">
+          <b>1-minute demo</b>
+          <span className="pl-small pl-muted">{index >= 0 ? `Step ${index + 1} of ${script.length}` : `${script.length} steps`}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => { reset(); setOpen(false); }} aria-label="Close demo">Close</button>
+        </header>
 
-      <div className="ap-say" aria-live="polite">
-        {step ? (
-          <>
-            <h3>{step.title}</h3>
-            <p>{step.say(data, mem.current)}</p>
-          </>
-        ) : (
-          <>
-            <h3>See the whole idea in about a minute</h3>
-            <p>
-              The demo uses this workspace for real: the agent does a few jobs, earns freedom,
-              hits a practice problem, gets paused, and a person resumes it. Practice problems
-              are labelled as practice in your history.
-            </p>
-          </>
+        {index < 0 && (
+          <p className="ap-intro">
+            A short guided tour that uses this workspace for real. Each step opens the right
+            screen and points at what matters. Practice problems are labelled as practice.
+          </p>
         )}
-        {working && <p className="pl-muted ap-working">Working…</p>}
-        {error && <p className="ap-error">{error}</p>}
-      </div>
 
-      <details className="pl-more ap-steps-wrap">
-        <summary>All steps</summary>
-        <ol className="ap-steps">
+        <ol className="ap-list">
           {script.map((s, i) => (
             <li key={s.id} className={i === index ? 'is-on' : i < index ? 'is-done' : ''}>
               <button type="button" disabled={working || playing} onClick={() => execute(i)}>
-                <i>{i + 1}</i> {s.title}
+                <i>{i < index ? '✓' : i + 1}</i> {s.title}
               </button>
             </li>
           ))}
         </ol>
-      </details>
+        {error && <p className="ap-error ap-intro">{error}</p>}
 
-      <footer className="ap-foot">
-        {playing ? (
-          <button className="btn btn-line btn-sm" onClick={stop}>Pause</button>
-        ) : (
-          <button className="btn btn-ink btn-sm" disabled={working} onClick={() => play(index + 1 >= script.length ? 0 : index + 1)}>
-            {index < 0 ? 'Start the demo' : index + 1 >= script.length ? 'Play again' : 'Continue'}
+        <footer className="ap-foot">
+          <button
+            className="btn btn-ink btn-sm"
+            disabled={working || playing || index >= script.length - 1}
+            onClick={() => execute(index + 1)}
+          >
+            {index < 0 ? 'Start the tour' : 'Next step →'}
           </button>
-        )}
-        <button
-          className="btn btn-line btn-sm"
-          disabled={working || playing || index >= script.length - 1}
-          onClick={() => execute(index + 1)}
-        >
-          Next step
-        </button>
-        <button className="btn btn-ghost btn-sm" disabled={working} onClick={reset}>Start over</button>
-      </footer>
-    </aside>
+          {playing ? (
+            <button className="btn btn-line btn-sm" onClick={stop}>Pause</button>
+          ) : (
+            <button className="btn btn-line btn-sm" disabled={working} onClick={() => play(index + 1 >= script.length ? 0 : index + 1)}>
+              Auto-play
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" disabled={working} onClick={reset}>Start over</button>
+        </footer>
+      </aside>
+    </>
   );
 }

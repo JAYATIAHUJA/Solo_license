@@ -72,7 +72,7 @@ export function Ledger() {
       {events.length === 0 ? (
         <div className="pl-empty">No changes yet. When the agent earns more freedom or gets paused, it shows up here.</div>
       ) : (
-        <ul className="act-list hist-list">
+        <ul className="act-list hist-list" data-tour="history">
           {events.map((e) => {
             const who = personName(e.actor_id);
             const date = toDate(e.created_at);

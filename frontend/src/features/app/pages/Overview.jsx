@@ -73,7 +73,7 @@ export function Overview() {
       {paused.map((c) => {
         const r = pausingRun(data, c.key);
         return (
-          <div key={c.key} className="pl-alert app-alert-row" role="alert">
+          <div key={c.key} className="pl-alert app-alert-row" role="alert" data-tour={`paused-${c.key}`}>
             <p>
               <b>{jobIs(c.name)} paused.</b>{' '}
               {r ? <>A problem was caught on {r.order_id} — {lcFirst(problemFor(data, r).title)}. </> : 'A problem was caught. '}
@@ -89,9 +89,9 @@ export function Overview() {
 
       <section className="pl-section" aria-labelledby="h-allowed">
         <h2 id="h-allowed">What your agent is allowed to do</h2>
-        <div className="pl-grid">
+        <div className="pl-grid" data-tour="jobs">
           {cards.map((c) => (
-            <article key={c.key} className="pl-card">
+            <article key={c.key} className="pl-card" data-tour={`job-${c.key}`}>
               <div className="app-card-top">
                 <h3>{c.name}</h3>
                 <span className={`pl-status ${c.paused ? 'bad' : c.level >= 2 ? 'ok' : 'wait'}`}>{c.paused ? 'Paused' : c.copy.short}</span>
@@ -123,7 +123,7 @@ export function Overview() {
         {waiting.length > 8 && <Link className="app-link" to="/app/runs">See all {waiting.length} waiting</Link>}
       </section>
 
-      <section className="pl-section" aria-labelledby="h-recent">
+      <section className="pl-section" aria-labelledby="h-recent" data-tour="recent">
         <h2 id="h-recent">What happened recently</h2>
         {recent.length === 0 ? (
           <div className="pl-empty">

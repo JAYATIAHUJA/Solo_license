@@ -61,7 +61,7 @@ export function Reports() {
             <p className="pl-small pl-muted">Reached customers: {safety.reached}. Practice problems you set up: {safety.practice}.</p>
           </article>
 
-          <article className="pl-card">
+          <article className="pl-card" data-tour="savings">
             <p className="pl-muted pl-small">Estimated review time saved</p>
             <p className="pl-big">{moneyWhole(econ.supervision_saved_month)}<span className="app-per"> / month</span></p>
             <p>{savingsReason(cards, econ.supervision_saved_month || 0)}</p>

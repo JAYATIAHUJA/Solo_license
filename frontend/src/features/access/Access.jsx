@@ -3,9 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { clearSession, saveSession } from '../../lib/session.js';
 import { Logo } from '../../components/brand/Logo.jsx';
-import { ONE_LINER } from '../../lib/copy.js';
-import '../app/components/plain-form.css';
-import '../onboarding/onboarding.css';
+import { HandIcon } from '../../components/icons/HandIcon.jsx';
+import { DitherField } from '../../components/shader/PaperBackdrop.jsx';
 import './access.css';
 
 /** Sign-in. Two honest paths: a local demo session (only when the API runs
@@ -56,39 +55,44 @@ export function Access() {
   };
 
   return (
-    <div className="ob ax">
-      <aside className="ob-aside">
-        <div className="ob-aside-card">
-          <Link to="/" className="ob-brand"><Logo /> Solo License</Link>
-          <p className="ob-aside-note">{ONE_LINER}</p>
+    <div className="axo ax">
+      <aside className="axo-aside">
+        <DitherField className="axo-shader" shape="simplex" speed={0.2} size={2.4} />
+        <div className="axo-aside-card">
+          <Link to="/" className="axo-logo"><Logo /> Solo License</Link>
+          <p className="axo-aside-note hand">
+            An agent that earns the right to act alone — and loses it the instant a detection fires.
+          </p>
           <ul className="ax-points">
-            <li>Starts by asking permission</li>
-            <li>Double-checks every order after it acts</li>
-            <li>Every permission change is recorded</li>
+            <li><HandIcon name="dial" size={16} /> Per-task autonomy, L0 → L3</li>
+            <li><HandIcon name="eye" size={16} /> Every side effect read back, never trusted</li>
+            <li><HandIcon name="commit" size={16} /> Every license change is a git commit</li>
           </ul>
         </div>
       </aside>
 
-      <main className="ob-main pl-form">
-        <h1 className="ob-title">Sign in</h1>
-        <p className="ob-sub">
-          Your name is recorded next to everything you approve or change, so you can always see who did what.
+      <main className="axo-main">
+        <p className="mono muted">Sign in</p>
+        <h1 className="axo-title serif">Open your <i>workspace.</i></h1>
+        <p className="axo-sub">
+          Your name is written into the audit trail of every run and every license change you make.
         </p>
 
-        {info === null && !error && <p className="pl-muted">Connecting…</p>}
+        {info === null && !error && <p className="mono muted">Checking the API…</p>}
 
         {info?.demo_enabled && (
           <form className="ax-card" onSubmit={startDemo}>
             <div className="ax-card-head">
+              <HandIcon name="play" size={18} />
               <div>
                 <b>Try the demo</b>
-                <small>No account needed. Uses sample data.</small>
+                <small>Local demo session · admin role · no token needed</small>
               </div>
             </div>
             <label className="field">
               <span>Your name</span>
               <input
-                className="input ob-big-input"
+                className="input axo-big-input"
                 autoFocus
                 maxLength={40}
                 placeholder="e.g. Jayati"
@@ -97,7 +101,7 @@ export function Access() {
               />
             </label>
             <button className="btn btn-ink" disabled={busy || name.trim().length < 2}>
-              {busy ? 'Opening…' : 'Start the demo →'}
+              {busy ? 'Opening…' : 'Enter the demo'} <HandIcon name="arrow-right" size={16} />
             </button>
           </form>
         )}
@@ -105,9 +109,10 @@ export function Access() {
         {info && (
           <details className="ax-card ax-token" open={!info.demo_enabled}>
             <summary>
+              <HandIcon name="key" size={18} />
               <div>
-                <b>Sign in with an access code</b>
-                <small>Given to you by whoever set up this workspace</small>
+                <b>Connect with an access token</b>
+                <small>Issued by whoever deployed this workspace (SOLO_API_TOKENS)</small>
               </div>
             </summary>
             <form onSubmit={useToken} className="ax-token-form">
@@ -115,22 +120,22 @@ export function Access() {
                 className="input"
                 type="password"
                 autoComplete="off"
-                placeholder="Paste your access code"
+                placeholder="Paste access token"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
               />
-              <button className="btn btn-line" disabled={busy || token.trim().length < 8}>Sign in</button>
+              <button className="btn btn-line" disabled={busy || token.trim().length < 8}>Connect</button>
             </form>
             {!info.token_auth && !info.demo_enabled && (
               <p className="ax-note">
-                Sign-in isn't set up on this server yet. Whoever runs it can turn on the demo
-                (<code>SOLO_DEMO_MODE=1</code>) or create access codes (<code>SOLO_API_TOKENS</code>).
+                This API has no sign-in configured. Set <code>SOLO_DEMO_MODE=1</code> for a local demo,
+                or <code>SOLO_API_TOKENS</code> for a deployment.
               </p>
             )}
           </details>
         )}
 
-        {error && <p className="ob-error">{error}</p>}
+        {error && <p className="axo-error"><HandIcon name="warn" size={16} /> {error}</p>}
       </main>
     </div>
   );

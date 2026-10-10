@@ -127,10 +127,10 @@ export function Runs() {
             <div className="pl-empty">Loading…</div>
           ) : (
             <div className="pl-card act-detail-card">
-              <EvidencePacket packet={packet} />
+              <div data-tour="what-happened"><EvidencePacket packet={packet} /></div>
               <ApproveBar run={packet.run} onDone={(id) => id && navigate(`/app/runs/${id}`)} />
               {data.licenses?.[detailClass]?.quarantined && (
-                <RestorePanel taskClass={detailClass} evidenceRunId={packet.run.id} />
+                <div data-tour="resume"><RestorePanel taskClass={detailClass} evidenceRunId={packet.run.id} /></div>
               )}
             </div>
           )}
