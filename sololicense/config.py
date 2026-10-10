@@ -59,9 +59,30 @@ def load_config() -> Config:
         neatlogs_project=_get("NEATLOGS_PROJECT", "solo-license"),
         llm_provider=_get("LLM_PROVIDER", "deterministic").lower(),
         anthropic_api_key=_get("ANTHROPIC_API_KEY", ""),
-        anthropic_model=_get("ANTHROPIC_MODEL", "claude-opus-4-8"),
+        anthropic_model=_get("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
         openai_api_key=_get("OPENAI_API_KEY", ""),
         openai_model=_get("OPENAI_MODEL", "gpt-4o"),
         promotion_clean_runs=int(_get("PROMOTION_CLEAN_RUNS", "3")),
         l2_auto_refund_ceiling=float(_get("L2_AUTO_REFUND_CEILING", "50")),
     )
+
+
+_STR_KEYS = (
+    "llm_provider", "anthropic_api_key", "anthropic_model",
+    "openai_api_key", "openai_model", "neatlogs_api_key", "neatlogs_project",
+)
+
+
+def with_overrides(config: Config, stored: dict[str, str]) -> Config:
+    """Overlay operator settings (from the settings table) on env defaults."""
+    from dataclasses import replace
+
+    changes: dict[str, object] = {}
+    for key in _STR_KEYS:
+        if stored.get(key, "").strip():
+            changes[key] = stored[key].strip()
+    if stored.get("promotion_clean_runs", "").strip():
+        changes["promotion_clean_runs"] = max(1, int(stored["promotion_clean_runs"]))
+    if stored.get("l2_auto_refund_ceiling", "").strip():
+        changes["l2_auto_refund_ceiling"] = max(0.0, float(stored["l2_auto_refund_ceiling"]))
+    return replace(config, **changes)
