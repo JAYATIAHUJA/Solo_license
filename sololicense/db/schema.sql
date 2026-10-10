@@ -50,9 +50,8 @@ CREATE TABLE IF NOT EXISTS runs (
     FOREIGN KEY (order_id) REFERENCES orders (order_id)
 );
 CREATE INDEX IF NOT EXISTS idx_runs_created ON runs (created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_runs_idempotency_executed
-    ON runs (idempotency_key)
-    WHERE idempotency_key IS NOT NULL AND executed = 1;
+-- idx_runs_idempotency_executed is created in database._migrate_runs, after
+-- older databases have gained the idempotency_key column.
 
 -- Detections surfaced as incidents. Each row is one rule firing on one run.
 CREATE TABLE IF NOT EXISTS detections (

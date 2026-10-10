@@ -15,3 +15,33 @@ def test_load_config_reads_ledger_repo(monkeypatch, tmp_path):
 
 def test_approved_status_is_a_run_status_value():
     assert RunStatus.APPROVED.value == "approved"
+
+
+def test_legacy_database_without_new_columns_migrates(tmp_path):
+    import sqlite3
+
+    from sololicense.db.database import init_db
+
+    db = tmp_path / "legacy.db"
+    legacy = sqlite3.connect(db)
+    legacy.executescript(
+        """
+        CREATE TABLE orders (order_id TEXT PRIMARY KEY, customer TEXT NOT NULL,
+            amount REAL NOT NULL, refunded_amount REAL NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'paid', updated_at TEXT);
+        CREATE TABLE runs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_class TEXT NOT NULL,
+            order_id TEXT NOT NULL, requested_amount REAL NOT NULL, level_at_run INTEGER NOT NULL,
+            decision TEXT NOT NULL, status TEXT NOT NULL, executed INTEGER NOT NULL DEFAULT 0,
+            before_refunded REAL NOT NULL, after_refunded REAL NOT NULL,
+            fault_mode TEXT NOT NULL DEFAULT 'none', trace_id TEXT, notes TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')));
+        """
+    )
+    legacy.close()
+
+    conn = init_db(db)
+
+    run_columns = {r["name"] for r in conn.execute("PRAGMA table_info(runs)")}
+    order_columns = {r["name"] for r in conn.execute("PRAGMA table_info(orders)")}
+    assert {"idempotency_key", "actor_id"} <= run_columns
+    assert "credit_issued" in order_columns
