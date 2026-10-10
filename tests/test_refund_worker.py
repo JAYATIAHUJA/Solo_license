@@ -137,3 +137,20 @@ def test_fault_mode_is_recorded_only_when_consumed(harness):
         "SELECT fault_mode FROM runs WHERE id = ?", (consumed.run_id,)
     ).fetchone()
     assert consumed_row["fault_mode"] == FaultMode.QUIET_FAILURE.value
+
+
+def test_duplicate_idempotency_key_demotes_without_double_refund(harness):
+    first = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective"),
+        idempotency_key="msg-ord-1001-25",
+    )
+    assert first.status is RunStatus.CLEAN
+
+    retry = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective"),
+        idempotency_key="msg-ord-1001-25",
+    )
+
+    assert retry.status is RunStatus.DEMOTED
+    assert [d.rule for d in retry.detections] == ["duplicate_action"]
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 25.0

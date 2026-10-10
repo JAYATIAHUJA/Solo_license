@@ -62,6 +62,17 @@ def detect_missing_verification(*, verified: bool) -> Detection | None:
     return None
 
 
+def detect_duplicate_action(*, duplicate: bool) -> Detection | None:
+    """Fire when a retry tries to execute an already-executed action key."""
+    if duplicate:
+        return Detection(
+            rule="duplicate_action",
+            severity=CRITICAL,
+            message="Idempotency key already executed; duplicate action blocked.",
+        )
+    return None
+
+
 def detect_policy_breach(
     *, authorized: Decision, attempted: Decision
 ) -> Detection | None:

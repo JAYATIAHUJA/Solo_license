@@ -7,6 +7,7 @@ and the git-backed ledger remain the implementation in ``sololicense``.
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from dataclasses import replace
 from threading import RLock
 
@@ -52,6 +53,7 @@ class RefundPayload(BaseModel):
     order_id: str
     amount: float | None = Field(default=None, ge=0)
     reason: str = "customer refund"
+    idempotency_key: str | None = Field(default=None, max_length=120)
 
 
 class IntakePayload(BaseModel):
@@ -208,8 +210,13 @@ def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -
     }
 
 
+def make_idempotency_key(namespace: str, *parts: object) -> str:
+    normalized = "\x1f".join(str(part).strip().lower() for part in parts)
+    return f"{namespace}:{sha256(normalized.encode('utf-8')).hexdigest()[:32]}"
+
+
 def _run(context: AppContext, order_id: str, amount: float | None, reason: str,
-         *, approved: bool = False):
+         *, approved: bool = False, idempotency_key: str | None = None):
     order = orders_repo.get_order(context.conn, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found.")
@@ -224,6 +231,7 @@ def _run(context: AppContext, order_id: str, amount: float | None, reason: str,
         RefundRequest(order["order_id"], order["customer"], value, reason),
         task_class=TASK_CLASS,
         approved=approved,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -247,7 +255,12 @@ def get_settings() -> dict:
 def run_refund(payload: RefundPayload) -> dict:
     with _lock:
         context = get_context()
-        result = _run(context, payload.order_id.strip().upper(), payload.amount, payload.reason)
+        order_id = payload.order_id.strip().upper()
+        key = payload.idempotency_key or make_idempotency_key(
+            "manual", order_id, payload.amount or "", payload.reason
+        )
+        result = _run(context, order_id, payload.amount, payload.reason,
+                      idempotency_key=key)
         return dashboard_payload(context, result.run_id)
 
 
@@ -264,7 +277,13 @@ def intake(payload: IntakePayload) -> dict:
                 error = "Could not find an order id and amount in that message."
             else:
                 try:
-                    result = _run(context, parsed.order_id, parsed.amount, parsed.reason)
+                    key = make_idempotency_key(
+                        "intake", payload.message, parsed.order_id, parsed.amount
+                    )
+                    result = _run(
+                        context, parsed.order_id, parsed.amount, parsed.reason,
+                        idempotency_key=key,
+                    )
                     run_id = result.run_id
                 except HTTPException as exc:
                     error = str(exc.detail)
@@ -298,7 +317,8 @@ def approve_run(run_id: int) -> dict:
         if context.license_service.get_or_create(TASK_CLASS).quarantined:
             raise HTTPException(status_code=409, detail="The class is quarantined. Restore it before approving runs.")
         result = _run(context, run["order_id"], run["requested_amount"],
-                      "approved by human", approved=True)
+                      "approved by human", approved=True,
+                      idempotency_key=make_idempotency_key("approval", run_id))
         context.conn.execute(
             "UPDATE runs SET status = ? WHERE id = ?",
             (RunStatus.APPROVED.value, run_id),

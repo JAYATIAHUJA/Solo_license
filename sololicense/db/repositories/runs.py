@@ -20,6 +20,7 @@ class NewRun:
     executed: bool
     before_refunded: float
     after_refunded: float
+    idempotency_key: str | None
     fault_mode: str
     trace_id: str | None
     notes: str | None
@@ -31,9 +32,9 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
         """
         INSERT INTO runs
             (task_class, order_id, requested_amount, level_at_run, decision,
-             status, executed, before_refunded, after_refunded, fault_mode,
-             trace_id, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             status, executed, before_refunded, after_refunded, idempotency_key,
+             fault_mode, trace_id, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run.task_class,
@@ -45,6 +46,7 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
             1 if run.executed else 0,
             run.before_refunded,
             run.after_refunded,
+            run.idempotency_key,
             run.fault_mode,
             run.trace_id,
             run.notes,
@@ -55,6 +57,21 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
 
 def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+
+
+def get_executed_by_idempotency_key(
+    conn: sqlite3.Connection, key: str
+) -> sqlite3.Row | None:
+    return conn.execute(
+        """
+        SELECT * FROM runs
+         WHERE idempotency_key = ?
+           AND executed = 1
+         ORDER BY id DESC
+         LIMIT 1
+        """,
+        (key,),
+    ).fetchone()
 
 
 def list_recent(conn: sqlite3.Connection, limit: int = 20) -> list[sqlite3.Row]:

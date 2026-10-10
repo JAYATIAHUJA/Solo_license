@@ -25,6 +25,7 @@ from sololicense.agent.planner import Plan, Planner
 from sololicense.agent.tools import execute_refund
 from sololicense.config import Config
 from sololicense.db.repositories import detections as detections_repo
+from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
@@ -83,6 +84,7 @@ class RefundWorker:
         *,
         task_class: str = "refund",
         approved: bool = False,
+        idempotency_key: str | None = None,
     ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
         # Peek, don't consume: an armed fault only bends a run that actually
@@ -103,6 +105,16 @@ class RefundWorker:
 
         before = verification.read_refunded(self._conn, request.order_id)
         will_execute = attempted in _EXECUTING
+        duplicate = (
+            bool(idempotency_key)
+            and will_execute
+            and runs_repo.get_executed_by_idempotency_key(
+                self._conn, idempotency_key or ""
+            )
+            is not None
+        )
+        if duplicate:
+            will_execute = False
         effects = effects_for(FaultMode.NONE)
         if will_execute and armed_effects.active:
             effects = self._faults.consume_effects(task_class)
@@ -140,6 +152,7 @@ class RefundWorker:
             attempted=attempted,
             intended_delta=intended_delta,
             result=result,
+            duplicate=duplicate,
         )
         for d in found:
             trace.span(f"detection.{d.rule}", status="error", severity=d.severity,
@@ -154,6 +167,7 @@ class RefundWorker:
             status=status,
             executed=will_execute,
             result=result,
+            idempotency_key=idempotency_key,
             effects=effects,
             trace=trace,
             plan=plan,
@@ -235,10 +249,11 @@ class RefundWorker:
         )
 
     def _run_detections(
-        self, *, authorized, attempted, intended_delta, result
+        self, *, authorized, attempted, intended_delta, result, duplicate
     ) -> list[Detection]:
         candidates = [
             rules.detect_policy_breach(authorized=authorized, attempted=attempted),
+            rules.detect_duplicate_action(duplicate=duplicate),
             rules.detect_state_mismatch(
                 intended_delta=intended_delta,
                 actual_delta=result.actual_delta,
@@ -259,7 +274,7 @@ class RefundWorker:
 
     def _persist_run(
         self, *, request, task_class, state_level, authorized, status, executed,
-        result, effects, trace, plan,
+        result, idempotency_key, effects, trace, plan,
     ) -> int:
         return insert_run(
             self._conn,
@@ -273,6 +288,7 @@ class RefundWorker:
                 executed=executed and status is not RunStatus.SUGGESTED,
                 before_refunded=result.before,
                 after_refunded=result.after,
+                idempotency_key=idempotency_key,
                 fault_mode=effects.mode.value,
                 trace_id=trace.trace_id,
                 notes=plan.rationale,
