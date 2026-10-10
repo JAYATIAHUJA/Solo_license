@@ -16,10 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sololicense.domain.license import Decision, LicenseLevel
+from sololicense.domain.license import Decision
 
 CRITICAL = "critical"
 WARNING = "warning"
+
+# Decisions that actually touch the world.
+_EXECUTING = (Decision.AUTO_EXECUTE, Decision.AUTO_EXECUTE_AUDITED)
 
 
 @dataclass(frozen=True)
@@ -58,37 +61,21 @@ def detect_missing_verification(*, verified: bool) -> Detection | None:
 
 
 def detect_policy_breach(
-    *,
-    decision: Decision,
-    level: LicenseLevel,
-    amount: float,
-    l2_ceiling: float,
+    *, authorized: Decision, attempted: Decision
 ) -> Detection | None:
-    """Fire when an auto-execution would exceed what the license permits:
+    """Fire when the agent executed beyond what the license authorised.
 
-    * auto-executing at L0/L1 (those levels never auto-execute), or
-    * auto-executing above the L2 ceiling.
+    The authorised decision already folds in level, amount, and the L2 ceiling
+    (see :func:`sololicense.domain.license.decide`), so the rule is simply:
+    the agent executed while the license said suggest or draft only.
     """
-    auto = decision in (Decision.AUTO_EXECUTE, Decision.AUTO_EXECUTE_AUDITED)
-    if not auto:
-        return None
-
-    if level in (LicenseLevel.L0, LicenseLevel.L1):
+    if attempted in _EXECUTING and authorized not in _EXECUTING:
         return Detection(
             rule="policy_breach",
             severity=CRITICAL,
             message=(
-                f"Auto-execution attempted at {level.name}, which only permits "
-                f"{'suggestions' if level is LicenseLevel.L0 else 'drafts'}."
-            ),
-        )
-    if level is LicenseLevel.L2 and amount > l2_ceiling:
-        return Detection(
-            rule="policy_breach",
-            severity=CRITICAL,
-            message=(
-                f"Auto-executed ${amount:.2f} above the L2 ceiling of "
-                f"${l2_ceiling:.2f}."
+                f"Agent attempted {attempted.name} but the license only "
+                f"authorised {authorized.name}."
             ),
         )
     return None
