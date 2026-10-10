@@ -28,3 +28,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Generated evidence artifacts (regenerate with scripts.generate_evidence)
+artifacts/evidence_report.md
+artifacts/evidence_report.json
