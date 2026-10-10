@@ -1,0 +1,48 @@
+.ob { display: grid; grid-template-columns: minmax(320px, 0.8fr) 1.2fr; min-height: 100vh; }
+.ob-aside { position: relative; border-right: 1px solid var(--ink); }
+.ob-shader { position: absolute !important; inset: 0; }
+.ob-aside-card { position: sticky; top: 24px; margin: 24px; padding: 28px; background: var(--paper); border: 1px solid var(--ink); display: grid; gap: 32px; z-index: 1; }
+.ob-steps { list-style: none; margin: 0; padding: 0; display: grid; }
+.ob-steps li button { width: 100%; display: flex; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--hair); font-size: 17px; text-align: left; opacity: 1; }
+.ob-steps li button:disabled { opacity: 0.4; cursor: default; }
+.ob-step-box { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--ink); font: 500 11px var(--font-mono); }
+.ob-steps li.is-current .ob-step-box { background: var(--ink); color: var(--paper); }
+.ob-steps li.is-current button { font-family: var(--font-serif); font-size: 24px; font-style: italic; }
+.ob-aside-note { font-size: 23px; line-height: 1.2; margin: 0; min-height: 3.6em; }
+
+.ob-main { display: flex; flex-direction: column; padding: clamp(24px, 5vw, 72px); max-width: 900px; width: 100%; }
+.ob-progress { height: 4px; border: 1px solid var(--ink); margin-bottom: 48px; }
+.ob-progress i { display: block; height: 100%; background: var(--ink); }
+.ob-panel { display: grid; gap: 28px; align-content: start; flex: 1; }
+.ob-title { font-size: clamp(40px, 5vw, 72px); line-height: 0.98; margin: 0; letter-spacing: -0.02em; }
+.ob-sub { margin: -8px 0 0; font-size: 16px; color: var(--ink-2); max-width: 56ch; line-height: 1.55; }
+.ob-big-input { height: 64px; font-size: 24px; }
+.ob-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ob-nav { display: flex; justify-content: space-between; padding-top: 32px; margin-top: 40px; border-top: 1px solid var(--ink); }
+.ob-error { display: flex; gap: 8px; align-items: center; color: var(--signal); }
+
+.ob-check { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border: 1px solid var(--ink); cursor: pointer; background: var(--sheet); }
+.ob-check input { position: absolute; opacity: 0; pointer-events: none; }
+.ob-check-box { width: 24px; height: 24px; border: 1px solid var(--ink); display: grid; place-items: center; flex: none; }
+.ob-check input:focus-visible + .ob-check-box { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ob-check b { display: block; font-weight: 500; }
+.ob-check small { color: var(--muted); }
+.ob-order-form { display: grid; grid-template-columns: 1fr 1.2fr 0.8fr auto; gap: 10px; align-items: end; }
+.ob-orders { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--ink); }
+.ob-orders li { display: grid; grid-template-columns: 1fr 1.4fr 1fr auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--hair); }
+.ob-review { margin: 0; border-top: 1px solid var(--ink); }
+.ob-review div { display: grid; grid-template-columns: 160px 1fr; padding: 14px 0; border-bottom: 1px solid var(--hair); }
+.ob-review dt { color: var(--muted); }
+.ob-review dd { margin: 0; font-size: 17px; }
+.ob-hint { font-size: 24px; color: var(--ink); }
+
+@media (max-width: 900px) {
+  .ob { grid-template-columns: 1fr; }
+  .ob-aside { border-right: 0; border-bottom: 1px solid var(--ink); }
+  .ob-aside-card { position: relative; top: 0; margin: 16px; padding: 20px; gap: 16px; }
+  .ob-steps { grid-template-columns: repeat(5, 1fr); }
+  .ob-steps li button { flex-direction: column; font-size: 12px !important; gap: 6px; border: 0; }
+  .ob-steps li.is-current button { font-family: var(--font-sans); font-style: normal; }
+  .ob-aside-note { display: none; }
+  .ob-row, .ob-order-form { grid-template-columns: 1fr; }
+}

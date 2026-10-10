@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", Arial, sans-serif;
+  --font-display: "Manrope", Arial, sans-serif;
+}
+
+html[data-landing], html[data-landing] body, html[data-landing] #root,
+html:has(.landing-page), body:has(.landing-page), #root:has(.landing-page) {
+  height: auto !important;
+  min-height: 100%;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.landing-page { background:#fff; color:#141614; font-family:var(--font-sans); }
+.landing-page * { box-sizing:border-box; }
+.soft-grain { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E"); }
+@media (prefers-reduced-motion:no-preference) { .hero-float { animation:hero-float 7s ease-in-out infinite; } .hero-float-delayed { animation:hero-float 8s ease-in-out -3s infinite; } }
+@keyframes hero-float { 50% { transform:translateY(-10px); } }
