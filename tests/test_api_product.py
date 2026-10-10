@@ -82,3 +82,11 @@ def test_payouts_share_one_remaining_balance(monkeypatch, harness):
 
     assert over.status_code == 422
     assert "5.00" in over.json()["detail"]
+
+
+def test_demo_session_survives_api_restart(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+    api_module._demo_sessions.clear()  # what a process restart does
+
+    assert client.get("/api/session/me", headers=headers).json()["id"] == "demo:jayati"

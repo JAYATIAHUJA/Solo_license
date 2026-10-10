@@ -176,11 +176,38 @@ def current_actor(authorization: str | None = Header(default=None)) -> Actor:
     for issued, actor in _demo_sessions.items():
         if secrets.compare_digest(issued, token):
             return actor
+    remembered = _remembered_demo_actor(token)
+    if remembered is not None:
+        return remembered
     if not _token_auth_configured():
         raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
     actor = get_authenticator().authenticate(token)
     if actor is None:
         raise HTTPException(status_code=401, detail="Invalid API token.")
+    return actor
+
+
+_DEMO_PREFIX = "demo_session:"
+
+
+def _token_digest(token: str) -> str:
+    return sha256(token.encode("utf-8")).hexdigest()
+
+
+def _remembered_demo_actor(token: str) -> Actor | None:
+    """Demo sessions survive an API restart: only a hash of the token is kept
+    in the local settings table, and only while demo mode is on."""
+    with _lock:
+        context = get_context()
+        if not context.config.demo_mode:
+            return None
+        row = context.conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (_DEMO_PREFIX + _token_digest(token),)
+        ).fetchone()
+    if row is None:
+        return None
+    actor = Actor(actor_id=row["value"], role=Role.ADMIN)
+    _demo_sessions[token] = actor
     return actor
 
 
@@ -461,7 +488,8 @@ def start_demo_session(payload: DemoSessionPayload) -> dict:
     a judge can try the product without a deployment token. The name is
     recorded as the actor on every run and license change."""
     with _lock:
-        if not get_context().config.demo_mode:
+        context = get_context()
+        if not context.config.demo_mode:
             raise HTTPException(status_code=404, detail="Demo sessions are disabled.")
         slug = re.sub(r"[^a-z0-9]+", "-", payload.name.strip().lower()).strip("-")[:24]
         actor = Actor(actor_id=f"demo:{slug or 'guest'}", role=Role.ADMIN)
@@ -469,6 +497,8 @@ def start_demo_session(payload: DemoSessionPayload) -> dict:
         if len(_demo_sessions) > 200:
             _demo_sessions.clear()
         _demo_sessions[token] = actor
+        settings_repo.set_many(context.conn, {_DEMO_PREFIX + _token_digest(token): actor.actor_id})
+        context.conn.commit()
         return {"token": token, "actor": {"id": actor.actor_id, "role": actor.role.value}}
 
 
