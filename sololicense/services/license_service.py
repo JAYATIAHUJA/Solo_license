@@ -27,6 +27,10 @@ from sololicense.domain.license import (
     restore,
 )
 from sololicense.services.git_ledger import GitLedger, LedgerEntry
+from sololicense.security import Actor, Role
+
+
+SYSTEM_ACTOR = Actor("system:license-service", Role.ADMIN)
 
 
 @dataclass(frozen=True)
@@ -61,7 +65,12 @@ class LicenseService:
         return state
 
     def apply_clean_run(
-        self, task_class: str, *, run_id: int | None, trace_id: str | None
+        self,
+        task_class: str,
+        *,
+        run_id: int | None,
+        trace_id: str | None,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
         """Credit a verified-clean run; promote if the threshold is reached."""
         old = self.get_or_create(task_class)
@@ -77,6 +86,7 @@ class LicenseService:
                 ),
                 run_id=run_id,
                 trace_id=trace_id,
+                actor=actor,
             )
         # No rung change: persist the updated tally without a git event.
         license_repo.upsert_state(self._conn, new)
@@ -90,12 +100,19 @@ class LicenseService:
         run_id: int | None,
         trace_id: str | None,
         reason: str,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
         """Crash the dial to L0 and quarantine on a detection."""
         old = self.get_or_create(task_class)
         new = demote_on_detection(old)
         return self._persist(
-            old, new, kind="demote", reason=reason, run_id=run_id, trace_id=trace_id
+            old,
+            new,
+            kind="demote",
+            reason=reason,
+            run_id=run_id,
+            trace_id=trace_id,
+            actor=actor,
         )
 
     def restore_license(
@@ -104,12 +121,19 @@ class LicenseService:
         target: LicenseLevel,
         *,
         reason: str,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
         """Lift quarantine to a human-chosen level after evidence review."""
         old = self.get_or_create(task_class)
         new = restore(old, target)
         return self._persist(
-            old, new, kind="restore", reason=reason, run_id=None, trace_id=None
+            old,
+            new,
+            kind="restore",
+            reason=reason,
+            run_id=None,
+            trace_id=None,
+            actor=actor,
         )
 
     def _persist(
@@ -121,6 +145,7 @@ class LicenseService:
         reason: str,
         run_id: int | None,
         trace_id: str | None,
+        actor: Actor,
     ) -> Transition:
         """Persist state + event, then commit a git ledger entry and link it."""
         license_repo.upsert_state(self._conn, new)
@@ -132,6 +157,8 @@ class LicenseService:
             to_level=int(new.level),
             reason=reason,
             run_id=run_id,
+            actor_id=actor.actor_id,
+            actor_role=actor.role.value,
         )
         self._conn.commit()
 

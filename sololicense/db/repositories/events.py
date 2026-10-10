@@ -17,15 +17,17 @@ def insert_event(
     to_level: int,
     reason: str,
     run_id: int | None,
+    actor_id: str,
+    actor_role: str,
 ) -> int:
     """Persist a license event (git_sha filled in later). Caller commits."""
     cur = conn.execute(
         """
         INSERT INTO license_events
-            (task_class, kind, from_level, to_level, reason, run_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (task_class, kind, from_level, to_level, reason, run_id, actor_id, actor_role)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (task_class, kind, from_level, to_level, reason, run_id),
+        (task_class, kind, from_level, to_level, reason, run_id, actor_id, actor_role),
     )
     return int(cur.lastrowid)
 

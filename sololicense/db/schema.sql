@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS runs (
     before_refunded  REAL NOT NULL,            -- orders.refunded_amount before
     after_refunded   REAL NOT NULL,            -- orders.refunded_amount after
     idempotency_key  TEXT,
+    actor_id         TEXT NOT NULL DEFAULT 'system:license-service',
+    actor_role       TEXT NOT NULL DEFAULT 'admin',
     fault_mode       TEXT NOT NULL DEFAULT 'none',
     trace_id         TEXT,
     notes            TEXT,
@@ -75,6 +77,8 @@ CREATE TABLE IF NOT EXISTS license_events (
     to_level    INTEGER NOT NULL,
     reason      TEXT NOT NULL,
     run_id      INTEGER,
+    actor_id    TEXT NOT NULL DEFAULT 'system:license-service',
+    actor_role  TEXT NOT NULL DEFAULT 'admin',
     git_sha     TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (run_id) REFERENCES runs (id)

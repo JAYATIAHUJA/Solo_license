@@ -34,7 +34,8 @@ from sololicense.observability import detections as rules
 from sololicense.observability.detections import Detection
 from sololicense.observability.tracer import Tracer
 from sololicense.services import verification
-from sololicense.services.license_service import LicenseService, Transition
+from sololicense.security import Actor
+from sololicense.services.license_service import LicenseService, SYSTEM_ACTOR, Transition
 
 _EXECUTING = (Decision.AUTO_EXECUTE, Decision.AUTO_EXECUTE_AUDITED)
 
@@ -85,6 +86,7 @@ class RefundWorker:
         task_class: str = "refund",
         approved: bool = False,
         idempotency_key: str | None = None,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
         # Peek, don't consume: an armed fault only bends a run that actually
@@ -168,6 +170,7 @@ class RefundWorker:
             executed=will_execute,
             result=result,
             idempotency_key=idempotency_key,
+            actor=actor,
             effects=effects,
             trace=trace,
             plan=plan,
@@ -184,7 +187,9 @@ class RefundWorker:
                 trace_id=trace.trace_id,
             )
 
-        transition = self._update_dial(task_class, status, found, run_id, trace.trace_id)
+        transition = self._update_dial(
+            task_class, status, found, run_id, trace.trace_id, actor
+        )
         self._conn.commit()
 
         return RunResult(
@@ -274,7 +279,7 @@ class RefundWorker:
 
     def _persist_run(
         self, *, request, task_class, state_level, authorized, status, executed,
-        result, idempotency_key, effects, trace, plan,
+        result, idempotency_key, actor, effects, trace, plan,
     ) -> int:
         return insert_run(
             self._conn,
@@ -289,6 +294,8 @@ class RefundWorker:
                 before_refunded=result.before,
                 after_refunded=result.after,
                 idempotency_key=idempotency_key,
+                actor_id=actor.actor_id,
+                actor_role=actor.role.value,
                 fault_mode=effects.mode.value,
                 trace_id=trace.trace_id,
                 notes=plan.rationale,
@@ -296,16 +303,16 @@ class RefundWorker:
         )
 
     def _update_dial(
-        self, task_class, status, found, run_id, trace_id
+        self, task_class, status, found, run_id, trace_id, actor
     ) -> Transition:
         if status is RunStatus.DEMOTED:
             reason = "; ".join(d.message for d in found)
             return self._licenses.apply_detection(
-                task_class, run_id=run_id, trace_id=trace_id, reason=reason
+                task_class, run_id=run_id, trace_id=trace_id, reason=reason, actor=actor
             )
         if status is RunStatus.CLEAN:
             return self._licenses.apply_clean_run(
-                task_class, run_id=run_id, trace_id=trace_id
+                task_class, run_id=run_id, trace_id=trace_id, actor=actor
             )
         # Suggestions and pending approvals do not move the dial.
         state = self._licenses.get_or_create(task_class)

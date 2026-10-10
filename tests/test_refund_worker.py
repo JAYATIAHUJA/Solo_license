@@ -8,6 +8,7 @@ from sololicense.db.repositories import license as license_repo
 from sololicense.db.repositories import orders as orders_repo
 from sololicense.domain.license import LicenseLevel
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
+from sololicense.security import Actor, Role
 
 
 def _dial(harness):
@@ -154,3 +155,19 @@ def test_duplicate_idempotency_key_demotes_without_double_refund(harness):
     assert retry.status is RunStatus.DEMOTED
     assert [d.rule for d in retry.detections] == ["duplicate_action"]
     assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 25.0
+
+
+def test_run_and_demotion_event_record_the_initiating_actor(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada Lovelace", 25.0, "refund"),
+        actor=Actor("ops-17", Role.OPERATOR),
+    )
+
+    run = harness.conn.execute("SELECT * FROM runs WHERE id = ?", (result.run_id,)).fetchone()
+    event = harness.conn.execute("SELECT * FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    assert run["actor_id"] == "ops-17"
+    assert run["actor_role"] == "operator"
+    assert event["actor_id"] == "ops-17"
+    assert event["actor_role"] == "operator"

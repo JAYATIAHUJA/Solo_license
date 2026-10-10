@@ -7,11 +7,12 @@ and the git-backed ledger remain the implementation in ``sololicense``.
 from __future__ import annotations
 
 import re
+import os
 from hashlib import sha256
 from dataclasses import replace
 from threading import RLock
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,7 @@ from sololicense.db.seed import SEED_ORDERS, seed
 from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.services.evidence import build_packet
+from sololicense.security import Actor, Role, TokenAuthenticator, permits
 
 TASK_CLASS = "refund"
 SECRET_KEYS = ("anthropic_api_key", "openai_api_key", "neatlogs_api_key")
@@ -38,12 +40,17 @@ SETTING_KEYS = (
 app = FastAPI(title="Solo License API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(127\.0\.0\.1|localhost):\d+",
+    allow_origins=[
+        origin.strip()
+        for origin in os.environ.get("SOLO_ALLOWED_ORIGINS", "http://localhost:5174").split(",")
+        if origin.strip()
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 _context: AppContext | None = None
+_authenticator: TokenAuthenticator | None = None
 _lock = RLock()
 
 
@@ -105,6 +112,39 @@ def reset_context() -> None:
         except Exception:  # pragma: no cover
             pass
     _context = None
+
+
+def get_authenticator() -> TokenAuthenticator:
+    """Load deployment-owned API tokens once, never from SQLite settings."""
+    global _authenticator
+    if _authenticator is None:
+        raw_tokens = os.environ.get("SOLO_API_TOKENS", "").strip()
+        if not raw_tokens:
+            raise HTTPException(status_code=503, detail="API authentication is not configured.")
+        try:
+            _authenticator = TokenAuthenticator.from_json(raw_tokens)
+        except ValueError as error:
+            raise HTTPException(status_code=503, detail="API authentication is misconfigured.") from error
+    return _authenticator
+
+
+def current_actor(authorization: str | None = Header(default=None)) -> Actor:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="Bearer authentication is required.")
+    actor = get_authenticator().authenticate(token)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Invalid API token.")
+    return actor
+
+
+def require_role(required: Role):
+    def dependency(actor: Actor = Depends(current_actor)) -> Actor:
+        if not permits(actor, required):
+            raise HTTPException(status_code=403, detail="This role is not allowed to perform that action.")
+        return actor
+
+    return dependency
 
 
 def _mask(value: str) -> str:
@@ -216,7 +256,8 @@ def make_idempotency_key(namespace: str, *parts: object) -> str:
 
 
 def _run(context: AppContext, order_id: str, amount: float | None, reason: str,
-         *, approved: bool = False, idempotency_key: str | None = None):
+         *, approved: bool = False, idempotency_key: str | None = None,
+         actor: Actor):
     order = orders_repo.get_order(context.conn, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found.")
@@ -232,19 +273,23 @@ def _run(context: AppContext, order_id: str, amount: float | None, reason: str,
         task_class=TASK_CLASS,
         approved=approved,
         idempotency_key=idempotency_key,
+        actor=actor,
     )
 
 
 # --- read -----------------------------------------------------------------
 
 @app.get("/api/dashboard")
-def get_dashboard(run_id: int | None = None) -> dict:
+def get_dashboard(
+    run_id: int | None = None,
+    actor: Actor = Depends(require_role(Role.OPERATOR)),
+) -> dict:
     with _lock:
         return dashboard_payload(get_context(), run_id)
 
 
 @app.get("/api/settings")
-def get_settings() -> dict:
+def get_settings(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
     with _lock:
         return serialize_settings(get_context())
 
@@ -252,7 +297,9 @@ def get_settings() -> dict:
 # --- agent ----------------------------------------------------------------
 
 @app.post("/api/refunds")
-def run_refund(payload: RefundPayload) -> dict:
+def run_refund(
+    payload: RefundPayload, actor: Actor = Depends(require_role(Role.OPERATOR))
+) -> dict:
     with _lock:
         context = get_context()
         order_id = payload.order_id.strip().upper()
@@ -260,12 +307,14 @@ def run_refund(payload: RefundPayload) -> dict:
             "manual", order_id, payload.amount or "", payload.reason
         )
         result = _run(context, order_id, payload.amount, payload.reason,
-                      idempotency_key=key)
+                      idempotency_key=key, actor=actor)
         return dashboard_payload(context, result.run_id)
 
 
 @app.post("/api/intake")
-def intake(payload: IntakePayload) -> dict:
+def intake(
+    payload: IntakePayload, actor: Actor = Depends(require_role(Role.OPERATOR))
+) -> dict:
     """Free-text customer message -> structured request -> licensed run."""
     with _lock:
         context = get_context()
@@ -285,6 +334,7 @@ def intake(payload: IntakePayload) -> dict:
                     result = _run(
                         context, parsed.order_id, parsed.amount, parsed.reason,
                         idempotency_key=key,
+                        actor=actor,
                     )
                     run_id = result.run_id
                 except HTTPException as exc:
@@ -307,7 +357,9 @@ def intake(payload: IntakePayload) -> dict:
 
 
 @app.post("/api/runs/{run_id}/approve")
-def approve_run(run_id: int) -> dict:
+def approve_run(
+    run_id: int, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
     """Human approves a draft (L1 / over the L2 ceiling) or acts on an L0
     suggestion. The approved execution is still verified and, when clean,
     earns track-record credit — that is how a class climbs off L0."""
@@ -322,7 +374,8 @@ def approve_run(run_id: int) -> dict:
             raise HTTPException(status_code=409, detail="The class is quarantined. Restore it before approving runs.")
         result = _run(context, run["order_id"], run["requested_amount"],
                       "approved by human", approved=True,
-                      idempotency_key=make_idempotency_key("approval", run_id))
+                      idempotency_key=make_idempotency_key("approval", run_id),
+                      actor=actor)
         context.conn.execute(
             "UPDATE runs SET status = ? WHERE id = ?",
             (RunStatus.APPROVED.value, run_id),
@@ -332,7 +385,9 @@ def approve_run(run_id: int) -> dict:
 
 
 @app.post("/api/faults")
-def arm_fault(payload: FaultPayload) -> dict:
+def arm_fault(
+    payload: FaultPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
     with _lock:
         context = get_context()
         context.fault_injector.arm(TASK_CLASS, payload.mode)
@@ -340,21 +395,27 @@ def arm_fault(payload: FaultPayload) -> dict:
 
 
 @app.post("/api/restore")
-def restore_license(payload: RestorePayload) -> dict:
+def restore_license(
+    payload: RestorePayload, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
     with _lock:
         context = get_context()
         try:
             target = LicenseLevel(payload.level)
         except ValueError as error:
             raise HTTPException(status_code=422, detail="Unknown license level.") from error
-        context.license_service.restore_license(TASK_CLASS, target, reason=payload.reason)
+        context.license_service.restore_license(
+            TASK_CLASS, target, reason=payload.reason, actor=actor
+        )
         return dashboard_payload(context)
 
 
 # --- orders ---------------------------------------------------------------
 
 @app.post("/api/orders")
-def add_order(payload: OrderPayload) -> dict:
+def add_order(
+    payload: OrderPayload, actor: Actor = Depends(require_role(Role.OPERATOR))
+) -> dict:
     with _lock:
         context = get_context()
         order_id = payload.order_id.strip().upper()
@@ -371,7 +432,9 @@ def add_order(payload: OrderPayload) -> dict:
 
 
 @app.delete("/api/orders/{order_id}")
-def delete_order(order_id: str) -> dict:
+def delete_order(
+    order_id: str, actor: Actor = Depends(require_role(Role.OPERATOR))
+) -> dict:
     with _lock:
         context = get_context()
         used = context.conn.execute(
@@ -413,7 +476,9 @@ def _save_settings(context: AppContext, values: dict[str, str]) -> None:
 
 
 @app.put("/api/settings")
-def update_settings(payload: SettingsPayload) -> dict:
+def update_settings(
+    payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
     with _lock:
         context = get_context()
         _save_settings(context, _clean_values(payload.values))
@@ -422,7 +487,9 @@ def update_settings(payload: SettingsPayload) -> dict:
 
 
 @app.post("/api/settings/test-llm")
-def test_llm(payload: SettingsPayload) -> dict:
+def test_llm(
+    payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
     """Try a provider/key (from the form, before saving) with a tiny call."""
     with _lock:
         context = get_context()
@@ -449,7 +516,9 @@ def test_llm(payload: SettingsPayload) -> dict:
 
 
 @app.post("/api/onboarding/complete")
-def complete_onboarding(payload: OnboardingPayload) -> dict:
+def complete_onboarding(
+    payload: OnboardingPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
     with _lock:
         context = get_context()
         values = _clean_values(payload.values)
@@ -473,7 +542,7 @@ def complete_onboarding(payload: OnboardingPayload) -> dict:
 
 
 @app.post("/api/reseed")
-def reseed_demo() -> dict:
+def reseed_demo(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
     """Reset runs/ledger and reinstall the sample orders (keeps settings)."""
     with _lock:
         context = get_context()

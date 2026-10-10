@@ -21,6 +21,8 @@ class NewRun:
     before_refunded: float
     after_refunded: float
     idempotency_key: str | None
+    actor_id: str
+    actor_role: str
     fault_mode: str
     trace_id: str | None
     notes: str | None
@@ -33,8 +35,8 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
         INSERT INTO runs
             (task_class, order_id, requested_amount, level_at_run, decision,
              status, executed, before_refunded, after_refunded, idempotency_key,
-             fault_mode, trace_id, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             actor_id, actor_role, fault_mode, trace_id, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run.task_class,
@@ -47,6 +49,8 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
             run.before_refunded,
             run.after_refunded,
             run.idempotency_key,
+            run.actor_id,
+            run.actor_role,
             run.fault_mode,
             run.trace_id,
             run.notes,

@@ -48,8 +48,8 @@ refund request ─▶ license check ─▶ execute or suggest ─▶ verify side
 
 ## Setup
 
-**Requirements:** Python 3.11+ and git. No external services are required for
-the core demo (an LLM key and a neatlogs key are optional — see below).
+**Requirements:** Python 3.11+ and git. The React API requires an API-token
+configuration; an LLM key and a neatlogs key are optional.
 
 ```bash
 pip install -r requirements.txt     # 1. dependencies
@@ -60,6 +60,23 @@ streamlit run app/streamlit_app.py  # 4. launch the live UI
 
 With `make`: `make install && make run`. On Windows PowerShell, use the four
 raw commands above (`copy .env.example .env` for step 2).
+
+### API access and Vercel
+
+The FastAPI adapter is protected by bearer-token authentication. Add at least
+one token in `.env` before starting `make run-api`:
+
+```dotenv
+SOLO_API_TOKENS={"replace-with-a-long-random-token":{"id":"jay","role":"admin"}}
+SOLO_ALLOWED_ORIGINS=http://localhost:5174,https://your-project.vercel.app
+```
+
+Roles are cumulative: `operator` can run refunds and manage orders,
+`approver` can additionally approve drafts and restore a quarantined license,
+and `admin` can manage settings, onboarding, demo faults, and reseeding.
+Every run and license transition records the actor id and role. The static
+frontend must never receive a token through a `VITE_*` variable; deployment
+will use Vercel environment variables and a server-side API route.
 
 ### Optional keys (the demo is fully functional without them)
 
