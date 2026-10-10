@@ -3,7 +3,7 @@
 
 PYTHON ?= python
 
-.PHONY: install seed run test evidence cfo clean
+.PHONY: install seed run run-api test evidence cfo clean
 
 install:            ## Install runtime dependencies
 	$(PYTHON) -m pip install -r requirements.txt
@@ -13,6 +13,9 @@ seed:               ## Rebuild the database to the demo-ready state
 
 run: seed           ## Seed, then launch the live UI
 	$(PYTHON) -m streamlit run app/streamlit_app.py
+
+run-api: seed       ## Launch the React API adapter
+	$(PYTHON) -m uvicorn app.api:app --reload
 
 test:               ## Run the test suite
 	$(PYTHON) -m pytest
