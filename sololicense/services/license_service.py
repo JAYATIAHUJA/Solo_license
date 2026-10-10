@@ -1,0 +1,153 @@
+"""License service — the one orchestrator allowed to change the dial.
+
+It composes the pure state machine (:mod:`sololicense.domain.license`) with
+persistence, the event ledger, and the git ledger. Every transition it makes
+is: compute new state → persist state + event (SQLite) → commit a git ledger
+entry → back-link the git sha to the event.
+
+Only three things move the dial, and they map one-to-one onto the ladder's
+rules:
+    * a verified-clean run may *promote*;
+    * a detection *demotes* (crash to L0 + quarantine);
+    * a human *restores* after reading the evidence packet.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import dataclass
+
+from sololicense.db.repositories import events as events_repo
+from sololicense.db.repositories import license as license_repo
+from sololicense.domain.license import (
+    LicenseLevel,
+    LicenseState,
+    demote_on_detection,
+    record_clean_run,
+    restore,
+)
+from sololicense.services.git_ledger import GitLedger, LedgerEntry
+
+
+@dataclass(frozen=True)
+class Transition:
+    """Result of a dial change, surfaced to the worker and UI."""
+
+    old: LicenseState
+    new: LicenseState
+    kind: str            # promote | demote | restore | noop
+    git_sha: str | None
+
+
+class LicenseService:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        ledger: GitLedger,
+        *,
+        promotion_threshold: int,
+    ) -> None:
+        self._conn = conn
+        self._ledger = ledger
+        self._threshold = promotion_threshold
+
+    def get_or_create(self, task_class: str) -> LicenseState:
+        """Return the task class's state, seeding a fresh L0 row if absent."""
+        state = license_repo.get_state(self._conn, task_class)
+        if state is None:
+            state = LicenseState(task_class=task_class)
+            license_repo.upsert_state(self._conn, state)
+            self._conn.commit()
+        return state
+
+    def apply_clean_run(
+        self, task_class: str, *, run_id: int | None, trace_id: str | None
+    ) -> Transition:
+        """Credit a verified-clean run; promote if the threshold is reached."""
+        old = self.get_or_create(task_class)
+        new = record_clean_run(old, promotion_threshold=self._threshold)
+        if new.level > old.level:
+            return self._persist(
+                old,
+                new,
+                kind="promote",
+                reason=(
+                    f"{self._threshold} consecutive clean runs; earned "
+                    f"{new.level.name} ({new.level.label})."
+                ),
+                run_id=run_id,
+                trace_id=trace_id,
+            )
+        # No rung change: persist the updated tally without a git event.
+        license_repo.upsert_state(self._conn, new)
+        self._conn.commit()
+        return Transition(old=old, new=new, kind="noop", git_sha=None)
+
+    def apply_detection(
+        self,
+        task_class: str,
+        *,
+        run_id: int | None,
+        trace_id: str | None,
+        reason: str,
+    ) -> Transition:
+        """Crash the dial to L0 and quarantine on a detection."""
+        old = self.get_or_create(task_class)
+        new = demote_on_detection(old)
+        return self._persist(
+            old, new, kind="demote", reason=reason, run_id=run_id, trace_id=trace_id
+        )
+
+    def restore_license(
+        self,
+        task_class: str,
+        target: LicenseLevel,
+        *,
+        reason: str,
+    ) -> Transition:
+        """Lift quarantine to a human-chosen level after evidence review."""
+        old = self.get_or_create(task_class)
+        new = restore(old, target)
+        return self._persist(
+            old, new, kind="restore", reason=reason, run_id=None, trace_id=None
+        )
+
+    def _persist(
+        self,
+        old: LicenseState,
+        new: LicenseState,
+        *,
+        kind: str,
+        reason: str,
+        run_id: int | None,
+        trace_id: str | None,
+    ) -> Transition:
+        """Persist state + event, then commit a git ledger entry and link it."""
+        license_repo.upsert_state(self._conn, new)
+        event_id = events_repo.insert_event(
+            self._conn,
+            task_class=new.task_class,
+            kind=kind,
+            from_level=int(old.level),
+            to_level=int(new.level),
+            reason=reason,
+            run_id=run_id,
+        )
+        self._conn.commit()
+
+        git_sha = self._ledger.record(
+            LedgerEntry(
+                task_class=new.task_class,
+                kind=kind,
+                from_level=int(old.level),
+                to_level=int(new.level),
+                reason=reason,
+                run_id=run_id,
+                trace_id=trace_id,
+            )
+        )
+        if git_sha:
+            events_repo.set_git_sha(self._conn, event_id, git_sha)
+            self._conn.commit()
+
+        return Transition(old=old, new=new, kind=kind, git_sha=git_sha)
