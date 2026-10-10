@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Solo License — autonomy you earn</title>
+<meta name="description" content="An operations agent that earns the right to act unattended, task class by task class, from a measured reliability track record — and loses it the instant a detection fires." />
+<meta name="theme-color" content="#031b36" />
+
+<!-- Open Graph / social (drop assets/og.jpg to populate the preview) -->
+<meta property="og:title" content="Solo License — autonomy you earn" />
+<meta property="og:description" content="Earned-permission ops agent. Demotion driven by detections, restored from one evidence packet, priced as a margin lever." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/og.jpg" />
+
+<!-- Dial favicon (inline SVG) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23031b36'/%3E%3Cpath d='M7 22a9 9 0 0 1 18 0' fill='none' stroke='%23fdffee' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='16' y1='22' x2='22' y2='13' stroke='%23ff2c17' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============================================================
+     Design tokens — adapted from thinkcompany.com's midnight_navy
+     theme (navy #031b36 / cream #fdffee / signature red #ff2c17).
+     ============================================================ */
+  :root{
+    --navy:#031b36; --navy-900:#020f21; --navy-800:#0b2c52; --navy-700:#13335c;
+    --cream:#fdffee; --red:#ff2c17; --aqua:#b6ffff; --rose:#ffaaf6;
+    --charcoal:#2d2d2d; --ink-60:rgba(253,255,238,.62); --ink-40:rgba(253,255,238,.40);
+    --line:rgba(253,255,238,.14);
+    --maxw:1200px; --gutter:clamp(16px,5vw,64px);
+    --r:16px; --r-lg:24px;
+    --ease:cubic-bezier(.2,.7,.2,1);
+    --f-head:"Space Grotesk",system-ui,sans-serif;
+    --f-body:"Inter",system-ui,sans-serif;
+    --f-mono:"Space Mono",ui-monospace,monospace;
+    --f-serif:"Instrument Serif",Georgia,serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{
+    font-family:var(--f-body); background:var(--navy); color:var(--cream);
+    -webkit-font-smoothing:antialiased; line-height:1.55; overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  img,video{max-width:100%;display:block}
+  ::selection{background:var(--red);color:var(--cream)}
+
+  .wrap{max-width:var(--maxw);margin:0 auto;padding-inline:var(--gutter)}
+  .kicker{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--red)}
+  .serif-it{font-family:var(--f-serif);font-style:italic;font-weight:400}
+
+  h1,h2,h3{font-family:var(--f-head);font-weight:600;line-height:1.02;
+    letter-spacing:-.02em}
+  h1{font-size:clamp(2.6rem,7.2vw,5.5rem)}
+  h2{font-size:clamp(2rem,4.6vw,3.4rem);letter-spacing:-.025em}
+  h3{font-size:1.25rem;letter-spacing:-.01em}
+  .lead{font-size:clamp(1.05rem,1.7vw,1.3rem);color:var(--ink-60);max-width:48ch}
+
+  /* ---- buttons ---- */
+  .btn{display:inline-flex;align-items:center;gap:.6em;font-family:var(--f-head);
+    font-weight:500;font-size:1rem;padding:.9em 1.4em;border-radius:999px;
+    border:1px solid transparent;cursor:pointer;transition:transform .25s var(--ease),
+    background .25s,color .25s,border-color .25s;will-change:transform}
+  .btn-primary{background:var(--cream);color:var(--navy)}
+  .btn-primary:hover{transform:translateY(-3px);background:var(--red);color:var(--cream)}
+  .btn-ghost{border-color:var(--line);color:var(--cream)}
+  .btn-ghost:hover{transform:translateY(-3px);border-color:var(--cream)}
+  .btn svg{width:1.05em;height:1.05em}
+
+  /* ============================================================ NAV */
+  header.nav{position:fixed;inset:0 0 auto 0;z-index:50;
+    transition:background .3s,backdrop-filter .3s,border-color .3s;
+    border-bottom:1px solid transparent}
+  header.nav.scrolled{background:rgba(3,27,54,.82);backdrop-filter:blur(14px);
+    border-bottom-color:var(--line)}
+  .nav-row{display:flex;align-items:center;justify-content:space-between;
+    height:72px}
+  .brand{display:flex;align-items:center;gap:.6rem;font-family:var(--f-head);
+    font-weight:600;font-size:1.12rem;letter-spacing:-.01em}
+  .brand .glyph{width:30px;height:30px}
+  .nav-links{display:flex;align-items:center;gap:2rem}
+  .nav-links a.navlink{font-family:var(--f-mono);font-size:.82rem;
+    color:var(--ink-60);letter-spacing:.03em;transition:color .2s}
+  .nav-links a.navlink:hover{color:var(--cream)}
+  .nav-cta{padding:.6em 1.1em;font-size:.9rem}
+  @media(max-width:860px){.nav-links a.navlink{display:none}}
+
+  /* ============================================================ HERO */
+  .hero{position:relative;min-height:100svh;display:flex;align-items:center;
+    padding-top:96px;padding-bottom:48px;overflow:hidden}
+  .hero-media{position:absolute;inset:0;z-index:0}
+  .hero-media video{width:100%;height:100%;object-fit:cover;opacity:.28}
+  .hero-grid-bg{position:absolute;inset:0;z-index:0;
+    background:
+      radial-gradient(1200px 700px at 72% 18%,rgba(182,255,255,.10),transparent 60%),
+      radial-gradient(900px 600px at 15% 90%,rgba(255,44,23,.10),transparent 60%),
+      linear-gradient(var(--line) 1px,transparent 1px) 0 0/48px 48px,
+      linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/48px 48px;
+    mask-image:radial-gradient(120% 100% at 50% 0%,#000 55%,transparent 100%)}
+  .hero-glow{position:absolute;z-index:0;width:60vw;height:60vw;max-width:720px;
+    max-height:720px;right:-8vw;top:-12vw;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,44,23,.22),transparent 65%);
+    filter:blur(20px);animation:float 14s ease-in-out infinite}
+  @keyframes float{50%{transform:translate(-30px,40px) scale(1.08)}}
+
+  .hero .wrap{position:relative;z-index:2;display:grid;
+    grid-template-columns:1.05fr .95fr;gap:clamp(32px,5vw,72px);align-items:center;width:100%}
+  @media(max-width:920px){.hero .wrap{grid-template-columns:1fr}}
+
+  .hero h1{margin:.5rem 0 1.2rem}
+  .hero h1 .em{color:var(--red)}
+  .hero h1 .aqua{color:var(--aqua)}
+  .hero-ctas{display:flex;flex-wrap:wrap;gap:.8rem;margin:2rem 0 1.6rem}
+  .trust-row{display:flex;flex-wrap:wrap;gap:1.4rem;font-family:var(--f-mono);
+    font-size:.74rem;color:var(--ink-40);letter-spacing:.04em}
+  .trust-row b{color:var(--aqua);font-weight:400}
+
+  /* ---- live dial panel (the showpiece) ---- */
+  .panel{background:linear-gradient(180deg,rgba(11,44,82,.55),rgba(3,27,54,.75));
+    border:1px solid var(--line);border-radius:var(--r-lg);padding:26px;
+    backdrop-filter:blur(8px);box-shadow:0 40px 90px -40px rgba(0,0,0,.7)}
+  .panel-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+  .panel-top .lbl{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-40)}
+  .pill{font-family:var(--f-mono);font-size:.72rem;padding:.35em .75em;border-radius:999px;
+    border:1px solid var(--line);display:inline-flex;align-items:center;gap:.45em;
+    transition:all .35s var(--ease)}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--aqua)}
+  .pill.ok{color:var(--aqua);border-color:rgba(182,255,255,.35)}
+  .pill.alert{color:var(--red);border-color:rgba(255,44,23,.5);background:rgba(255,44,23,.08)}
+  .pill.alert .dot{background:var(--red)}
+
+  .ladder-track{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
+  .rung{position:relative;height:84px;border-radius:12px;border:1px solid var(--line);
+    display:flex;flex-direction:column;justify-content:flex-end;padding:10px;
+    background:rgba(253,255,238,.02);transition:all .4s var(--ease)}
+  .rung .lv{font-family:var(--f-head);font-weight:600;font-size:1.1rem}
+  .rung .cap{font-size:.62rem;color:var(--ink-40);line-height:1.2;font-family:var(--f-mono)}
+  .rung[data-on="1"]{background:rgba(182,255,255,.1);border-color:var(--aqua);
+    box-shadow:0 0 0 1px var(--aqua),0 12px 30px -12px rgba(182,255,255,.5)}
+  .rung[data-on="1"] .lv{color:var(--aqua)}
+  .rung.crashed[data-on="1"]{background:rgba(255,44,23,.14);border-color:var(--red);
+    box-shadow:0 0 0 1px var(--red),0 12px 30px -12px rgba(255,44,23,.6)}
+  .rung.crashed[data-on="1"] .lv{color:var(--red)}
+  .meter{height:6px;border-radius:999px;background:rgba(253,255,238,.08);overflow:hidden;margin:16px 0 14px}
+  .meter i{display:block;height:100%;width:0;background:var(--aqua);border-radius:999px;
+    transition:width .5s var(--ease)}
+  .meter.crashed i{background:var(--red)}
+  .feed{font-family:var(--f-mono);font-size:.72rem;line-height:1.9;height:108px;overflow:hidden;
+    color:var(--ink-60);border-top:1px solid var(--line);padding-top:10px}
+  .feed .ln{display:flex;gap:.5em;opacity:0;transform:translateY(6px);animation:ln .4s var(--ease) forwards}
+  .feed .ln.ok b{color:var(--aqua)} .feed .ln.bad b{color:var(--red)}
+  @keyframes ln{to{opacity:1;transform:none}}
+
+  /* ---- marquee ---- */
+  .marquee{border-block:1px solid var(--line);padding:16px 0;overflow:hidden;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+            mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+  .marquee .track{display:flex;gap:2.5rem;white-space:nowrap;width:max-content;
+    animation:scroll 26s linear infinite;font-family:var(--f-mono);font-size:.82rem;
+    color:var(--ink-40);letter-spacing:.06em}
+  .marquee .track span .s{color:var(--red)}
+  @keyframes scroll{to{transform:translateX(-50%)}}
+  @media (prefers-reduced-motion:reduce){.marquee .track{animation:none}}
+
+  /* ============================================================ SECTIONS */
+  section{position:relative}
+  .sec{padding:clamp(72px,11vw,150px) 0}
+  .sec-cream{background:var(--cream);color:var(--charcoal)}
+  .sec-cream h2{color:var(--navy)} .sec-cream .kicker{color:var(--red)}
+  .sec-cream .lead{color:rgba(45,45,45,.72)}
+  .sec-head{max-width:62ch;margin-bottom:clamp(40px,6vw,72px)}
+  .sec-head h2{margin:.7rem 0 1rem}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(26px);
+    transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+  /* ---- loop flow ---- */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:860px){.flow{grid-template-columns:1fr 1fr}}
+  .step{border:1px solid var(--line);border-radius:var(--r);padding:22px;position:relative;
+    background:rgba(253,255,238,.02);transition:transform .3s var(--ease),border-color .3s}
+  .step:hover{transform:translateY(-6px);border-color:var(--aqua)}
+  .step .n{font-family:var(--f-mono);font-size:.74rem;color:var(--red)}
+  .step h3{margin:.6rem 0 .4rem;font-size:1.05rem}
+  .step p{font-size:.9rem;color:var(--ink-60)}
+  .branch{margin-top:20px;border:1px dashed rgba(255,44,23,.5);border-radius:var(--r);
+    padding:18px 22px;display:flex;gap:14px;align-items:center;background:rgba(255,44,23,.05)}
+  .branch .tag{font-family:var(--f-mono);font-size:.72rem;color:var(--red);
+    border:1px solid rgba(255,44,23,.5);border-radius:999px;padding:.3em .7em;white-space:nowrap}
+  .branch p{font-size:.92rem;color:var(--ink-60)}
+
+  /* ---- ladder cards ---- */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media(max-width:980px){.cards{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.cards{grid-template-columns:1fr}}
+  .lvl{border:1px solid rgba(45,45,45,.14);border-radius:var(--r);padding:24px;
+    background:#fff;transition:transform .35s var(--ease),box-shadow .35s}
+  .lvl:hover{transform:translateY(-8px);box-shadow:0 30px 60px -30px rgba(3,27,54,.4)}
+  .lvl .tag{font-family:var(--f-mono);font-size:.78rem;color:var(--red)}
+  .lvl .big{font-family:var(--f-head);font-weight:700;font-size:2.4rem;color:var(--navy);
+    line-height:1;margin:.3rem 0 .8rem}
+  .lvl h3{color:var(--navy);margin-bottom:.4rem}
+  .lvl p{font-size:.9rem;color:rgba(45,45,45,.7)}
+
+  /* ---- detections / tools shared grid ---- */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:860px){.grid3{grid-template-columns:1fr}}
+  .det{border:1px solid var(--line);border-radius:var(--r);padding:24px;
+    background:rgba(253,255,238,.02);transition:transform .3s var(--ease),border-color .3s}
+  .det:hover{transform:translateY(-6px);border-color:var(--red)}
+  .det .code{font-family:var(--f-mono);font-size:.76rem;color:var(--aqua);
+    background:var(--navy-900);border:1px solid var(--line);border-radius:10px;
+    padding:12px;margin:14px 0;overflow:auto}
+  .det h3{margin-bottom:.4rem} .det p{font-size:.9rem;color:var(--ink-60)}
+  .det .fires{font-family:var(--f-mono);font-size:.72rem;color:var(--red);margin-top:12px}
+
+  .tool{border:1px solid rgba(45,45,45,.14);border-radius:var(--r);padding:26px;background:#fff}
+  .tool .eyebrow{font-family:var(--f-mono);font-size:.76rem;color:var(--red)}
+  .tool h3{color:var(--navy);margin:.5rem 0 .6rem;font-size:1.3rem}
+  .tool p{font-size:.92rem;color:rgba(45,45,45,.72)}
+  .tool ul{list-style:none;margin-top:14px;font-size:.86rem;color:rgba(45,45,45,.8)}
+  .tool li{padding-left:1.2em;position:relative;margin:.4em 0}
+  .tool li::before{content:"→";position:absolute;left:0;color:var(--red)}
+
+  /* ---- economics ---- */
+  .econ{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(32px,5vw,64px);align-items:center}
+  @media(max-width:900px){.econ{grid-template-columns:1fr}}
+  .stat-row{display:flex;gap:40px;flex-wrap:wrap;margin:8px 0 28px}
+  .stat .num{font-family:var(--f-head);font-weight:700;font-size:clamp(2.4rem,5vw,3.6rem);
+    line-height:1;letter-spacing:-.03em}
+  .stat .num.good{color:var(--aqua)} .stat .num.bad{color:var(--red)}
+  .stat .cap{font-family:var(--f-mono);font-size:.74rem;color:var(--ink-40);margin-top:.5rem;max-width:22ch}
+  .bars{display:flex;gap:28px;align-items:flex-end;height:280px;
+    border-bottom:1px solid var(--line);padding:0 10px}
+  .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:12px;height:100%}
+  .bar .col{width:100%;max-width:120px;border-radius:12px 12px 0 0;height:0;
+    transition:height 1.1s var(--ease);position:relative}
+  .bar.good .col{background:linear-gradient(180deg,var(--aqua),rgba(182,255,255,.25))}
+  .bar.bad .col{background:linear-gradient(180deg,var(--red),rgba(255,44,23,.2))}
+  .bar .bl{font-family:var(--f-mono);font-size:.72rem;color:var(--ink-60);text-align:center}
+  .bar .bl b{display:block;font-family:var(--f-head);font-size:1rem;color:var(--cream)}
+
+  /* ---- evidence terminal ---- */
+  .term{background:var(--navy-900);border:1px solid var(--line);border-radius:var(--r-lg);
+    overflow:hidden;box-shadow:0 40px 90px -40px rgba(0,0,0,.7)}
+  .term .bar3{display:flex;gap:7px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .term .bar3 i{width:11px;height:11px;border-radius:50%;background:var(--line)}
+  .term .bar3 i:first-child{background:var(--red)}
+  .term pre{font-family:var(--f-mono);font-size:.8rem;line-height:1.85;padding:22px;
+    overflow:auto;color:var(--ink-60);margin:0}
+  .term pre .c{color:var(--ink-40)} .term pre .g{color:var(--aqua)}
+  .term pre .r{color:var(--red)} .term pre .w{color:var(--cream)}
+
+  /* ---- CTA ---- */
+  .cta{text-align:center;padding:clamp(80px,12vw,160px) 0}
+  .cta h2{font-size:clamp(2.4rem,6vw,4.4rem);margin-bottom:1.4rem}
+  .cta .lead{margin:0 auto 2.4rem}
+  .cta-btns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+
+  footer{border-top:1px solid var(--line);padding:40px 0}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;
+    font-family:var(--f-mono);font-size:.76rem;color:var(--ink-40)}
+  .foot-row a:hover{color:var(--cream)}
+
+  .scrollcue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    font-family:var(--f-mono);font-size:.68rem;color:var(--ink-40);letter-spacing:.2em;
+    display:flex;flex-direction:column;align-items:center;gap:8px;z-index:3}
+  .scrollcue .ln{width:1px;height:34px;background:linear-gradient(var(--red),transparent);
+    animation:drop 1.8s var(--ease) infinite}
+  @keyframes drop{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}
+    50.1%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+</style>
+</head>
+<body>
+
+<!-- ========================================================= NAV -->
+<header class="nav" id="nav">
+  <div class="wrap nav-row">
+    <a class="brand" href="#top" aria-label="Solo License home">
+      <svg class="glyph" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#0b2c52"/>
+        <path d="M7 22a9 9 0 0 1 18 0" fill="none" stroke="#fdffee" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="16" y1="22" x2="22" y2="13" stroke="#ff2c17" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      Solo License
+    </a>
+    <nav class="nav-links">
+      <a class="navlink" href="#loop">// the loop</a>
+      <a class="navlink" href="#ladder">// the ladder</a>
+      <a class="navlink" href="#tools">// tools</a>
+      <a class="navlink" href="#economics">// economics</a>
+      <a class="btn btn-primary nav-cta" href="https://github.com/JAYATIAHUJA/Solo_lincense" target="_blank" rel="noopener">View on GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ========================================================= HERO -->
+<section class="hero" id="top">
+  <!-- Custom media slot: drop assets/hero.mp4 + assets/hero.webm (see assets/README). -->
+  <div class="hero-media" id="heroMedia" hidden>
+    <video autoplay muted loop playsinline poster="assets/hero-poster.jpg">
+      <source src="assets/hero.webm" type="video/webm" />
+      <source src="assets/hero.mp4" type="video/mp4" />
+    </video>
+  </div>
+  <div class="hero-grid-bg"></div>
+  <div class="hero-glow"></div>
+
+  <div class="wrap">
+    <div class="hero-copy">
+      <span class="kicker">// neatHack · earned-permission ops agent</span>
+      <h1>
+        Autonomy you <span class="aqua">earn</span>.<br/>
+        Not autonomy you <span class="em">assume</span>.
+      </h1>
+      <p class="lead">Solo License is an operations agent that starts at near-zero autonomy and must <span class="serif-it">earn</span> the right to act unattended — task class by task class — from a measured reliability track record. One detection, and it crashes back to zero.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="https://github.com/JAYATIAHUJA/Solo_lincense" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          Clone the repo
+        </a>
+        <a class="btn btn-ghost" href="#loop">See how it works</a>
+      </div>
+      <div class="trust-row">
+        <span>verifies side effects in <b>SQLite</b></span>
+        <span>demotion driven by <b>detections</b></span>
+        <span>every change is a <b>git commit</b></span>
+      </div>
+    </div>
+
+    <!-- Live autonomy-dial showpiece (pure code, animates on loop) -->
+    <div class="panel reveal" id="dialPanel" aria-label="Live autonomy dial demo">
+      <div class="panel-top">
+        <span class="lbl">task class · refund</span>
+        <span class="pill ok" id="statusPill"><span class="dot"></span><span id="statusText">earning</span></span>
+      </div>
+      <div class="ladder-track" id="ladder">
+        <div class="rung" data-lv="0"><span class="lv">L0</span><span class="cap">suggest<br/>only</span></div>
+        <div class="rung" data-lv="1"><span class="lv">L1</span><span class="cap">draft +<br/>approve</span></div>
+        <div class="rung" data-lv="2"><span class="lv">L2</span><span class="cap">auto under<br/>ceiling</span></div>
+        <div class="rung" data-lv="3"><span class="lv">L3</span><span class="cap">full auto<br/>audited</span></div>
+      </div>
+      <div class="meter" id="meter"><i id="meterFill"></i></div>
+      <div class="feed" id="feed" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="scrollcue"><span>SCROLL</span><span class="ln"></span></div>
+</section>
+
+<!-- ========================================================= MARQUEE -->
+<div class="marquee" aria-hidden="true">
+  <div class="track" id="marquee"></div>
+</div>
+
+<!-- ========================================================= THE LOOP -->
+<section class="sec" id="loop">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// the loop</span>
+      <h2>A simple, elegant control loop — that never trusts a tool's word.</h2>
+      <p class="lead">One refund run does exactly this, in order, tracing every step. Authority comes from the license; truth comes from reading the database back.</p>
+    </div>
+    <div class="flow">
+      <div class="step reveal"><span class="n">01</span><h3>License check</h3><p>Read the task class's rung on the ladder before doing anything.</p></div>
+      <div class="step reveal"><span class="n">02</span><h3>Execute or suggest</h3><p>Do only what the license authorises — suggest, draft, or auto-execute.</p></div>
+      <div class="step reveal"><span class="n">03</span><h3>Verify in SQLite</h3><p>Read the actual side effect back. The tool's response is never evidence.</p></div>
+      <div class="step reveal"><span class="n">04</span><h3>Update the dial</h3><p>A verified-clean run earns credit; the track record climbs the ladder.</p></div>
+    </div>
+    <div class="branch reveal">
+      <span class="tag">detection fires</span>
+      <p>If any detection fires, the class <b style="color:var(--red)">crashes to L0 and is quarantined</b> — then a human reviews one evidence packet and restores it with judgement, not a blind retry.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= LADDER -->
+<section class="sec sec-cream" id="ladder">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// the autonomy ladder</span>
+      <h2>Four rungs. Earned one clean run at a time.</h2>
+      <p class="lead">Promotion is automatic after N consecutive verified-clean runs. Demotion is immediate on a detection. The dial is always the single source of truth.</p>
+    </div>
+    <div class="cards">
+      <div class="lvl reveal"><span class="tag">rung 00</span><div class="big">L0</div><h3>Suggest only</h3><p>The agent recommends; a human does everything. Near-zero autonomy — the starting line.</p></div>
+      <div class="lvl reveal"><span class="tag">rung 01</span><div class="big">L1</div><h3>Draft + approve</h3><p>The agent prepares the change and holds. A human approves every execution.</p></div>
+      <div class="lvl reveal"><span class="tag">rung 02</span><div class="big">L2</div><h3>Auto under ceiling</h3><p>The agent acts automatically below a dollar ceiling. Humans spot-check.</p></div>
+      <div class="lvl reveal"><span class="tag">rung 03</span><div class="big">L3</div><h3>Full auto, audited</h3><p>Full autonomy with post-hoc audit sampling — earned, and revocable in an instant.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= DETECTIONS -->
+<section class="sec" id="detections">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// detections drive demotion</span>
+      <h2>Three checks stand between the agent and your ledger.</h2>
+      <p class="lead">Pure, testable rules that fire on observed facts. When one fires, the dial drops — no exceptions, no overrides.</p>
+    </div>
+    <div class="grid3">
+      <div class="det reveal">
+        <h3>state_mismatch</h3>
+        <div class="code">intended Δ $40.00<br/>sqlite moved $0.00</div>
+        <p>The verified change in the database doesn't equal what the agent intended — the signature of a quiet failure.</p>
+        <div class="fires">▸ demotes to L0</div>
+      </div>
+      <div class="det reveal">
+        <h3>policy_breach</h3>
+        <div class="code">authorised: DRAFT<br/>attempted: AUTO_EXECUTE</div>
+        <p>The agent executed beyond what the license authorised. The ceiling and level are folded into one decision.</p>
+        <div class="fires">▸ demotes to L0</div>
+      </div>
+      <div class="det reveal">
+        <h3>missing_verification</h3>
+        <div class="code">executed: true<br/>verified: false</div>
+        <p>An execution completed without ever reading SQLite back. If it wasn't verified, it didn't happen.</p>
+        <div class="fires">▸ demotes to L0</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= TOOLS -->
+<section class="sec sec-cream" id="tools">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// load-bearing tool use</span>
+      <h2>Three tools, each doing real work.</h2>
+      <p class="lead">Not logos on a slide — each tool carries a distinct, honest job in the loop.</p>
+    </div>
+    <div class="grid3">
+      <div class="tool reveal">
+        <span class="eyebrow">observability</span>
+        <h3>neatlogs</h3>
+        <p>Traces every run as spans and fires the custom detections that move the dial.</p>
+        <ul><li>plan → execute → verify spans</li><li>3 custom detections as incidents</li><li>before/after numbers compared</li></ul>
+      </div>
+      <div class="tool reveal">
+        <span class="eyebrow">audit trail</span>
+        <h3>Entire</h3>
+        <p>Every promote, demote, and restore is a scoped git commit — the checkpoint graph of earned trust.</p>
+        <ul><li>reason + run id + trace id per commit</li><li>graph & explain the history</li><li>one evidence packet to restore</li></ul>
+      </div>
+      <div class="tool reveal">
+        <span class="eyebrow">economics</span>
+        <h3>cfo.ai</h3>
+        <p>Models the license level as a margin driver: supervision cost vs. the incident bill of over-trust.</p>
+        <ul><li>supervision-cost curve by level</li><li>over-promotion risk model</li><li>revenue, margin, runway</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= ECONOMICS -->
+<section class="sec" id="economics">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// the margin story</span>
+      <h2>Autonomy you earned is margin.<br/>Autonomy you grabbed is runway you set on fire.</h2>
+    </div>
+    <div class="econ">
+      <div class="reveal">
+        <div class="stat-row">
+          <div class="stat"><div class="num good" data-count="20.3" data-suffix="%" data-sign="+">+0%</div><div class="cap">margin running <b>earned L2</b></div></div>
+          <div class="stat"><div class="num bad" data-count="73.4" data-suffix="%" data-sign="-">-0%</div><div class="cap">margin running <b>over-promoted L3</b></div></div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><div class="num" style="color:var(--cream)" data-count="41250" data-prefix="$">$0</div><div class="cap">monthly supervision saved climbing L0 → L2</div></div>
+          <div class="stat"><div class="num" style="color:var(--red)" data-count="18000" data-prefix="$">$0</div><div class="cap">monthly incident bill from over-promotion</div></div>
+        </div>
+        <p class="lead">The reckless path spends less on supervision and still destroys the business — the incident bill swamps the saving. The loop is what lets you sit high <span class="serif-it">only</span> when the track record justifies it.</p>
+      </div>
+      <div class="reveal">
+        <div class="bars" id="bars">
+          <div class="bar good"><div class="col" data-h="68%"></div><div class="bl"><b>+20.3%</b>Earned L2</div></div>
+          <div class="bar bad"><div class="col" data-h="100%"></div><div class="bl"><b>−73.4%</b>Over-promoted L3</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= EVIDENCE -->
+<section class="sec" id="evidence">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// recovery with judgement</span>
+      <h2>Every license change leaves a trail.</h2>
+      <p class="lead">The git-backed ledger is the checkpoint history a human — or Entire — reads to understand exactly when and why autonomy moved.</p>
+    </div>
+    <div class="term reveal">
+      <div class="bar3"><i></i><i></i><i></i></div>
+<pre><span class="c">$ git log --oneline -- ledger/license_ledger.jsonl</span>
+<span class="g">c0f60cf</span> <span class="w">license(refund): promote L2 -&gt; L3</span>  <span class="c"># 3 clean runs earned it</span>
+<span class="r">8073847</span> <span class="w">license(refund): demote  L3 -&gt; L0</span>  <span class="c"># state_mismatch fired</span>
+<span class="g">c20d5fa</span> <span class="w">license(refund): restore L0 -&gt; L2</span>  <span class="c"># human reviewed evidence</span>
+<span class="r">ea24e56</span> <span class="w">license(refund): demote  L2 -&gt; L0</span>  <span class="c"># policy_breach fired</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= CTA -->
+<section class="cta">
+  <div class="wrap">
+    <span class="kicker">// agents you'd trust to run without you watching</span>
+    <h2>Clone it. Run it.<br/>Watch it earn its license.</h2>
+    <p class="lead">One command to seed, one to launch. Trigger a refund, inject a fault, watch the dial crash, restore from the evidence packet — all live.</p>
+    <div class="cta-btns">
+      <a class="btn btn-primary" href="https://github.com/JAYATIAHUJA/Solo_lincense" target="_blank" rel="noopener">View on GitHub</a>
+      <a class="btn btn-ghost" href="#top">Back to top</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-row">
+    <span>Solo License · built for the neatHack AI agent hackathon</span>
+    <span><a href="https://github.com/JAYATIAHUJA/Solo_lincense" target="_blank" rel="noopener">github.com/JAYATIAHUJA/Solo_lincense</a></span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- nav scroll state ---- */
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 24);
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+
+  /* ---- hero custom media: show only if the file actually loads ---- */
+  const media = document.getElementById('heroMedia');
+  const vid = media.querySelector('video');
+  if (vid) {
+    vid.addEventListener('loadeddata', () => { media.hidden = false; });
+    // if neither source resolves, it stays hidden and the coded bg shows
+  }
+
+  /* ---- scroll reveal ---- */
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }});
+  }, {threshold:.16});
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  /* ---- count-up stats ---- */
+  const fmt = (n, el) => {
+    const pre = el.dataset.prefix || '', suf = el.dataset.suffix || '', sign = el.dataset.sign || '';
+    const dec = (el.dataset.count.indexOf('.') > -1) ? 1 : 0;
+    const val = dec ? n.toFixed(1) : Math.round(n).toLocaleString('en-US');
+    return `${sign}${pre}${val}${suf}`;
+  };
+  const countUp = (el) => {
+    const target = parseFloat(el.dataset.count); const dur = 1400; const t0 = performance.now();
+    const tick = (t) => {
+      const p = Math.min((t - t0)/dur, 1); const eased = 1 - Math.pow(1-p, 3);
+      el.textContent = fmt(target*eased, el);
+      if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(target, el);
+    };
+    requestAnimationFrame(tick);
+  };
+  const statIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting){
+      if (reduce) e.target.textContent = fmt(parseFloat(e.target.dataset.count), e.target);
+      else countUp(e.target);
+      statIO.unobserve(e.target);
+    }});
+  }, {threshold:.6});
+  document.querySelectorAll('[data-count]').forEach(el => statIO.observe(el));
+
+  /* ---- economics bars ---- */
+  const barIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting){
+      e.target.querySelectorAll('.col').forEach(c => c.style.height = c.dataset.h);
+      barIO.unobserve(e.target);
+    }});
+  }, {threshold:.4});
+  const bars = document.getElementById('bars'); if (bars) barIO.observe(bars);
+
+  /* ---- marquee content ---- */
+  const terms = ['earned autonomy','verify, don\'t trust','state_mismatch','one evidence packet',
+    'policy_breach','git-backed ledger','L0 → L1 → L2 → L3','demote on detection',
+    'supervision = cost','autonomy = lever','neatlogs','Entire','cfo.ai'];
+  const mk = () => terms.map(t => `<span>${t} <span class="s">/</span></span>`).join(' ');
+  document.getElementById('marquee').innerHTML = mk() + mk();
+
+  /* ---- hero live autonomy dial (the showpiece state machine) ---- */
+  const rungs = [...document.querySelectorAll('#ladder .rung')];
+  const meter = document.getElementById('meter');
+  const fill = document.getElementById('meterFill');
+  const feed = document.getElementById('feed');
+  const pill = document.getElementById('statusPill');
+  const statusText = document.getElementById('statusText');
+  const NEED = 3;
+  let level = 2, clean = 0, crashed = false;
+  const orders = [['ORD-1001','$25'],['ORD-1002','$40'],['ORD-1003','$15'],['ORD-1005','$45']];
+  let oi = 0;
+
+  const paint = () => {
+    rungs.forEach(r => {
+      const on = (+r.dataset.lv === level);
+      r.dataset.on = on ? '1' : '0';
+      r.classList.toggle('crashed', crashed);
+    });
+    fill.style.width = (crashed ? 0 : (clean/NEED)*100) + '%';
+    meter.classList.toggle('crashed', crashed);
+    pill.className = 'pill ' + (crashed ? 'alert' : 'ok');
+    statusText.textContent = crashed ? 'quarantined' : (level===3 ? 'full auto' : 'earning');
+  };
+  const log = (cls, html) => {
+    const d = document.createElement('div'); d.className = 'ln ' + cls; d.innerHTML = html;
+    feed.prepend(d); while (feed.children.length > 5) feed.lastChild.remove();
+  };
+
+  const step = () => {
+    if (crashed) { crashed = false; clean = 0; level = 2; log('ok','<b>✓</b> human restored → L2'); paint(); return; }
+    // ~1 in 5 ticks after reaching higher trust, a detection fires
+    const willFail = (level >= 2) && Math.random() < 0.22;
+    if (willFail) {
+      crashed = true; level = 0; clean = 0; paint();
+      log('bad','<b>✗</b> state_mismatch — demoted to L0');
+      return;
+    }
+    const [id, amt] = orders[oi++ % orders.length];
+    log('ok', `<b>✓</b> ${id} refund ${amt} verified`);
+    clean++;
+    if (clean >= NEED && level < 3) { level++; clean = 0; log('ok', `<b>▲</b> promoted → L${level}`); }
+    paint();
+  };
+
+  paint();
+  if (!reduce) {
+    log('ok','<b>✓</b> ORD-1001 refund $25 verified');
+    setInterval(step, 1700);
+  } else {
+    // static, legible snapshot for reduced-motion users
+    clean = 2; paint(); log('ok','L2 · 2/3 clean runs toward L3');
+  }
+})();
+</script>
+</body>
+</html>
