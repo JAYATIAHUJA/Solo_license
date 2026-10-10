@@ -28,7 +28,7 @@ from sololicense.db.repositories import detections as detections_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
 from sololicense.domain.models import RefundRequest, RunStatus
-from sololicense.faults.injector import FaultInjector
+from sololicense.faults.injector import FaultInjector, effects_for
 from sololicense.observability import detections as rules
 from sololicense.observability.detections import Detection
 from sololicense.observability.tracer import Tracer
@@ -85,7 +85,9 @@ class RefundWorker:
         approved: bool = False,
     ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
-        effects = self._faults.consume_effects(task_class)
+        # Peek, don't consume: an armed fault only bends a run that actually
+        # executes, so a draft or suggestion leaves it armed for the next one.
+        effects = effects_for(self._faults.peek(task_class))
         trace = self._tracer.start_trace("refund")
         trace.span(
             "license.check",
@@ -101,6 +103,8 @@ class RefundWorker:
 
         before = verification.read_refunded(self._conn, request.order_id)
         will_execute = attempted in _EXECUTING
+        if will_execute and effects.active:
+            self._faults.consume_effects(task_class)
         intended_delta = request.amount if will_execute else 0.0
 
         if will_execute:
@@ -136,6 +140,7 @@ class RefundWorker:
         status = self._status(found, will_execute, authorized)
         run_id = self._persist_run(
             request=request,
+            task_class=task_class,
             state_level=state.effective_level,
             authorized=authorized,
             status=status,
@@ -146,7 +151,6 @@ class RefundWorker:
             plan=plan,
         )
         trace.flush(self._conn, run_id)
-        self._conn.commit()
 
         for d in found:
             detections_repo.insert_detection(
@@ -157,9 +161,9 @@ class RefundWorker:
                 message=d.message,
                 trace_id=trace.trace_id,
             )
-        self._conn.commit()
 
         transition = self._update_dial(task_class, status, found, run_id, trace.trace_id)
+        self._conn.commit()
 
         return RunResult(
             run_id=run_id,
@@ -244,13 +248,13 @@ class RefundWorker:
         return RunStatus.SUGGESTED
 
     def _persist_run(
-        self, *, request, state_level, authorized, status, executed, result,
-        effects, trace, plan,
+        self, *, request, task_class, state_level, authorized, status, executed,
+        result, effects, trace, plan,
     ) -> int:
         return insert_run(
             self._conn,
             NewRun(
-                task_class="refund",
+                task_class=task_class,
                 order_id=request.order_id,
                 requested_amount=request.amount,
                 level_at_run=int(state_level),
