@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_LEDGER_FILE = _REPO_ROOT / "ledger" / "license_ledger.jsonl"
+_LEDGER_RELPATH = Path("ledger") / "license_ledger.jsonl"
 
 
 @dataclass(frozen=True)
@@ -31,16 +31,6 @@ class LedgerEntry:
     reason: str
     run_id: int | None
     trace_id: str | None
-
-
-def _run_git(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
 
 
 def _commit_message(entry: LedgerEntry) -> str:
@@ -63,16 +53,29 @@ def _commit_message(entry: LedgerEntry) -> str:
 
 
 class GitLedger:
-    """Appends to and commits the license ledger file."""
+    """Appends to and commits the license ledger file.
 
-    def __init__(self, ledger_file: Path = _LEDGER_FILE) -> None:
-        self._ledger_file = ledger_file
+    ``repo_root`` defaults to this repository; tests point it at a throwaway
+    git repo so committing is exercised without touching project history."""
+
+    def __init__(self, repo_root: Path = _REPO_ROOT) -> None:
+        self._repo_root = repo_root
+        self._ledger_file = repo_root / _LEDGER_RELPATH
 
     def record(self, entry: LedgerEntry) -> str | None:
         """Append the entry and commit the ledger file. Returns the short sha,
         or ``None`` if git is unavailable or nothing needed committing."""
         self._append(entry)
         return self._commit(entry)
+
+    def _run_git(self, args: list[str]) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self._repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     def _append(self, entry: LedgerEntry) -> None:
         self._ledger_file.parent.mkdir(parents=True, exist_ok=True)
@@ -92,12 +95,12 @@ class GitLedger:
             fh.write(line + "\n")
 
     def _commit(self, entry: LedgerEntry) -> str | None:
-        rel = str(self._ledger_file.relative_to(_REPO_ROOT)).replace("\\", "/")
-        add = _run_git(["add", "--", rel])
+        rel = _LEDGER_RELPATH.as_posix()
+        add = self._run_git(["add", "--", rel])
         if add.returncode != 0:
             return None
-        commit = _run_git(["commit", "-m", _commit_message(entry), "--", rel])
+        commit = self._run_git(["commit", "-m", _commit_message(entry), "--", rel])
         if commit.returncode != 0:
             return None
-        sha = _run_git(["rev-parse", "--short", "HEAD"])
+        sha = self._run_git(["rev-parse", "--short", "HEAD"])
         return sha.stdout.strip() or None
