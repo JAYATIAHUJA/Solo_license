@@ -471,7 +471,13 @@ def _clean_values(values: dict) -> dict[str, str]:
 
 
 def _save_settings(context: AppContext, values: dict[str, str]) -> None:
-    settings_repo.set_many(context.conn, values)
+    try:
+        protected = settings_repo.protect_secret_values(
+            values, context.config.settings_encryption_key
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    settings_repo.set_many(context.conn, protected)
     context.conn.commit()
 
 

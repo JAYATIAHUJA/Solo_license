@@ -41,7 +41,11 @@ def build_app(
 
     # 1. Persistence first, so operator settings can override the environment.
     conn = init_db(config.db_path, check_same_thread=check_same_thread)
-    config = with_overrides(config, settings_repo.get_all(conn))
+    stored_settings = settings_repo.get_all(conn)
+    config = with_overrides(
+        config,
+        settings_repo.reveal_secret_values(stored_settings, config.settings_encryption_key),
+    )
 
     # 2. Observability — instrument before any agent logic.
     neatlogs = init_neatlogs(config)

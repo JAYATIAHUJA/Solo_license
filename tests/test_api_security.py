@@ -42,3 +42,21 @@ def test_operator_cannot_restore_a_license(monkeypatch, harness):
     )
 
     assert response.status_code == 403
+
+
+def test_settings_secret_requires_server_encryption_key(monkeypatch, harness):
+    monkeypatch.setenv(
+        "SOLO_API_TOKENS",
+        '{"admin-token":{"id":"admin-1","role":"admin"}}',
+    )
+    monkeypatch.setattr(api_module, "_context", _context_from_harness(harness))
+    monkeypatch.setattr(api_module, "_authenticator", None, raising=False)
+    client = TestClient(api_module.app, raise_server_exceptions=False)
+
+    response = client.put(
+        "/api/settings",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"values": {"anthropic_api_key": "sk-live-secret"}},
+    )
+
+    assert response.status_code == 503

@@ -69,6 +69,7 @@ one token in `.env` before starting `make run-api`:
 ```dotenv
 SOLO_API_TOKENS={"replace-with-a-long-random-token":{"id":"jay","role":"admin"}}
 SOLO_ALLOWED_ORIGINS=http://localhost:5174,https://your-project.vercel.app
+SOLO_SETTINGS_ENCRYPTION_KEY=replace-with-a-fernet-key
 ```
 
 Roles are cumulative: `operator` can run refunds and manage orders,
@@ -76,7 +77,10 @@ Roles are cumulative: `operator` can run refunds and manage orders,
 and `admin` can manage settings, onboarding, demo faults, and reseeding.
 Every run and license transition records the actor id and role. The static
 frontend must never receive a token through a `VITE_*` variable; deployment
-will use Vercel environment variables and a server-side API route.
+will use Vercel environment variables and a server-side API route. Generate
+the Fernet key once with
+`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+It encrypts settings-screen API keys before their values reach SQLite.
 
 ### Optional keys (the demo is fully functional without them)
 

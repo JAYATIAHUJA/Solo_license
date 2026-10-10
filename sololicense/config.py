@@ -37,6 +37,7 @@ class Config:
     promotion_clean_runs: int
     l2_auto_refund_ceiling: float
     ledger_repo: Path
+    settings_encryption_key: str
 
     @property
     def llm_enabled(self) -> bool:
@@ -66,6 +67,7 @@ def load_config() -> Config:
         promotion_clean_runs=int(_get("PROMOTION_CLEAN_RUNS", "3")),
         l2_auto_refund_ceiling=float(_get("L2_AUTO_REFUND_CEILING", "50")),
         ledger_repo=Path(_get("SOLO_LEDGER_REPO", "data/ledger-repo")),
+        settings_encryption_key=_get("SOLO_SETTINGS_ENCRYPTION_KEY", ""),
     )
 
 
