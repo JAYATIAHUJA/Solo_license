@@ -13,3 +13,4 @@
 {"ts": "2026-10-10T23:13:28.358745+00:00", "task_class": "refund", "kind": "restore", "from_level": 2, "to_level": 2, "reason": "Guided demo baseline: start from an earned L2.", "run_id": null, "trace_id": null}
 {"ts": "2026-10-10T23:13:32.088541+00:00", "task_class": "refund", "kind": "demote", "from_level": 2, "to_level": 0, "reason": "Intended refund delta $20.00 but SQLite moved $0.00. Tool response cannot be trusted.", "run_id": 31, "trace_id": "0c410579d4e439ccd9701f67ba0ee03b"}
 {"ts": "2026-10-10T23:14:05.355743+00:00", "task_class": "refund", "kind": "restore", "from_level": 0, "to_level": 2, "reason": "Guided demo baseline: start from an earned L2.", "run_id": null, "trace_id": null}
+{"ts": "2026-10-10T23:14:06.878987+00:00", "task_class": "refund", "kind": "restore", "from_level": 2, "to_level": 2, "reason": "Guided demo baseline: start from an earned L2.", "run_id": null, "trace_id": null}
