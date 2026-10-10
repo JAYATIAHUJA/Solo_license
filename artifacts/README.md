@@ -1,15 +1,10 @@
 # Artifacts
 
-Generated, judge-verifiable evidence lands here (git-ignored, regenerate any
-time):
+Judge-verifiable evidence produced by the real system.
 
-```bash
-python -m scripts.generate_evidence                      # quiet-failure demo
-python -m scripts.generate_evidence --fault policy_violation
-```
+| File | How to regenerate | What it shows |
+|---|---|---|
+| `benchmark.md` / `benchmark.json` | `python -m scripts.benchmark` | 50 seeded runs with injected faults, scored as "trust the tool" vs. Solo License |
+| `evidence_report.md` / `.json` (git-ignored) | `python -m scripts.generate_evidence [--fault policy_violation]` | One clean run and one faulted run side by side, with trace ids and the dial change |
 
-Produces:
-
-- `evidence_report.md` — before/after comparison with the numbers, the
-  detections that fired, and the dial transition (shareable as a #neatHack post).
-- `evidence_report.json` — the same data, structured, including trace ids.
+After a new benchmark, redraw the README charts with `python -m scripts.readme_charts`.

@@ -1,257 +1,221 @@
-# 🎚️ Solo License
+<div align="center">
 
-**An operations agent that earns the right to act unattended — task class by
-task class — from a measured reliability track record, and loses it the instant
-a detection fires.**
+# Solo License
 
-Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon).
+**A driving license for AI agents.**<br/>
+The agent starts by asking permission, earns freedom one verified job at a time,
+and is paused the instant something goes wrong — until a person reviews and resumes it.
 
-A visible **autonomy dial** (per task class) rises after consecutive clean runs
-proven by traces, and crashes immediately when a detection fires. A human
-reviews **one evidence packet** (trace + checkpoint context) to restore
-permissions. Recovery is a judgement, not a blind retry. The system **verifies
-actual side effects in SQLite** and never trusts a tool's response.
+*Earned. Revocable. Priced.*
 
-```
-refund request ─▶ license check ─▶ execute or suggest ─▶ verify side effect in SQLite ─▶ update dial
-                                                                │
-                                              detection fires ──┘─▶ auto-demote to L0 ─▶ evidence packet ─▶ human restore
-```
+Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · uses **neatlogs**, **Entire** and **cfo.ai** · by [@JAYATIAHUJA](https://github.com/JAYATIAHUJA)
+
+</div>
 
 ---
 
-## The autonomy ladder
+## The problem
 
-| Level | Meaning | Who acts |
+Today you either watch every action an AI agent takes, or you let it run and hope.
+Agents also *lie by accident*: a tool says "Refund processed" while nothing moved.
+If you trust that response, the mistake reaches your customer.
+
+## What Solo License does
+
+| | |
+|---|---|
+| **Starts cautious** | Every job type (refunds, store credit) begins at *Suggests only* or *Needs your OK*. |
+| **Checks, never trusts** | After every action the agent re-reads the database. The tool's "success" message is ignored. |
+| **Earns freedom** | After *N* double-checked jobs in a row, that job type moves up one level — automatically. |
+| **Stops instantly** | Any caught problem pauses that job type at once. Other job types keep their own level. |
+| **A person decides** | One evidence page shows what was meant, what happened and why it stopped. A person resumes it at a level they choose. |
+| **Everything is recorded** | Every permission change is a git commit (explainable with Entire); every run is a neatlogs trace. |
+
+### The four levels
+
+| Level | In the app | What the agent may do alone |
 |---|---|---|
-| **L0** | Suggest only | Human does everything |
-| **L1** | Draft + human approve | Agent drafts, human clicks |
-| **L2** | Auto under a dollar ceiling | Agent acts, human spot-checks |
-| **L3** | Full auto, post-hoc audit | Agent acts, audit samples |
+| L0 | **Suggests only** | Nothing — it suggests, you act |
+| L1 | **Needs your OK** | Prepares each job; you approve with one click |
+| L2 | **Works alone up to $50** | Jobs under the limit; bigger ones wait for you |
+| L3 | **Works alone** | Everything, reviewed afterwards |
 
-- **Promote:** after *N* consecutive verified-clean runs (default 3) the dial
-  climbs one rung — automatically, because the track record earned it.
-- **Demote:** the instant a detection fires, the class crashes to **L0** and is
-  **quarantined** (it can only suggest, and earns no credit) until a human acts.
-- **Restore:** a human reads the evidence packet and lifts the quarantine to a
-  chosen level. Every promote / demote / restore is a **git commit**.
+```mermaid
+stateDiagram-v2
+    direction LR
+    L0: Suggests only
+    L1: Needs your OK
+    L2: Works alone up to limit
+    L3: Works alone
+    Paused: Paused (acts as L0)
+    L0 --> L1: N verified jobs
+    L1 --> L2: N verified jobs
+    L2 --> L3: N verified jobs
+    L1 --> Paused: problem caught
+    L2 --> Paused: problem caught
+    L3 --> Paused: problem caught
+    Paused --> L2: person reviews and resumes
+```
 
-## Three custom detections (these drive demotion)
+---
 
-| Rule | Fires when | Demo fault |
+## Results
+
+### Before / after — trusting the tool vs. checking the result
+
+50 real runs through the worker with 20 % injected faults (seeded, reproducible):
+
+<p align="center"><img src="docs/assets/benchmark.svg" alt="10 of 50 false successes reach the customer when the tool is trusted; 0 with Solo License" width="760"/></p>
+
+| | Trust the tool | Solo License |
 |---|---|---|
-| `state_mismatch` | the verified change in SQLite ≠ what the agent intended | quiet failure |
-| `policy_breach` | the agent executed beyond what the license authorised | policy violation |
-| `missing_verification` | an execution completed without reading SQLite back | guardrail |
+| False successes reaching a customer | **10 / 50** | **0 / 50** |
+| Verified success rate | 80 % | 100 % |
+| Problems caught and paused | 0 | 10 |
+| Mean / p95 latency per run | — | 84 ms / 320 ms |
+
+Reproduce: `python -m scripts.benchmark` → [`artifacts/benchmark.md`](artifacts/benchmark.md)
+
+### Autonomy is a margin driver
+
+<p align="center"><img src="docs/assets/supervision.svg" alt="Monthly review cost falls from $45,000 at L0 to $3,750 at L2" width="760"/></p>
+
+From stated assumptions in [`cfo/model.py`](cfo/model.py) (10,000 actions/month, $45/h loaded cost):
+
+- Earning **L2** saves **$41,250 / month** in review time → **+20.3 % margin**.
+- Running a level the agent has *not* earned (blind full-auto) adds ~$18,000 / month in incidents → **−73.4 % margin**.
+
+The app recomputes this live from your own runs on the **Reports** page — the number visibly drops when a job type is paused.
 
 ---
 
-## Setup
+## How one run works
 
-**Requirements:** Python 3.11+ and git. The React API requires an API-token
-configuration; an LLM key and a neatlogs key are optional.
-
-```bash
-pip install -r requirements.txt     # 1. dependencies
-cp .env.example .env                # 2. optional config (runs fine empty)
-python -m sololicense.db.seed       # 3. seed the demo database
-streamlit run app/streamlit_app.py  # 4. launch the live UI
+```mermaid
+flowchart LR
+    M[Customer message] --> I[Intake<br/>LLM or rules]
+    I --> L{License check}
+    L -->|allowed| X[Execute tool]
+    L -->|not allowed| S[Suggest / wait for OK]
+    X --> V[Re-read database]
+    V --> D{Matches intent?}
+    D -->|yes| C[Clean run<br/>+1 toward next level]
+    D -->|no| P[Problem caught<br/>pause job type]
+    P --> E[Evidence page] --> H[Person resumes]
+    C & P & H --> G[(git ledger commit)]
+    I & X & V & D -.-> N[[neatlogs trace]]
 ```
 
-With `make`: `make install && make run`. On Windows PowerShell, use the four
-raw commands above (`copy .env.example .env` for step 2).
+*The model proposes, the license decides, the database proves.* The LLM only reads the
+message and writes a plan — it never decides what is allowed.
 
-### API access and Vercel
+Problems the safety checks catch:
 
-The FastAPI adapter is protected by bearer-token authentication. Add at least
-one token in `.env` before starting `make run-api`:
-
-```dotenv
-SOLO_API_TOKENS={"replace-with-a-long-random-token":{"id":"jay","role":"admin"}}
-SOLO_ALLOWED_ORIGINS=http://localhost:5174,https://your-project.vercel.app
-SOLO_SETTINGS_ENCRYPTION_KEY=replace-with-a-fernet-key
-```
-
-Roles are cumulative: `operator` can run refunds and manage orders,
-`approver` can additionally approve drafts and restore a quarantined license,
-and `admin` can manage settings, onboarding, demo faults, and reseeding.
-Every run and license transition records the actor id and role. The static
-frontend must never receive a token through a `VITE_*` variable; deployment
-will use Vercel environment variables and a server-side API route. Generate
-the Fernet key once with
-`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
-It encrypts settings-screen API keys before their values reach SQLite.
-
-### Optional keys (the demo is fully functional without them)
-
-- **neatlogs** — set `NEATLOGS_API_KEY` to ship real traces + detections. Left
-  empty, spans are mirrored into SQLite and the evidence packet still works.
-- **LLM** — set `LLM_PROVIDER=anthropic` (or `openai`) with the matching key to
-  have the model author each plan's rationale. Left as `deterministic`, a
-  rule-based planner is used. **Authority always comes from the license, never
-  the model**, so safety is identical either way.
+| Check | Plain meaning |
+|---|---|
+| `state_mismatch` | The tool said "done", but nothing changed |
+| `policy_breach` | The agent acted beyond its permission |
+| `missing_verification` | The result was never double-checked |
+| `duplicate_action` | The same action ran twice |
+| intake guard | The message tries to change the agent's rules ("ignore your rules…") → sent to a person |
 
 ---
 
-## Run the demo (what to click)
+## How the three hackathon tools are used
 
-Everything is on one screen; the sidebar holds the controls.
+### neatlogs — the trust signal
+- Every run is one **workflow trace** (`solo-license`) with spans for `license.check → plan → tool → verify.readback → detection.*`; caught problems are marked as **error spans**.
+- LLM calls (Gemini, Claude, OpenAI) are wrapped with `neatlogs.wrap`, so the model call sits inside the same trace.
+- The evidence page deep-links to the trace. Code: [`sololicense/observability/`](sololicense/observability).
 
-1. **Trigger a refund** on an under-ceiling order (e.g. `ORD-1001`, $25). It
-   auto-executes, verifies in SQLite, and the dial earns a clean run. Do it a
-   few times to **watch the dial climb L2 → L3**.
-2. **Inject a fault** → *Quiet failure* → **Arm fault**, then run a refund. The
-   tool reports success but SQLite never moved → `state_mismatch` fires → the
-   **dial crashes to L0 + quarantine**.
-3. **Open the evidence packet** (right panel) — before/after numbers, the
-   detection, the trace spans, and the git-backed license history.
-4. **Restore the license** → pick `L2` → **Restore license**. Quarantine lifts;
-   a git commit records the restore.
-
-To show `policy_breach` instead: arm *Policy violation* and run an
-**above-ceiling** order (`ORD-1004`, $120). The agent attempts an auto-execute
-the license does not authorise → demotion.
-
-## Generate the before/after evidence artifact
+### Entire — the audit trail
+- Every promote / pause / resume is one scoped commit of [`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with the reason, run and trace id.
+- Entire checkpoints are enabled for Claude Code and Codex sessions ([`.entire/settings.json`](.entire/settings.json)).
 
 ```bash
-python -m scripts.generate_evidence                      # quiet-failure
-python -m scripts.generate_evidence --fault policy_violation
+git log --oneline -- ledger/license_ledger.jsonl     # how each job type earned and lost its license
+entire checkpoint explain <sha>                       # why a change was made
+entire graph impact --repo . --symbol execute_refund  # what the side-effecting tool touches
 ```
 
-Writes `artifacts/evidence_report.md` (+ `.json`): two comparable runs with
-trace ids, the verified `refunded_amount` before/after, the detections that
-fired, and the dial transition. Ready to drop into a **#neatHack** post.
-
-## Inspect the git-backed license ledger (for Entire)
-
-Every autonomy change is one scoped commit of `ledger/license_ledger.jsonl`:
-
-```bash
-git log --oneline -- ledger/license_ledger.jsonl
-# license(refund): promote L2 -> L3 ...
-# license(refund): demote L3 -> L0 ...
-# license(refund): restore L0 -> L2 ...
-```
-
-Point **Entire**'s graph / explain at these commits to walk how the task class
-earned and lost its license. See [`ledger/README.md`](ledger/README.md).
-
-## See the cfo.ai model
-
-```bash
-python -m cfo.model        # structured numbers, grounded in real runs when present
-```
-
-Narrative plan: [`cfo/business_model.md`](cfo/business_model.md).
+### cfo.ai — the margin story
+- [`cfo/model.py`](cfo/model.py) turns stated assumptions into a supervision-cost curve, over-promotion risk and a P&L; narrative in [`cfo/business_model.md`](cfo/business_model.md).
+- The plan with pricing, costs, revenue and runway (4 scenarios) is built in cfo.ai through its MCP from these files and the benchmark.
 
 ---
 
-## 3-minute demo script
+## Evidence for judges
 
-> Covers **architecture, implementation, runtime, reasoning, result** for each
-> of the three tools. Timings are a guide.
-
-**[0:00–0:20] The idea.** "Solo License is an ops agent that starts at
-near-zero autonomy and *earns* the right to act unattended, per task class, from
-its measured track record — and loses it the instant something goes wrong."
-
-**[0:20–1:10] neatlogs — the trust signal.**
-- *Architecture:* every refund run opens a trace; steps (plan → execute →
-  verify) are spans; three custom rules emit detections.
-- *Implementation:* `sololicense/observability/` — tracer + `detect_state_mismatch`,
-  `detect_policy_breach`, `detect_missing_verification`.
-- *Runtime:* trigger two refunds under the ceiling; the dial climbs L2 → L3 on
-  clean traces. Then arm *Quiet failure* and run one.
-- *Reasoning:* the tool returned success, but the verifier read SQLite back and
-  the delta was $0 — `state_mismatch` fires.
-- *Result:* the dial crashes to L0. Show the before/after numbers in the
-  evidence packet (and the neatlogs trace link if a key is set).
-
-**[1:10–2:00] Entire — the audit trail.**
-- *Architecture:* every license change is a scoped git commit of the ledger file.
-- *Implementation:* `sololicense/services/git_ledger.py` + `license_service.py`.
-- *Runtime:* `git log --oneline -- ledger/license_ledger.jsonl` — promote,
-  demote, restore, each with the reason, run id, and trace id.
-- *Reasoning:* this is the checkpoint history Entire graphs/explains — the agent
-  can reconstruct exactly when and why its own permissions changed.
-- *Result:* a human opens the one evidence packet and restores to L2 — another
-  commit. Recovery with judgement, not blind retry.
-
-**[2:00–2:45] cfo.ai — the margin story.**
-- *Architecture / implementation:* `cfo/model.py` turns stated assumptions into
-  a supervision-cost curve, an over-promotion risk model, and a P&L.
-- *Runtime:* `python -m cfo.model`.
-- *Reasoning:* climbing L0 → L2 saves **$41,250/month** in supervision; but
-  running a rung you haven't earned adds **~$18,000/month** in incidents.
-- *Result:* earned-L2 runs at **+20.3% margin**; blind full-auto runs at
-  **−73.4%** with a 15-month runway. The license level *is* the margin driver.
-
-**[2:45–3:00] Close.** "Graduated autonomy isn't new. What's here is autonomy
-driven by detections, restored from one evidence packet, and priced as a margin
-lever — an agent you'd actually trust to run without you watching."
+| Requirement | Where to find it |
+|---|---|
+| Real end-to-end agent task | Refund + store-credit worker: intake → license → execute → read-back → detections → dial ([`worker.py`](sololicense/agent/worker.py)); try it in **Try the agent** |
+| Two runs with compared numbers | [`artifacts/benchmark.md`](artifacts/benchmark.md) (10/50 → 0/50) · `python -m scripts.generate_evidence` for a single clean-vs-fault pair |
+| neatlogs traces / detections | Benchmark runs were exported to neatlogs; detections are error spans per run |
+| A failure and what the agent did next | Guided tour step 4–8: practice problem → paused → evidence → person resumes |
+| Entire checkpoints / graph | 26 ledger commits: `git log -- ledger/license_ledger.jsonl`; `entire checkpoint list` |
+| cfo.ai plan (pricing, costs, revenue, runway) | [`cfo/`](cfo) + plan built in cfo.ai via MCP |
+| Commits during the hackathon | `git log --since=2026-10-10` |
+| Tests | `python -m pytest` — 70 tests (state machine, detections, worker, API, ledger isolation, intake safety) |
 
 ---
 
-## Scoring evidence checklist
+## Run it locally
 
-- [x] **Real end-to-end task** — refund worker: plan → license check → execute →
-  verify in SQLite → recover. (`sololicense/agent/worker.py`)
-- [x] **Two traces with compared numbers** — `scripts/generate_evidence.py`.
-- [x] **neatlogs detections surfaced as incidents** — `observability/detections.py`,
-  shown in the UI and evidence packet.
-- [x] **Clear failure-recovery run** — inject fault → demote → evidence → restore.
-- [x] **Entire-compatible checkpoints** — git commits of every license change
-  (`ledger/license_ledger.jsonl`).
-- [x] **cfo.ai business model** — pricing, costs, revenue, runway
-  (`cfo/business_model.md`, `cfo/model.py`).
-- [x] **Side effects verified, never trusted** — `services/verification.py`.
-- [x] **Seeded data** — `sololicense/db/seed.py` (runs immediately).
-- [x] **Tests** — `pytest` (domain, detections, end-to-end worker).
+**Requirements:** Python 3.11+, Node 20+, git.
 
-## Honest differentiator
+```bash
+pip install -r requirements.txt
+cp .env.example .env             # SOLO_DEMO_MODE=1 is already on; keys are optional
+python -m sololicense.db.seed    # demo orders; refunds start at L2, store credit at L1
+uvicorn app.api:app --port 8000  # API
+npm --prefix frontend install
+npm --prefix frontend run dev    # http://127.0.0.1:5174
+```
 
-Graduated autonomy / earned-permission ladders already exist in public
-literature (AWS "graduated autonomy," research papers, practitioner posts). This
-project does not claim that framing as novel. What is specific and
-judge-visible here is:
+Open the app → **Try the demo** → type your name. On **Home**, click **Watch a 1-minute demo**:
+a guided tour opens each screen, highlights what matters and runs the whole loop for real.
 
-1. **Demotion driven by detections** — reliability signals, not a fixed policy,
-   move the dial down.
-2. **A single human-reviewable evidence packet** (trace + checkpoint context) to
-   restore a license.
-3. **The license level treated as a cfo.ai margin driver** — supervision cost vs
-   autonomy, with the cost of over-promotion made explicit.
+**Optional keys** (Settings → AI model / Connections, or `.env`):
+`GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / any OpenAI-compatible endpoint,
+`NEATLOGS_API_KEY` for remote traces, and a Slack/Discord webhook for pause alerts.
+Without a model the agent uses built-in rules — the safety is identical, because authority
+never comes from the model. Keys saved in Settings are encrypted at rest.
+
+For a deployment, turn demo mode off and issue role-based access codes with
+`SOLO_API_TOKENS` (`operator` < `approver` < `admin`). Set `SOLO_LEDGER_REPO=.` to commit
+license changes into this repository so Entire can explain them.
+
+| Command | What it does |
+|---|---|
+| `make test` | Run the test suite |
+| `make seed` | Reset the demo database |
+| `make benchmark` | Re-run the 50-run before/after benchmark |
+| `make charts` | Redraw the README charts from the latest data |
+| `make cfo` | Print the financial model |
+
+---
 
 ## Architecture
 
-Dependencies point inward; `domain` has no third-party imports and is purely
-unit-tested.
-
 ```
-app/ · scripts/            UI and CLI (Streamlit, evidence generator)
-   │
-sololicense/agent/         worker loop + planner + refund tool
-sololicense/services/      license service, verification, git ledger, evidence
-   │
-sololicense/observability/ neatlogs tracer + custom detections
-   │
-sololicense/domain/ · db/  pure license state machine · SQLite + repositories
-cfo/                       financial model + plan
+frontend/        React app — sign-in, onboarding, Home, Try the agent, Activity, Reports, History, Settings
+app/api.py       FastAPI adapter: sessions, roles, settings (encrypted secrets), dashboard
+sololicense/
+  agent/         intake (LLM or rules), planner, worker loop, tools
+  domain/        pure license state machine + task-class registry
+  services/      verification, license service, git ledger, evidence, economics, alerts
+  observability/ neatlogs tracer + detection rules
+  db/            SQLite schema, migrations, repositories
+cfo/             financial model and plan
+scripts/         benchmark, evidence pair, README charts
 ```
 
-| Concern | Module |
-|---|---|
-| Autonomy state machine (pure) | `sololicense/domain/license.py` |
-| Permission authority | `sololicense/domain/license.py::decide` |
-| Side-effect truth | `sololicense/services/verification.py` |
-| Detections | `sololicense/observability/detections.py` |
-| Dial transitions + git | `sololicense/services/license_service.py` |
-| Fault injection | `sololicense/faults/injector.py` |
-| Composition root | `sololicense/bootstrap.py` |
+Dependencies point inward: `domain` has no I/O and is unit-tested on its own.
 
-## Tests
+## Honest positioning
 
-```bash
-pytest        # 26 tests: state machine, detections, end-to-end worker
-```
+Graduated autonomy is not new — AWS described "graduated autonomy" (Aug 2026), and there is
+research and practitioner work on earned permission ladders. Solo License does not claim the
+ladder. What it adds: **demotion driven by detections on verified side effects**, **one
+evidence page a person uses to resume**, and **the license level treated as a priced margin
+driver**.
