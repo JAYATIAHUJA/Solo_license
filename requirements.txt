@@ -3,6 +3,8 @@
 
 # One-screen live UI
 streamlit>=1.33,<2.0
+fastapi>=0.115,<1.0
+uvicorn>=0.30,<1.0
 
 # Observability: neatlogs Python SDK (agent tracing + detections).
 # The code degrades gracefully to a local span recorder if this import
