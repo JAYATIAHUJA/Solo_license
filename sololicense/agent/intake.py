@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -18,6 +18,17 @@ from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES, cl
 from sololicense.observability.neatlogs_client import wrap_llm_client
 
 _ORDER_RE = re.compile(r"\b([A-Z]{2,5}-\d{2,8})\b", re.IGNORECASE)
+# Messages that try to steer the agent rather than ask for a refund. With a
+# model configured the LLM flags these itself; the rule-based fallback must
+# not be the weaker path, so it refuses them too.
+_SUSPICIOUS_RE = re.compile(
+    r"ignore (?:all |your |any |the |previous |prior )*(?:rules|instructions|polic(?:y|ies)|limits?)"
+    r"|disregard (?:all |your |the |previous )*(?:rules|instructions)"
+    r"|(?:this is|i am|i'm) (?:the )?(?:store |shop )?(?:owner|admin|administrator|manager|developer)"
+    r"|system prompt|override (?:the )?(?:limit|rules|policy)|new (?:card|account|bank)"
+    r"|refund (?:all|every) (?:orders?|customers?)",
+    re.IGNORECASE,
+)
 _MONEY_RE = re.compile(r"(?:\$|usd\s*|rs\.?\s*|₹)\s*(\d+(?:\.\d{1,2})?)", re.IGNORECASE)
 
 
@@ -117,10 +128,12 @@ def _deterministic(message: str, conn: sqlite3.Connection) -> Intake:
     amount = float(money.group(1)) if money else _remaining(conn, order_id)
     reason = re.sub(r"\s+", " ", message).strip()[:140]
     confidence = 0.85 if order_id and amount is not None else 0.35
+    suspicious = bool(_SUSPICIOUS_RE.search(message))
     return Intake(
         order_id, amount, reason, "deterministic",
-        confidence=confidence,
-        needs_human=confidence < 0.5,
+        confidence=0.1 if suspicious else confidence,
+        needs_human=suspicious or confidence < 0.5,
+        note="The message tries to change the agent's rules or payment details." if suspicious else "",
         task_class=classify_text(message),
     )
 
@@ -177,15 +190,28 @@ def build_prompt(message: str, known_orders: list[str]) -> str:
     )
 
 
-def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | None:
+def _failure_note(error: Exception) -> str:
+    """Why the model could not be used, in words an operator can act on."""
+    text = f"{type(error).__name__} {error}".lower()
+    if "429" in text or "quota" in text or "rate" in text:
+        return "The AI model's usage limit was reached, so built-in rules were used."
+    if "401" in text or "403" in text or "api key" in text or "permission" in text:
+        return "The AI model rejected the API key, so built-in rules were used."
+    if "timeout" in text or "timed out" in text:
+        return "The AI model did not answer in time, so built-in rules were used."
+    return "The AI model could not be reached, so built-in rules were used."
+
+
+def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | str:
+    """The model's reading of the message, or a note explaining why not."""
     known = [r["order_id"] for r in orders_repo.list_orders(conn)[:50]]
     try:
         text = complete(config, build_prompt(message, known), max_tokens=300)
-    except Exception:
-        return None
+    except Exception as error:
+        return _failure_note(error)
     parsed = parse_llm_response(text, model=config.llm_model)
     if parsed is None:
-        return None
+        return "The AI model's answer was not in the expected format, so built-in rules were used."
     amount = parsed.amount if parsed.amount is not None else _remaining(conn, parsed.order_id)
     return Intake(
         parsed.order_id, amount, parsed.reason, parsed.source,
@@ -198,6 +224,8 @@ def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | Non
 def parse_message(message: str, config: Config, conn: sqlite3.Connection) -> Intake:
     if config.llm_enabled:
         parsed = _llm(message, config, conn)
-        if parsed is not None:
+        if isinstance(parsed, Intake):
             return parsed
+        fallback = _deterministic(message, conn)
+        return replace(fallback, note=" ".join(n for n in (parsed, fallback.note) if n))
     return _deterministic(message, conn)

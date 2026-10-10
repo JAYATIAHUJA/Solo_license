@@ -120,6 +120,7 @@ function ResultCard({ data, intake, onNewRun }) {
         {intake.confidence != null && <> · confidence {pct(intake.confidence)}</>}
         <span className="pl-muted"> ({sourceText(data, intake.source)})</span>
       </p>
+      {intake.note && <p className="pl-help pl-small">{intake.note} Check the model in Settings → AI model.</p>}
       <Outcome data={data} intake={intake} packet={packet} onNewRun={onNewRun} />
       {packet && (
         <details className="pl-more">

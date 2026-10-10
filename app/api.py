@@ -596,6 +596,7 @@ def intake(
             "task_class": parsed.task_class,
             "confidence": parsed.confidence,
             "needs_human": parsed.needs_human,
+            "note": parsed.note,
             "run_id": run_id, "error": error,
         }
         return body
