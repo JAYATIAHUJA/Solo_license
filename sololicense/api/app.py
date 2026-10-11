@@ -34,6 +34,7 @@ from sololicense.db.seed import SEED_ORDERS, install_sample_store, seed
 from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
+from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 from sololicense.services import economics
 from sololicense.services.alerts import AlertNotifier, valid_webhook_url
@@ -1048,28 +1049,24 @@ def test_llm(
 def test_neatlogs(
     payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
 ) -> dict:
-    """Send neatlogs' own doctor probe trace with the (unsaved) key."""
+    """Doctor-probe neatlogs from an isolated child process.
+
+    The live tracer in this process stays untouched (re-initialising it is
+    what the SDK refuses); the probe runs out of process with the unsaved
+    key passed through the child's environment, and the answer is a safe,
+    structured result the frontend can explain.
+    """
     with _lock:
         context = get_context()
         cfg = _config_with_form(context, _clean_values(payload.values))
     if not cfg.neatlogs_api_key:
-        return {"ok": False, "message": "Add a neatlogs API key first."}
-    try:
-        import neatlogs
-
-        report = neatlogs.doctor_probe_v2(
-            api_key=cfg.neatlogs_api_key, endpoint=cfg.neatlogs_endpoint, timeout_seconds=12,
-        )
-    except Exception as error:
-        return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
-    if report.get("status") == "pass":
-        return {"ok": True, "message": "Connected. A probe trace was ingested and read back."}
-    failure = report.get("first_failure") or "unknown"
-    stages = [check.get("details", {}) for check in report.get("checks", [])]
-    accepted = any(stage.get("last_successful_stage") for stage in stages)
-    if accepted:
-        return {"ok": True, "message": "Connected. neatlogs accepted the probe trace (still processing)."}
-    return {"ok": False, "message": f"neatlogs probe failed: {failure}"}
+        return {
+            "ok": False,
+            "code": "CREDENTIAL_MISSING",
+            "message": "Add a neatlogs API key first.",
+        }
+    report = run_doctor_probe(cfg.neatlogs_api_key, cfg.neatlogs_endpoint)
+    return response_for(report, secret=cfg.neatlogs_api_key)
 
 
 @app.post("/api/settings/test-alert")
