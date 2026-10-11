@@ -3,7 +3,7 @@
   "checkpoint_id": "01M4PCBQHJ81QWQBNGJ3HD6H4N",
   "strategy": "manual-commit",
   "branch": "chore/scrap-payments-backend",
-  "checkpoints_count": 3,
+  "checkpoints_count": 23,
   "files_touched": [
     "sololicense/observability/neatlogs_client.py",
     "tests/unit/test_intake.py"
@@ -22,6 +22,10 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "prompt": ""
     }
   ],
   "token_usage": {
