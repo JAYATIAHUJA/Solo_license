@@ -171,3 +171,34 @@ def test_hook_route_rejects_malformed_agent_and_event_names():
     assert client.post("/api/hooks/codex/..%2F..%2Fetc", json={}).status_code in (404, 422)
     assert client.post("/api/hooks/Codex;rm/PreToolUse", json={}).status_code == 422
     assert client.post("/api/hooks/codex/Pre Tool", json={}).status_code == 422
+
+
+
+@pytest.mark.parametrize("name", ["repo$(whoami)", "repo`id`", "repo;rm", "repo%PATH%", "repo'x"])
+def test_paths_a_shell_would_expand_are_refused(tmp_path, name):
+    """Trail #26 finding: a repo path must never become shell code in a hook."""
+    repo = tmp_path / name
+    repo.mkdir()
+    for agent in ("cline", "codex", "cursor"):
+        with pytest.raises(SystemExit, match="shell characters"):
+            install(repo, "http://127.0.0.1:8000", agent)
+
+
+def test_cline_scripts_single_quote_their_paths(tmp_path):
+    repo = tmp_path / "my repo"
+    repo.mkdir()
+    install(repo, "http://127.0.0.1:8000", "cline")
+    script = (repo / ".clinerules" / "hooks" / "PreToolUse").read_text()
+    assert "exec '" in script and "my repo/.solo-license/hook.py'" in script.replace("\\", "/")
+
+
+@pytest.mark.parametrize("url", ["http://x/${process.exit(1)}", "javascript:alert(1)", "http://a`b`", 'http://a"+x+"'])
+def test_gate_urls_that_are_not_plain_http_are_refused(tmp_path, url):
+    with pytest.raises(SystemExit, match="plain http"):
+        install(tmp_path, url, "opencode")
+
+
+def test_opencode_plugin_embeds_the_url_as_a_json_string(tmp_path):
+    install(tmp_path, "http://127.0.0.1:8000", "opencode")
+    plugin = (tmp_path / ".opencode" / "plugins" / "solo-license.ts").read_text()
+    assert 'process.env.SOLO_LICENSE_URL ?? "http://127.0.0.1:8000"' in plugin
