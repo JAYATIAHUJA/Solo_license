@@ -9,6 +9,7 @@ const LINKS = [
   ['#agent', 'The loop'],
   ['#crash', 'The crash'],
   ['#evidence', 'Evidence'],
+  ['#install', 'Install'],
   ['#faq', 'FAQ'],
 ];
 

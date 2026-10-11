@@ -24,7 +24,7 @@ function Count({ to }) {
 export function Facts() {
   return (
     <section className="lp-section">
-      <SectionHead index="009" label="By the numbers" />
+      <SectionHead index="011" label="By the numbers" />
       <div className="lp-facts">
         {FACTS.map((f) => (
           <div key={f.label} className="lp-fact">

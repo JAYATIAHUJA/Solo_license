@@ -9,7 +9,7 @@ import { AskBar } from './AskBar.jsx';
 import { Magnetic } from '../../../components/fx/Magnetic.jsx';
 
 const META = [
-  ['For', 'Developers who approve the same npm test forty times a day'],
+  ['For', 'Claude Code, Codex, Cursor, Gemini, Antigravity, Copilot, Grok, Windsurf and more'],
   ['Proves', 'Every turn: the diff against your request, then the tests'],
   ['Earns', 'Auto-approval per action class, only when the evidence beats the cost of a mistake'],
 ];

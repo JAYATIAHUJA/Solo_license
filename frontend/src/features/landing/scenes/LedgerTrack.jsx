@@ -29,7 +29,7 @@ function Track({ p }) {
   return (
     <div className="sc-wrap sc-ledger-wrap">
       <div className="sc-ledger-head">
-        <div className="sc-head"><span className="mono muted">(008)</span><ScrambleText className="mono" text="The ledger" /></div>
+        <div className="sc-head"><span className="mono muted">(009)</span><ScrambleText className="mono" text="The ledger" /></div>
         <h2 className="sc-title serif">Every change is a <em className="italic">commit.</em></h2>
         <p className="sc-body">Promotions, demotions and restores are appended to <code className="mono">ledger/license_ledger.jsonl</code> and committed - a history you can diff, blame and audit.</p>
       </div>

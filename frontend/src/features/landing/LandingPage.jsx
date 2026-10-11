@@ -7,6 +7,7 @@ import { Nav } from './sections/Nav.jsx';
 import { Hero } from './sections/Hero.jsx';
 import { Ticker } from './sections/Ticker.jsx';
 import { Problem } from './scenes/Problem.jsx';
+import { Terminal } from './scenes/Terminal.jsx';
 import { Journey } from './scenes/Journey.jsx';
 import { AgentGraph } from './scenes/AgentGraph.jsx';
 import { Crash } from './scenes/Crash.jsx';
@@ -16,6 +17,7 @@ import { LedgerTrack } from './scenes/LedgerTrack.jsx';
 import { Altimeter } from './scenes/Altimeter.jsx';
 import { Facts } from './sections/Facts.jsx';
 import { Faq } from './sections/Faq.jsx';
+import { Install } from './sections/Install.jsx';
 import { Closing } from './sections/Closing.jsx';
 import { Footer } from './sections/Footer.jsx';
 import { useSmoothScroll } from './useSmoothScroll.js';
@@ -48,6 +50,7 @@ export function LandingPage() {
       <main>
         <Hero />
         <Ticker />
+        <Terminal />
         <Problem />
         <Journey />
         <AgentGraph />
@@ -55,6 +58,7 @@ export function LandingPage() {
         <Detections />
         <EvidenceMock />
         <LedgerTrack />
+        <Install />
         <Facts />
         <Faq />
         <Closing />
