@@ -26,7 +26,12 @@ def _git_log(repo) -> str:
 
 
 def test_clean_runs_execute_verify_and_promote(harness):
-    # The active policy requires three clean, verified results before L3.
+    # Promotion needs the policy's three clean results and an economic bound
+    # below break-even; a long verified record makes the bound hold here.
+    license_repo.upsert_state(
+        harness.conn, replace(_dial(harness), level=LicenseLevel.L2, successes=100_000)
+    )
+    harness.conn.commit()
     for order_id, amount in (("ORD-1001", 25.0), ("ORD-1003", 15.0), ("ORD-1005", 45.0)):
         result = harness.worker.run_refund(RefundRequest(order_id, "x", amount, "defective"))
         assert result.status is RunStatus.CLEAN

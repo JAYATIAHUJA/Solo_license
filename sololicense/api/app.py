@@ -378,18 +378,25 @@ def serialize_policy(policy: PolicyVersion) -> dict:
 
 
 def serialize_evaluation(context: AppContext, policy: PolicyVersion) -> dict[str, dict]:
-    return {
-        task_class: {
+    out: dict[str, dict] = {}
+    for task_class in TASK_CLASSES:
+        progress = context.policy_service.evaluation_for(task_class, policy=policy)
+        state = context.license_service.get_or_create(task_class)
+        economic = context.license_service.progress(state)
+        economics_met = economic["next_level"] is not None and economic["runs_needed"] == 0
+        out[task_class] = {
             "sample_size": progress.sample_size,
             "clean_runs": progress.clean_runs,
             "pass_rate": progress.pass_rate,
             "required_samples": progress.required_samples,
             "required_pass_rate": progress.required_pass_rate,
             "eligible": progress.eligible,
+            "economic_runs_needed": economic["runs_needed"],
+            "economic_upper_bound": economic["upper_bound"],
+            "economic_target_rate": economic["target_rate"],
+            "ready_to_promote": progress.eligible and economics_met and not state.quarantined,
         }
-        for task_class in TASK_CLASSES
-        for progress in [context.policy_service.evaluation_for(task_class, policy=policy)]
-    }
+    return out
 
 
 def serialize_impact(impact: PolicyImpact) -> dict:

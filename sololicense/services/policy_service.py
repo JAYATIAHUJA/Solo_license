@@ -64,7 +64,9 @@ class PolicyService:
             """,
             (task_class, active.version, rule.evaluation_window),
         ).fetchall()
-        return evaluate_runs([row["status"] == "clean" for row in rows], rule)
+        return evaluate_runs(
+            [row["status"] == "clean" for row in rows], rule, policy_version=active.version
+        )
 
     def preview_activation(self, rules: tuple[PolicyRule, ...]) -> list[PolicyImpact]:
         current = self.active()
@@ -115,7 +117,7 @@ class PolicyService:
             """,
             (rule.task_class, version, rule.evaluation_window),
         ).fetchall()
-        return evaluate_runs([row["status"] == "clean" for row in rows], rule)
+        return evaluate_runs([row["status"] == "clean" for row in rows], rule, policy_version=version)
 
 
 def _validate_complete_rules(rules: tuple[PolicyRule, ...]) -> None:

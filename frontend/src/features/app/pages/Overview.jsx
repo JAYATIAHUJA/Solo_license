@@ -106,7 +106,7 @@ export function Overview() {
           <div className="app-card-top">
             <div>
               <h2 id="h-policy">Evidence behind your agent’s freedom</h2>
-              <p className="pl-sub">Policy v{policy.version} is active. Only clean, verified runs under this version count toward the next level.</p>
+              <p className="pl-sub">Policy v{policy.version} is active. The next level needs both: this version’s minimum clean runs, and enough verified jobs on record to prove mistakes are rare enough to be worth it.</p>
             </div>
             <Link className="app-link" to="/app/settings">Review policy</Link>
           </div>
@@ -115,13 +115,23 @@ export function Overview() {
               const evidence = evaluations[card.key];
               if (!evidence) return null;
               const passRate = Math.round((evidence.pass_rate || 0) * 100);
+              const needed = evidence.economic_runs_needed;
               return (
                 <article key={card.key} className="pl-card">
                   <div className="app-card-top">
                     <h3>{card.name}</h3>
-                    <span className={`pl-status ${evidence.eligible ? 'ok' : 'wait'}`}>{evidence.eligible ? 'Evidence ready' : 'Building evidence'}</span>
+                    <span className={`pl-status ${evidence.ready_to_promote ? 'ok' : 'wait'}`}>{evidence.ready_to_promote ? 'Evidence ready' : 'Building evidence'}</span>
                   </div>
-                  <p className="pl-small">{evidence.sample_size}/{evidence.required_samples} verified runs · {passRate}% pass rate (needs {Math.round((evidence.required_pass_rate || 0) * 100)}%).</p>
+                  <p className="pl-small">Policy: {evidence.sample_size}/{evidence.required_samples} verified runs · {passRate}% pass rate (needs {Math.round((evidence.required_pass_rate || 0) * 100)}%).</p>
+                  {evidence.economic_target_rate != null && (
+                    <p className="pl-small">
+                      Economics: {needed === 0
+                        ? 'proven, mistakes are rare enough to be worth it.'
+                        : needed == null
+                          ? 'not reachable with the current costs.'
+                          : `${needed.toLocaleString()} more double-checked jobs needed.`}
+                    </p>
+                  )}
                 </article>
               );
             })}

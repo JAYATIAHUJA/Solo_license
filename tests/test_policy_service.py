@@ -4,9 +4,10 @@ import sqlite3
 from dataclasses import replace
 
 import pytest
-from sololicense.domain.license import LicenseLevel
+from sololicense.db.repositories import license as license_repo
+from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import RefundRequest, RunStatus
-from sololicense.domain.policy import PolicyRule
+from sololicense.domain.policy import EvaluationProgress, PolicyRule
 from sololicense.security import Actor, Role
 from sololicense.services.policy_service import PolicyService
 
@@ -82,13 +83,61 @@ def test_activation_preview_holds_class_for_review_when_evidence_is_missing(harn
     assert "3" in refund.reason
 
 
+def _met(samples: int = 3) -> EvaluationProgress:
+    return EvaluationProgress(
+        sample_size=samples, clean_runs=samples, pass_rate=1.0,
+        required_samples=3, required_pass_rate=1.0, eligible=samples >= 3, policy_version=1,
+    )
+
+
+def test_policy_minimums_alone_do_not_promote_without_the_economic_bound(harness):
+    """3/3 clean meets the policy floor, but L2 -> L3 saves little per job, so
+    the failure-rate bound is still above break-even and the dial must hold."""
+    service = PolicyService(harness.conn, harness.config)
+    service.ensure_default_policy()
+
+    for _ in range(3):
+        harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 5.0, "late"))
+
+    assert service.evaluation_for("refund").eligible is True
+    state = harness.license_service.get_or_create("refund")
+    assert state.level is LicenseLevel.L2
+    assert harness.license_service.progress(state)["runs_needed"] > 0
+
+
+def test_promotion_requires_both_policy_floor_and_economic_bound(harness):
+    """Economics proven but the policy floor unmet holds; both met promotes."""
+    license_repo.upsert_state(
+        harness.conn, LicenseState("refund", level=LicenseLevel.L2, successes=100_000)
+    )
+    harness.conn.commit()
+
+    held = harness.license_service.apply_clean_run("refund", run_id=None, trace_id=None, evaluation=_met(2))
+    assert held.kind == "noop"
+    assert held.new.level is LicenseLevel.L2
+
+    promoted = harness.license_service.apply_clean_run("refund", run_id=None, trace_id=None, evaluation=_met(3))
+    assert promoted.kind == "promote"
+    assert promoted.new.level is LicenseLevel.L3
+    reason = harness.conn.execute(
+        "SELECT reason FROM license_events WHERE kind = 'promote' ORDER BY id DESC LIMIT 1"
+    ).fetchone()["reason"]
+    assert "policy v1 minimums met" in reason
+    assert "confidence" in reason
+
+
 def test_clean_evidence_and_promotion_are_scoped_to_the_run_policy(harness):
     """Policy v2 begins a new evidence window even after v1 promoted a class."""
     service = PolicyService(harness.conn, harness.config)
     v1 = service.ensure_default_policy()
+    # A long verified record, so the economic bound is not what holds the dial.
+    license_repo.upsert_state(
+        harness.conn, LicenseState("refund", level=LicenseLevel.L2, successes=100_000)
+    )
+    harness.conn.commit()
 
     for _ in range(3):
-        harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 10.0, "late"))
+        harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 5.0, "late"))
 
     assert harness.license_service.get_or_create("refund").level is LicenseLevel.L3
     recorded_versions = harness.conn.execute(
