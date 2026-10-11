@@ -670,8 +670,13 @@ def intake(
 def handle_ticket(ticket_id: int, actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
     with _lock:
         context = get_context()
-        if tickets_repo.get(context.conn, ticket_id) is None:
+        ticket = tickets_repo.get(context.conn, ticket_id)
+        if ticket is None:
             raise HTTPException(status_code=404, detail="Message not found.")
+        if ticket["status"] != "new":
+            # Re-running would flag a duplicate action and demote the license
+            # for a double-submit that was never a fresh customer request.
+            raise HTTPException(status_code=409, detail="This message was already handled.")
         result = _handle_ticket(context, ticket_id, actor)
         body = dashboard_payload(context, result["run_id"])
         body["intake"] = result
@@ -1103,17 +1108,29 @@ def complete_onboarding(
             raise HTTPException(status_code=422, detail="Unknown license level.") from error
         for key in payload.starting_levels:
             _task_class(key)
+        # Validate the payloads that become writes BEFORE the onboarded flag
+        # is persisted: a rejected CSV or order id must leave the workspace
+        # exactly as it was, not flagged as set up.
+        csv_records: list = []
+        if payload.orders_csv:
+            csv_records, csv_problems = parse_orders_csv(payload.orders_csv)
+            if not csv_records:
+                raise HTTPException(
+                    status_code=422,
+                    detail=" ".join(csv_problems) or "No orders found in the file. Check the column headers.",
+                )
+        for order in payload.orders:
+            order_id = order.order_id.strip().upper()
+            if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{2,31}", order_id):
+                raise HTTPException(status_code=422, detail=f"Order id {order_id!r} may use letters, digits and dashes.")
 
         values["business_name"] = payload.business_name.strip()
         values["onboarded"] = "1"
         _save_settings(context, values)
         reset_context()
         context = get_context()
-        if payload.orders_csv:
-            records, problems = parse_orders_csv(payload.orders_csv)
-            if not records:
-                raise HTTPException(status_code=422, detail=" ".join(problems) or "No orders found in the file.")
-            orders_repo.upsert_orders(context.conn, records)
+        if csv_records:
+            orders_repo.upsert_orders(context.conn, csv_records)
         if payload.load_sample_orders and not orders_repo.list_orders(context.conn):
             install_sample_store(context.conn)
         for order in payload.orders:
