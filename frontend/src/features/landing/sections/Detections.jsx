@@ -6,22 +6,22 @@ import { SectionHead } from '../Reveal.jsx';
 
 const RULES = [
   {
-    code: 'state_mismatch',
-    title: 'The world didn’t change.',
-    fires: 'The amount the database actually moved differs from the refund the agent meant to make.',
-    example: 'Tool returns “Refund processed.” orders.refunded_amount moved $0.00. Caught.',
+    code: 'over_editing',
+    title: 'It changed more than you asked.',
+    fires: 'At the end of a turn, the diff is out of proportion to the request - graded 1 to 5 by Jev, or by a size-and-spread rule.',
+    example: '“Fix the off-by-one in cart.js” → 162 lines in 2 files. Sent back with the files to revert.',
   },
   {
-    code: 'missing_verification',
-    title: 'It said done without looking.',
-    fires: 'An execution completed but no read-back of the database ran afterwards.',
-    example: 'A run reports success with no verify.readback span. Caught.',
+    code: 'tests_failed',
+    title: 'It left the repo broken.',
+    fires: 'The repo’s own tests fail after the turn’s changes.',
+    example: 'npm test: 1 failing after the edit. Sent back to fix it; the class that changed code drops to L0.',
   },
   {
-    code: 'policy_breach',
-    title: 'It reached past its license.',
-    fires: 'The agent executed while its current level only allowed a suggestion or a draft.',
-    example: 'L0 class attempts AUTO_EXECUTE on a $120 refund. Caught.',
+    code: 'forbidden_action',
+    title: 'It reached for something it must never do.',
+    fires: 'Deleting outside the project, piping a download into a shell, force-pushing main, sudo, dropping a database.',
+    example: 'git push --force origin main → denied at any level. Caught.',
   },
 ];
 
@@ -33,7 +33,7 @@ export function Detections() {
       <SectionHead index="006" label="Detections" />
       <div className="lp-split">
         <h2 className="lp-h2 serif">Three ways to <em className="italic">lose</em> the keys.</h2>
-        <p className="lp-copy">Each rule is a pure function over observed facts. Any one of them firing demotes the task class to L0 and quarantines it until a person signs off.</p>
+        <p className="lp-copy">Each check runs once per turn, not once per edit. Any one of them firing demotes the action class that did it to L0, and the agent is told exactly what to fix.</p>
       </div>
       <div className="lp-index">
         {RULES.map((rule, i) => (

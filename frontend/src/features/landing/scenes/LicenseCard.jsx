@@ -1,15 +1,19 @@
 import { useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { LEVELS } from '../../../lib/format.js';
+export const CODING_LEVELS = [
+  { id: 0, code: 'L0', name: 'Asks you every time' },
+  { id: 1, code: 'L1', name: 'Runs what you approved' },
+  { id: 2, code: 'L2', name: 'Runs on its own' },
+];
 import { SIG_BOX, loadSignature } from '../../../lib/signature.js';
 import { Stamp } from '../../../components/fx/Stamp.jsx';
 import { Logo } from '../../../components/brand/Logo.jsx';
 
 /** The physical "license" the agent carries: level, track record, holder's
  *  signature, stamps. Purely presentational - the scenes drive it. */
-export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = false, stamp = null, style }) {
+export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = false, stamp = null, style, taskClass = 'test-run' }) {
   const signature = useMemo(loadSignature, []);
-  const info = LEVELS[level];
+  const info = CODING_LEVELS[Math.min(level, CODING_LEVELS.length - 1)];
   return (
     <motion.div className={`lc ${quarantined ? 'is-q' : ''}`} style={style}>
       <div className="lc-top">
@@ -18,12 +22,12 @@ export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = 
       </div>
       <div className="lc-mid">
         <div>
-          <span className="mono lc-label">Task class</span>
-          <b className="lc-class">refund</b>
+          <span className="mono lc-label">Action class</span>
+          <b className="lc-class">{taskClass}</b>
           <span className="mono lc-label">Authorised to</span>
           <AnimatePresence mode="wait">
             <motion.b key={`${level}-${quarantined}`} className="lc-auth" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              {quarantined ? 'Suggest only - quarantined' : info.name}
+              {quarantined ? 'Asks you - paused' : info.name}
             </motion.b>
           </AnimatePresence>
         </div>
@@ -34,7 +38,7 @@ export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = 
             </motion.span>
           </AnimatePresence>
           <div className="lc-rungs">
-            {[0, 1, 2, 3].map((r) => <i key={r} className={r <= level && !quarantined ? 'on' : ''} />)}
+            {CODING_LEVELS.map((l) => <i key={l.id} className={l.id <= level && !quarantined ? 'on' : ''} />)}
           </div>
         </div>
       </div>
@@ -44,7 +48,7 @@ export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = 
           <span className="mono lc-label">Issued by a human</span>
         </div>
         <div className="lc-runs">
-          <span className="mono lc-label">Clean runs</span>
+          <span className="mono lc-label">Verified runs</span>
           <div>
             {Array.from({ length: threshold }, (_, i) => (
               <motion.i key={i} animate={{ backgroundColor: i < runs ? 'var(--ink)' : 'rgba(0,0,0,0)' }} />

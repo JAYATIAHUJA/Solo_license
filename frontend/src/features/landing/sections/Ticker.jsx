@@ -3,12 +3,12 @@ import { motion, useAnimationFrame, useMotionValue, useScroll, useSpring, useTra
 import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 
 const WORDS = [
-  'Verify, never trust the tool',
-  'Promote on proof',
-  'Demote on detection',
-  'One packet to restore',
+  'Hooks, not hope',
+  'Earned per action class',
+  'Over-editing gets sent back',
+  'One failure → L0',
   'Every change is a commit',
-  'Suggest → Draft → Auto → Audited',
+  'Asks you → Runs what you approved → Runs alone',
 ];
 
 const wrap = (min, max, v) => ((((v - min) % (max - min)) + (max - min)) % (max - min)) + min;

@@ -3,10 +3,10 @@ import { animate, useInView } from 'motion/react';
 import { SectionHead } from '../Reveal.jsx';
 
 const FACTS = [
-  { n: 17, label: '% of GPT-4o database writes on τ-bench that were wrong' },
-  { n: 0, label: 'Wrong writes Solo License let through on τ-bench' },
-  { n: 4, label: 'Customers left waiting before recovery - now 0' },
-  { n: 0, label: 'Tool responses taken on trust' },
+  { n: 0, label: 'Prompts for npm test once it is earned in a repo' },
+  { n: 1, label: 'Failure it takes to lose a license' },
+  { n: 1, label: 'Check per turn - never one per edit' },
+  { n: 0, label: 'Actions allowed silently if the gate is down' },
 ];
 
 function Count({ to }) {
