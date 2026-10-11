@@ -169,6 +169,9 @@ export function Coding() {
     () => api.codingRestore({ repo: lic.repo, action_class: lic.action_class, level, reason: 'Reviewed the failure and resumed.' }),
     `${lic.label} resumed at L${level}.`,
   );
+  const anyFrozen = (coding?.repos || []).some((r) => r.frozen);
+  const freeze = (enabled) => act(() => api.codingFreeze('*', enabled),
+    enabled ? 'Frozen: every action asks until you unfreeze.' : 'Unfrozen: earned licenses apply again.');
   const rewind = (turn) => act(() => api.codingRewind(turn.id), 'Repository rewound. The turn’s changes are kept in git stash.');
 
   const first = session?.name ? session.name.split(/\s+/)[0] : '';
@@ -180,6 +183,13 @@ export function Coding() {
           <h1>{first ? `Hi ${first}` : 'Your coding agent'}</h1>
           <p>What your agent may do alone in each repository, earned from verified results.</p>
         </div>
+        <div className="pl-actions">
+          <button type="button" className={`btn btn-sm ${anyFrozen ? 'btn-ink' : 'btn-line'}`} disabled={busy}
+            onClick={() => freeze(!anyFrozen)} title="Kill switch for every repository on this machine">
+            {anyFrozen ? 'Unfreeze' : 'Freeze all'}
+          </button>
+          <Link to="/app/settings" className="btn btn-ghost btn-sm">Policy</Link>
+        </div>
         {repos.length > 1 && (
           <select className="act-select" value={current} onChange={(e) => setRepo(e.target.value)} aria-label="Repository">
             {repos.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -188,6 +198,12 @@ export function Coding() {
       </header>
 
       {error && <div className="pl-alert" role="alert"><p>{error}</p></div>}
+      {anyFrozen && (
+        <div className="pl-alert app-alert-row" role="alert">
+          <p><b>Frozen.</b> Every action asks, whatever has been earned. Trust is kept and comes back when you unfreeze.</p>
+          <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => freeze(false)}>Unfreeze</button>
+        </div>
+      )}
 
       {paused.map((l) => (
         <div key={l.action_class} className="pl-alert app-alert-row" role="alert">

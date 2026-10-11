@@ -83,6 +83,14 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def cmd_policy(args: argparse.Namespace) -> int:
+    from sololicense.coding import policy
+
+    path = policy.write_starter(Path(args.repo).resolve())
+    print(f"Policy file: {path}\nEdit it, then commit it: privilege changes are reviewed like code.")
+    return 0
+
+
 def cmd_prompt(args: argparse.Namespace) -> int:
     print(agent_prompt(args.agent))
     return 0
@@ -132,6 +140,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", default=".")
     p.add_argument("--url", default=DEFAULT_URL)
     p.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("policy", help="write a starter .solo-license/policy.toml for this repository")
+    p.add_argument("action", choices=["init"])
+    p.add_argument("--repo", default=".")
+    p.set_defaults(fn=cmd_policy)
 
     p = sub.add_parser("prompt", help="print a prompt that makes your agent install Solo License")
     p.add_argument("--agent", default="auto")

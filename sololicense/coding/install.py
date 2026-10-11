@@ -59,7 +59,8 @@ def _shim(repo: Path) -> Path:
     target = repo / ".solo-license" / "hook.py"
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(SHIM_SOURCE, target)
-    (repo / ".solo-license" / ".gitignore").write_text("*\n", encoding="utf-8")
+    # Ignore the machine-specific shim; .solo-license/policy.toml is for committing.
+    (repo / ".solo-license" / ".gitignore").write_text("hook.py\n", encoding="utf-8")
     return target
 
 

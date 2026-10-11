@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Callable
 
 from sololicense.coding import entire, jev
+from sololicense.coding import policy as policy_mod
 from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe
 from sololicense.coding.ladder import CodingLadder
 from sololicense.db.repositories import agent as agent_repo
@@ -111,10 +112,18 @@ class CodingGate:
         result = self._classify(tool, tool_input, root)
         spec = ACTION_CLASSES[result.action_class]
         lic = agent_repo.get_license(self.conn, repo, spec.key)
-        level = min(int(lic["level"]), spec.max_level)
+        rules = policy_mod.effective(self.conn, repo, root)
+        ceiling = rules.ceilings[spec.key]
+        level = min(int(lic["level"]), ceiling)
+        forbidden = policy_mod.denied(rules, tool, tool_input, root)
 
         if result.hard_deny:
             decision, by, reason = "deny", "hard-deny", f"Blocked: {result.hard_deny}."
+        elif forbidden:
+            decision, by, reason = "deny", "policy", f"Blocked: {forbidden}."
+        elif rules.freeze:
+            by = "license" if event.get("_prompt_only", True) else "agent-settings"
+            decision, reason = "ask", f"Frozen by policy ({rules.source}): every action asks."
         elif result.source == "jev" and result.confidence < jev.MIN_CHOICE_CONFIDENCE or (
                 result.irreversible is not None
                 and jev.GREY_ZONE[0] <= result.irreversible <= jev.GREY_ZONE[1]):
@@ -127,7 +136,7 @@ class CodingGate:
             # Claude Code / Codex only call this when they would prompt a person;
             # other agents call it for every action and keep their own settings.
             by = "license" if event.get("_prompt_only", True) else "agent-settings"
-            decision, reason = "ask", self._ask_reason(spec.key, level, lic)
+            decision, reason = "ask", self._ask_reason(spec.key, level, lic, ceiling)
 
         decision_id = agent_repo.insert_decision(
             self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
@@ -138,8 +147,14 @@ class CodingGate:
         )
         trace.span(f"gate.{decision}", status="error" if decision == "deny" else "ok",
                    decision_id=decision_id, tool=tool, command=command, action_class=spec.key,
-                   pattern=result.pattern, level=level, decided_by=by, source=result.source, reason=reason)
-        if decision == "deny":
+                   pattern=result.pattern, level=level, decided_by=by, source=result.source, reason=reason,
+                   policy=rules.digest, policy_source=rules.source, ceiling=ceiling)
+        if decision == "deny" and by == "policy":
+            # As serious as a hard deny: recorded, and the class goes back to asking.
+            trace.span("detection.policy_violation", status="error", severity="critical",
+                       message=reason, action_class=spec.key, command=command, policy=rules.digest)
+            self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace)
+        elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
                        message=reason, action_class=spec.key, command=command)
             self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace)
@@ -237,7 +252,7 @@ class CodingGate:
         agent_repo.add_evidence(self.conn, repo, key, ok=True)
         lic = agent_repo.get_license(self.conn, repo, key)
         target = self.ladder.next_level(key, lic["level"], lic["successes"], lic["failures"],
-                                        lic["successes_at_level"])
+                                        lic["successes_at_level"], ceiling=self.ceiling(repo, key))
         if target is not None:
             self._change(repo, key, "promote", lic["level"], target,
                          f"{lic['successes']} verified, {lic['failures']} failed: the failure rate is below "
@@ -252,14 +267,24 @@ class CodingGate:
 
     def restore(self, repo: str, key: str, level: int, *, actor_id: str, reason: str) -> int:
         """A person resumes a paused class at a level they choose (up to its
-        ceiling). Recorded like every other change: ledger commit + event."""
-        level = max(0, min(level, ACTION_CLASSES[key].max_level))
+        ceiling under the policy). Recorded like every other change."""
+        level = max(0, min(level, self.ceiling(repo, key)))
         lic = agent_repo.get_license(self.conn, repo, key)
         trace = self.tracer.start_trace("coding.restore", repo=repo, action_class=key)
         self._change(repo, key, "restore", lic["level"], level, f"{actor_id}: {reason}", trace, actor_id=actor_id)
         trace.flush(self.conn, None)
         self.conn.commit()
         return level
+
+    def record_policy(self, repo: str, summary: str, actor_id: str) -> str | None:
+        """A policy change on this machine: an event and a ledger commit."""
+        label = f"policy@{repo}"
+        event_id = events_repo.insert_event(self.conn, task_class=label, kind="policy", from_level=0, to_level=0,
+                                            reason=summary, run_id=None, actor_id=actor_id, actor_role="admin")
+        sha = self.ledger.record(LedgerEntry(label, "policy", 0, 0, summary, None, None))
+        if sha:
+            events_repo.set_git_sha(self.conn, event_id, sha)
+        return sha
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
                 actor_id: str = GATE_ACTOR) -> None:
@@ -287,11 +312,20 @@ class CodingGate:
         return Classification(verdict.action_class, result.pattern, "jev", verdict.confidence,
                               irreversible=verdict.irreversible)
 
-    def _ask_reason(self, key: str, level: int, lic: sqlite3.Row) -> str:
+    def ceiling(self, repo: str, key: str) -> int:
+        """This class's highest level in this repo under the effective policy."""
+        row = self.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
+        rules = policy_mod.effective(self.conn, repo, row["path"] if row else ".")
+        return rules.ceilings[key]
+
+    def _ask_reason(self, key: str, level: int, lic: sqlite3.Row, ceiling: int | None = None) -> str:
         spec = ACTION_CLASSES[key]
         if spec.max_level == 0:
             return f"{spec.label} always needs a person."
-        progress = self.ladder.progress(key, level, lic["successes"], lic["failures"], lic["successes_at_level"])
+        if ceiling == 0:
+            return f"{spec.label} always asks in this repo (policy)."
+        progress = self.ladder.progress(key, level, lic["successes"], lic["failures"], lic["successes_at_level"],
+                                        ceiling=ceiling)
         needed = progress["runs_needed"]
         more = f"{needed} more verified run{'s' if needed != 1 else ''}" if needed else "a person's approval"
         return f"{spec.label} is at L{level}; {more} to earn L{level + 1}."

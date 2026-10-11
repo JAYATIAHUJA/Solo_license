@@ -8,6 +8,8 @@ import {
   formFromSettings, validWebhook,
 } from '../components/IntegrationFields.jsx';
 import { PolicyEditor } from '../components/PolicyEditor.jsx';
+import { CodingPolicy } from '../components/CodingPolicy.jsx';
+import '../components/coding-policy.css';
 import { levelCopy } from '../../../lib/copy.js';
 import { jobsName, limitVerb, shortMoney } from '../components/words.js';
 import '../components/plain-form.css';
@@ -134,6 +136,12 @@ function SettingsForm({ data }) {
       </header>
 
       <CodingAgentsCard settings={s} />
+      <Section
+        title="Coding policy"
+        sub="Who decides how far the agent may go. The team's file in each repository and this machine's settings can only make it ask more - never less."
+      >
+        <CodingPolicy />
+      </Section>
 
       <h2 className="st-group-title">Payments agent <span className="pl-muted">(optional)</span></h2>
       <form onSubmit={save} className="pl-form st-form">
