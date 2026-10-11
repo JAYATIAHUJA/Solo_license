@@ -1,0 +1,253 @@
+read the whole codebase n tell me from 
+
+<pasted_content id="256c">
+Ji, to whole flow-based aur user perspective se mujhe bata ki ek normal user hamare app ko kaise use kar payega, kyunki mujhe khud samajh nahi aa raha:
+
+* uska saara data kahan se aayega
+* usko kaise, kya data ka refund ho raha hai
+* wo workspace kahan se ye data export karega, import karega
+* koi demo data kahan se
+* connectors kya hain
+
+ Ye sab mujhe kuch samajh hi nahi aa pa raha hai. Saaf ka saaf ka use kya hai? Kaise ho raha hai? Wo agent work karta bhi hai, nahi karta hai? Koi ML ka model humein lagana padega? Koi already pre-existing hamare paas open source wo hai, jis kaam ko easy kare, jis kaam chura paayein thoda sa part, aur algorithm humein ab better karne padenge? Ya phir humein connectors banane padenge jisse wo kaam kare? Hamara agent kaise achhe se work karega? Uski evals kya hain? Uska koi model train karna padega? Iska mujhe kuch samajh nahi aa raha hai. Achhe se ek baar research kar aur mujhe bata ki user perspective kya hai, sahab ka, kyunki user kisko bech rahe hain hum? Ye to hamare landing page mein bhi likha hai ki hum ye aap kisko bech rahe hain, ki use karega koi
+</pasted_content id="256c">
+
+---
+
+<pasted_content id="256c">
+Build an agent that works (literally)
+Build an AI agent, or a team of agents, that completes a substantial task from start to finish.
+Give it a goal, tools and an environment; let each result guide its next action. All projects compete for the same prizes.
+
+Focus areas
+Planning
+Break a goal into actionable steps.
+
+Tool use
+Choose tools, supply inputs and handle responses.
+
+State
+Retain state across steps, runs and failures.
+
+Context
+Bring in relevant information; leave out the rest.
+
+Execution
+Keep long tasks running to completion.
+
+Recovery
+Handle failures and unexpected results.
+
+Verification
+Check that results are correct.
+
+Iteration
+Use each result to choose the next step.
+
+See example tasks
+Requirements
+Use
+,
+
+and
+
+Your project must use neatlogs, Entire and cfo.ai. Use neatlogs and Entire to build and improve your agent, and cfo.ai to plan its business.
+
+neatlogs
+Works with any agent
+Trace every agent run
+Find the code behind a failure, then compare runs to verify your fix.
+
+Model and tool calls, inputs and responses
+State changes, retries, failures and agent messages
+Latency, token usage and cost
+neatlogs
+/
+traces
+Example run
+Research agent
+Every step, in context.
+Success
+Span tree
+Duration
+agent
+research_agent
+2.84s
+llm
+plan
+620ms
+tool
+search_documents
+480ms
+llm
+compose_answer
+1.42s
+tool
+verify_citations
+320ms
+5 spans
+1.8k tokens
+$0.003
+Entire
+For coding agents
+Give your coding agent repository context
+Open-source tools for understanding your codebase and the history of AI-made changes.
+
+Checkpoints: save the context behind each change
+entire-graph: map relationships across your repository
+agent-workspace
+Example PR
+Preserve state across retries #42
+agent/recovery → main
+
+Conversation 2
+Files changed 1
++3 −1
+src/agent/run.ts
+− const state = createState();
++ const state = checkpoint.restore();
++ await agent.run(state);
++ checkpoint.save(state);
+Entire
+Checkpoint attached
+Context, decisions & changes
+cfo.ai
+Plan the business with cfo.ai
+Use cfo.ai to plan your agent’s pricing, costs, revenue and runway. Include the resulting business plan in your submission.
+
+neatHack signup & credits
+Sign up at cfo.ai/neathacks ↗
+
+A card is required during signup. Immediately after signing up, cancel your subscription in Settings → Billing. You won’t be billed if you cancel immediately.
+
+The neatHack team will provide your cfo.ai credits directly.
+
+cfo.ai
+/
+agent economics
+Example model
+C6
+ƒx
+=(C3-C4)/C3
+Illustrative monthly economics for two scenarios
+A	B	C
+1	Monthly model	Base	Growth
+2	Customers	100	250
+3	Revenue	$2,000	$5,000
+4	Infra + inference	$400	$850
+5	Gross profit	$1,600	$4,150
+6	Gross margin	80%	83%
+Unit economics
+Runway
+Scenarios
+Judging criteria
+Judges score each project in five categories. Each category is scored out of 100, and the categories are weighted as shown to give a final score out of 100.
+
+The agent
+How well the agent, or the system of agents, handles a substantial task from start to finish.
+
+30%
+Use of neatlogs, Entire and cfo.ai
+How effectively you used neatlogs, Entire and cfo.ai to build, improve and plan a business around the agent.
+
+25%
+Demo video
+How clearly the demo video explains the agent and your use of neatlogs, Entire and cfo.ai.
+
+20%
+Building in public
+How you shared your project with other people while you built it.
+
+15%
+Usefulness and originality
+Whether the agent solves a problem that people have, in a new way.
+
+10%
+Evidence & verification
+Back up each claim in your submission with evidence that judges can check.
+
+The agent improved
+A run before your change and a run after it, e.g., two neatlogs traces, with the numbers you compared
+You used neatlogs
+Links to neatlogs traces from your project, or screenshots of them
+You used Entire
+Checkpoints or entire-graph output from your repository
+You used cfo.ai
+A business plan covering your agent’s pricing, costs, revenue and runway
+The agent recovers from failures
+A run where an action failed, showing what the agent did next
+You built in public
+Links to what you shared during the hackathon, tagged #neatHack
+You wrote the code during the hackathon
+A public repository with commits dated during the hackathon main abhi ki jo repository hai, achhe se roast kar, aur mujhe bata ki kya ye sab cheezon ko cover kar bhi diye hain ya nahi.
+</pasted_content id="256c">
+
+---
+
+https://app.cfo.ai/s/ELTPhGF4LAHDv6zV Sabko achhe se fix karo. Kuch bhi hard-coded nahi hona chahiye, aur agent bilkul perfect work karna chahiye. Iske andar originality aur usefulness sab daal, kyunki wo dono nahi hain. Hum likh rahe hain, but hamara bilkul best hona chahiye. Aisa lagna chahiye ki kisi ne aaj tak banaya nahi ho aur sabse best use case hai iska.
+
+Ye bahut help karega aur ye best hai duniya mein. Aise oversell karna hai mujhe is product ko. Samjha? It should work well, very good. Technically bhi bahut mudde nahi chahiye. Har cheez bahut easy honi chahiye: user ki onboarding, UX principles sab easy hone chahiye. Jiske liye hamari target audience hai, usko wo abhi use bhi kar paye, waisa bhi hona chahiye. Kya connectors banane hain, onboarding kaise karni hai, unki wo sab achhe se hone chahiye.
+
+---
+
+Reference research paper hai, jisse humein algorithm to uthana hai, ya phir kisi ki GitHub repo hai jahan se humein kuch code uthana hai, ya need pad sakti hai ya reference lena hai, to hum wo sab le sakte hain.
+
+---
+
+Model train karke humein iska kuch validity dikhani hai, kuch scores dikhane hain. Aisa kuch karna hai ki hamare paas ek bilkul hi standardized dataset ho. Us pe hum run karein, to pata hai ki hamara itna work kar raha hai, jo baakiyon mein itna work nahi karta. Hamara best hai. Apne competitions the, so wo sab bhi
+
+---
+
+<pasted_content id="256c">
+maine tujhe hackathon winning ke liye kya metrics hain, wo sab bhej diya hai. uske according ek proper plan to pehle bana:
+
+1. ye hamari high priorities hain, inhe theek karne hain.
+2. low priorities hain.
+3. aise finish and cache dena hai.
+
+ ye sab pehle plan bana.
+</pasted_content id="256c">
+
+---
+
+entire me runnersn and trails daal diye h maine neatlogs entire vagera bhi use hone chhiye oko
+
+---
+
+<task-notification>
+<task-id>bhm85srnf</task-id>
+<tool-use-id>toolu_01TwoHUAHAnBUrHZHxeYuKDV</tool-use-id>
+<output-file>C:\Users\Lenovo\AppData\Local\Temp\claude\C--Users-Lenovo-Desktop-solo-lincense\25d9d86b-b43f-47c0-87f8-e1a91b577b1c\tasks\bhm85srnf.output</output-file>
+<status>completed</status>
+<summary>Background command "Commit and push H1" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+locally kyu commit h pr banade na mai main me mer kr dongi trails n all jo bhi h
+
+---
+
+<task-notification>
+<task-id>bbss2xxzk</task-id>
+<tool-use-id>toolu_01VunMogfEB3fFE82u9qHik1</tool-use-id>
+<output-file>C:\Users\Lenovo\AppData\Local\Temp\claude\C--Users-Lenovo-Desktop-solo-lincense\25d9d86b-b43f-47c0-87f8-e1a91b577b1c\tasks\bbss2xxzk.output</output-file>
+<status>completed</status>
+<summary>Background command "Run tests and commit backend work" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+Maine apni .env mein Grok ki API daal di hai. Ab you can use that, kyunki Gemini ki API to khaali hai, to Grok ki use kar lena.
+
+---
+
+Free model use karna hai, free.
+
+---
+
+Medium items bhi kar do, onboarding aur demo polish aur mera agent wagairah sab work karana, aur net logs aur CFO ka jo bhi tha, screenshots wagairah the, wo sab tune dekh ke daal diye na readme mein? jo bhi necessary tha, agent wagairah sab work karna chahiye. jo bhi Agitation winning product ke liye hona chahiye tha, saari categories, I hope wo saari hain, aur if nahi hain to use bana do.
+
+---
+
+ye jo demo video ki script hai, app build in public ki post hai, in sabko push mat kariyo. ye sab commit bhi nahi hone chahiye aur push bhi nahi honi chahiye. Look bhi rehne chahiye.
