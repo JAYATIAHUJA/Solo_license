@@ -26,19 +26,20 @@ Solo License is the third option: **autonomy that is earned per job type from ve
 revoked the instant a check fails, and priced by your own economics.**
 
 ## Who it is for
-| | |
-|---|---|
-| **Starts cautious** | Every job type (refunds, store credit) begins at *Suggests only* or *Needs your OK*. |
-| **Checks, never trusts** | After every action the agent re-reads the database. The tool's "success" message is ignored. |
-| **Earns freedom** | After the current policy's required double-checked jobs, that job type moves up one level - automatically. |
-| **Stops instantly** | Any caught problem pauses that job type at once. Other job types keep their own level. |
-| **A person decides** | One evidence page shows what was meant, what happened and why it stopped. A person resumes it at a level they choose. |
-| **Everything is recorded** | Every permission change is a git commit (explainable with Entire); every run is a neatlogs trace. |
 
 Support and operations teams at online shops that take payments on **Stripe** (or can export
 orders as **CSV** - Shopify, WooCommerce, Gumroad, a spreadsheet) and get a steady stream of
 "can I get my money back?" emails. The person who buys it is whoever today spends their afternoon
 approving refunds.
+
+| | |
+|---|---|
+| **Starts cautious** | Every job type (refunds, store credit) begins at *Suggests only* or *Needs your OK*. |
+| **Checks, never trusts** | After every action the agent re-reads the database. The tool's "success" message is ignored. |
+| **Earns freedom** | A job type moves up one level automatically once both hold: the current policy's minimum clean runs, and enough verified jobs to prove its failure rate is below the break-even rate from your own costs. |
+| **Stops instantly** | Any caught problem pauses that job type at once. Other job types keep their own level. |
+| **A person decides** | One evidence page shows what was meant, what happened and why it stopped. A person resumes it at a level they choose. |
+| **Everything is recorded** | Every permission change is a git commit (explainable with Entire); every run is a neatlogs trace. |
 
 ## What a user does
 
@@ -191,10 +192,9 @@ use one set of numbers.
 | **Slack / Discord** | Message when a job type is paused or resumed | - |
 
 Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
-Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
 
 *The model proposes, the policy and license decide, the database proves.* The LLM only reads the
-message and writes a plan - it never decides what is allowed or writes directly to customer data.
+message and writes a plan; it never decides what is allowed or writes directly to customer data.
 
 Problems the safety checks catch:
 
@@ -245,7 +245,7 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 | A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
 | Scores on a standard dataset | [`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) - τ-bench retail, two frontier models |
 | Commits during the hackathon | `git log --since=2026-10-10` |
-| Tests | `python -m pytest` - 117 tests |
+| Tests | `python -m pytest` - 160+ tests |
 
 ---
 

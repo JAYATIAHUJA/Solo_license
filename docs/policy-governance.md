@@ -13,9 +13,11 @@ credit can be written.
    audit trail; it is not an Anthropic, neatlogs, or GitHub token.
 2. Complete onboarding with a business name and starting autonomy level for
    each task class.
-3. In **Settings → AI model**, choose **Anthropic**, enter an Anthropic API
-   key, and use the model name enabled for that account. Test the connection
-   before saving. The model is used only for intake and planning.
+3. In **Settings → AI model**, choose a provider (Groq, Gemini, Anthropic,
+   OpenAI, or any OpenAI-compatible endpoint), enter its API key, and use a
+   model name enabled for that account. Test the connection before saving. The
+   model is used only for intake and planning; without a key the built-in
+   deterministic rules still work.
 4. Optionally add a neatlogs API key and project in **Settings → Activity
    recording**. Test it, then save. Remote neatlogs traces make every run easy
    to inspect; the product remains functional without one because local spans
@@ -30,7 +32,7 @@ shows only a masked hint after saving, never the full secret.
 
 | Value | Where it belongs | When it is needed |
 | --- | --- | --- |
-| Anthropic API key | Workspace Settings, or `ANTHROPIC_API_KEY` as a deployment fallback | Needed only for model-authored intake and plans. Without it, deterministic intake/planning still works. |
+| Model provider API key (Groq, Gemini, Anthropic, OpenAI, or compatible) | Workspace Settings, or the provider's environment variable (e.g. `ANTHROPIC_API_KEY`) as a deployment fallback | Needed only for model-authored intake and plans. Without it, deterministic intake/planning still works. |
 | neatlogs API key | Workspace Settings, or `NEATLOGS_API_KEY` as a deployment fallback | Optional for remote trace viewing. Do not require it merely to run the agent. |
 | `SOLO_API_TOKENS` | Deployment environment only | Required outside demo mode. These are access tokens for people using the workspace. |
 | `SOLO_SETTINGS_ENCRYPTION_KEY` | Deployment environment only | Required in production before Settings can save any secret. Generate it once and keep it stable. |
@@ -56,8 +58,11 @@ Only an admin can activate a policy. In **Settings → Policy review**:
 
 Activation creates a new immutable version. Old rules and the version recorded
 on old runs are retained. The agent must collect the new policy's evidence
-before it can earn another promotion. The Home screen makes the current
-sample count and verified pass rate visible.
+before it can earn another promotion. A promotion also needs the economic
+bound: the verified failure rate must be provably below the break-even rate
+from the workspace's own costs, and no policy edit can lower that bar. The
+Home screen shows the current sample count, verified pass rate, and how many
+more double-checked jobs the economics still needs.
 
 ## What happens during a customer action
 
@@ -95,5 +100,5 @@ evidence again under the current policy.
 - Configure `NEATLOGS_API_KEY` only when the deployment owner is intentionally
   providing a shared trace project. Otherwise, let the workspace admin add
   their own key in Settings.
-- Confirm the Anthropic test and neatlogs test from Settings using non-demo
+- Confirm the AI model test and neatlogs test from Settings using non-demo
   credentials before inviting operators.
