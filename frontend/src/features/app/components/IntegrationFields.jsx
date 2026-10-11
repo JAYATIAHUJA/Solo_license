@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../lib/api.js';
+import { plainNeatlogsError } from '../../../lib/probe-errors.js';
 import { plainError, savedHint } from './ModelFields.jsx';
 import './plain-form.css';
 import './integration-fields.css';
@@ -74,15 +75,17 @@ export function SecretInput({ label, field, values, onChange, settings, placehol
 }
 
 /** A "Test" button with a plain one-line result. `okText` replaces the
- *  server's success message; failures are translated by plainError. */
-export function TestRow({ label = 'Test', okText = 'Connected', disabled, onTest }) {
+ *  server's success message; failures are translated by `translate`
+ *  (default: the generic provider-error wording). */
+export function TestRow({ label = 'Test', okText = 'Connected', disabled, onTest, translate }) {
   const [result, setResult] = useState(null);
   const [testing, setTesting] = useState(false);
+  const toText = translate || ((res) => plainError(res.message));
   async function go() {
     setTesting(true); setResult(null);
     try {
       const res = await onTest();
-      setResult(res.ok ? { ok: true, text: okText } : { ok: false, text: plainError(res.message), raw: res.message });
+      setResult(res.ok ? { ok: true, text: okText } : { ok: false, text: toText(res), raw: res.message });
     } catch (cause) {
       setResult({ ok: false, text: plainError(cause.message), raw: cause.message });
     } finally {
@@ -122,12 +125,13 @@ export function NeatlogsFields({ values, onChange, settings = {} }) {
         <label className="field">
           <span>Project ID</span>
           <input className="input" spellCheck={false} value={values.neatlogs_project || ''} onChange={(e) => onChange({ neatlogs_project: e.target.value })} />
-          <small>Which neatlogs project receives the records. Leave as is unless neatlogs gave you another.</small>
+          <small>A label that groups this workspace's traces in neatlogs. The Test button checks your key by sending one diagnostic trace and reading it back — it works with any Project ID.</small>
         </label>
       </div>
       <TestRow
         disabled={!has(values, settings, 'neatlogs_api_key')}
         onTest={() => api.testNeatlogs({ neatlogs_api_key: values.neatlogs_api_key, neatlogs_project: values.neatlogs_project })}
+        translate={plainNeatlogsError}
       />
     </div>
   );

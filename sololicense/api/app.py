@@ -36,6 +36,7 @@ from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.domain.policy import PolicyImpact, PolicyRule, PolicyVersion
 from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
+from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 from sololicense.services import economics
 from sololicense.services.alerts import AlertNotifier, valid_webhook_url
@@ -832,8 +833,13 @@ def intake(
 def handle_ticket(ticket_id: int, actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
     with _lock:
         context = get_context()
-        if tickets_repo.get(context.conn, ticket_id) is None:
+        ticket = tickets_repo.get(context.conn, ticket_id)
+        if ticket is None:
             raise HTTPException(status_code=404, detail="Message not found.")
+        if ticket["status"] != "new":
+            # Re-running would flag a duplicate action and demote the license
+            # for a double-submit that was never a fresh customer request.
+            raise HTTPException(status_code=409, detail="This message was already handled.")
         result = _handle_ticket(context, ticket_id, actor)
         body = dashboard_payload(context, result["run_id"])
         body["intake"] = result
@@ -1211,28 +1217,24 @@ def test_llm(
 def test_neatlogs(
     payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
 ) -> dict:
-    """Send neatlogs' own doctor probe trace with the (unsaved) key."""
+    """Doctor-probe neatlogs from an isolated child process.
+
+    The live tracer in this process stays untouched (re-initialising it is
+    what the SDK refuses); the probe runs out of process with the unsaved
+    key passed through the child's environment, and the answer is a safe,
+    structured result the frontend can explain.
+    """
     with _lock:
         context = get_context()
         cfg = _config_with_form(context, _clean_values(payload.values))
     if not cfg.neatlogs_api_key:
-        return {"ok": False, "message": "Add a neatlogs API key first."}
-    try:
-        import neatlogs
-
-        report = neatlogs.doctor_probe_v2(
-            api_key=cfg.neatlogs_api_key, endpoint=cfg.neatlogs_endpoint, timeout_seconds=12,
-        )
-    except Exception as error:
-        return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
-    if report.get("status") == "pass":
-        return {"ok": True, "message": "Connected. A probe trace was ingested and read back."}
-    failure = report.get("first_failure") or "unknown"
-    stages = [check.get("details", {}) for check in report.get("checks", [])]
-    accepted = any(stage.get("last_successful_stage") for stage in stages)
-    if accepted:
-        return {"ok": True, "message": "Connected. neatlogs accepted the probe trace (still processing)."}
-    return {"ok": False, "message": f"neatlogs probe failed: {failure}"}
+        return {
+            "ok": False,
+            "code": "CREDENTIAL_MISSING",
+            "message": "Add a neatlogs API key first.",
+        }
+    report = run_doctor_probe(cfg.neatlogs_api_key, cfg.neatlogs_endpoint)
+    return response_for(report, secret=cfg.neatlogs_api_key)
 
 
 @app.post("/api/settings/test-alert")
@@ -1269,17 +1271,29 @@ def complete_onboarding(
             raise HTTPException(status_code=422, detail="Unknown license level.") from error
         for key in payload.starting_levels:
             _task_class(key)
+        # Validate the payloads that become writes BEFORE the onboarded flag
+        # is persisted: a rejected CSV or order id must leave the workspace
+        # exactly as it was, not flagged as set up.
+        csv_records: list = []
+        if payload.orders_csv:
+            csv_records, csv_problems = parse_orders_csv(payload.orders_csv)
+            if not csv_records:
+                raise HTTPException(
+                    status_code=422,
+                    detail=" ".join(csv_problems) or "No orders found in the file. Check the column headers.",
+                )
+        for order in payload.orders:
+            order_id = order.order_id.strip().upper()
+            if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{2,31}", order_id):
+                raise HTTPException(status_code=422, detail=f"Order id {order_id!r} may use letters, digits and dashes.")
 
         values["business_name"] = payload.business_name.strip()
         values["onboarded"] = "1"
         _save_settings(context, values)
         reset_context()
         context = get_context()
-        if payload.orders_csv:
-            records, problems = parse_orders_csv(payload.orders_csv)
-            if not records:
-                raise HTTPException(status_code=422, detail=" ".join(problems) or "No orders found in the file.")
-            orders_repo.upsert_orders(context.conn, records)
+        if csv_records:
+            orders_repo.upsert_orders(context.conn, csv_records)
         if payload.load_sample_orders and not orders_repo.list_orders(context.conn):
             install_sample_store(context.conn)
         for order in payload.orders:

@@ -51,6 +51,9 @@ def harness(tmp_path) -> Harness:
         demo_mode=False,
         alert_webhook_url="",
         ledger_repo=repo,
+        # A developer's .env may set a real key; tests that assert "saving a
+        # secret is refused without one" need a clean slate regardless.
+        settings_encryption_key="",
     )
     conn = init_db(config.db_path)
     seed(conn, config)
