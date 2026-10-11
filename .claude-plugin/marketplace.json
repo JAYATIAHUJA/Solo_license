@@ -1,0 +1,13 @@
+{
+  "name": "solo-license",
+  "owner": {
+    "name": "JAYATIAHUJA"
+  },
+  "plugins": [
+    {
+      "name": "solo-license",
+      "source": "./plugin/solo-license",
+      "description": "Earned, revocable autonomy for Claude Code, verified per action class."
+    }
+  ]
+}

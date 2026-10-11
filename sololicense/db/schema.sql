@@ -254,3 +254,77 @@ CREATE TABLE IF NOT EXISTS tickets (
     handled_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tickets_created ON tickets (created_at DESC);
+
+-- Coding agents ------------------------------------------------------------
+-- One license per (repository, action class): `npm test` earns `test-run` in
+-- this repo only. Levels: 0 ask every time, 1 auto-allow command families a
+-- person already approved here, 2 auto-allow the whole class.
+CREATE TABLE IF NOT EXISTS agent_licenses (
+    repo          TEXT NOT NULL,
+    action_class  TEXT NOT NULL,
+    level         INTEGER NOT NULL DEFAULT 0,
+    successes     INTEGER NOT NULL DEFAULT 0,   -- verified outcomes at any level
+    failures      INTEGER NOT NULL DEFAULT 0,
+    successes_at_level INTEGER NOT NULL DEFAULT 0, -- since the last level change
+    demoted_from  INTEGER,
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (repo, action_class)
+);
+
+-- Command families a person approved in a repo (what level 1 auto-allows).
+CREATE TABLE IF NOT EXISTS agent_patterns (
+    repo          TEXT NOT NULL,
+    action_class  TEXT NOT NULL,
+    pattern       TEXT NOT NULL,
+    approvals     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (repo, pattern)
+);
+
+-- Every gate decision and what came of it.
+CREATE TABLE IF NOT EXISTS agent_decisions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id    TEXT NOT NULL,
+    turn_id       INTEGER,
+    repo          TEXT NOT NULL,
+    tool_name     TEXT NOT NULL,
+    action_class  TEXT NOT NULL,
+    pattern       TEXT NOT NULL,
+    command       TEXT NOT NULL,
+    decision      TEXT NOT NULL,                -- allow | ask | deny
+    decided_by    TEXT NOT NULL,                -- license | person | hard-deny | classifier
+    level         INTEGER NOT NULL,
+    source        TEXT NOT NULL,                -- rules | jev | fallback
+    reason        TEXT NOT NULL DEFAULT '',
+    outcome       TEXT NOT NULL DEFAULT 'pending', -- pending | ran | verified | failed | denied | not-run
+    trace_id      TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_decisions_session ON agent_decisions (session_id, id DESC);
+
+-- One user prompt and the turn of work it started; verified at Stop.
+CREATE TABLE IF NOT EXISTS agent_turns (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id    TEXT NOT NULL,
+    repo          TEXT NOT NULL,
+    cwd           TEXT NOT NULL,
+    prompt        TEXT NOT NULL DEFAULT '',
+    base_ref      TEXT,                         -- working tree snapshot at the prompt
+    status        TEXT NOT NULL DEFAULT 'open', -- open | verified | blocked | failed
+    scope_score   INTEGER,
+    lines_changed INTEGER,
+    files_changed INTEGER,
+    tests         TEXT,                         -- passed | failed | none
+    reason        TEXT,
+    trace_id      TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    closed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_turns_session ON agent_turns (session_id, id DESC);
+
+-- Per-repository settings (the command that verifies a turn).
+CREATE TABLE IF NOT EXISTS agent_repos (
+    repo          TEXT PRIMARY KEY,
+    path          TEXT NOT NULL,
+    test_command  TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);

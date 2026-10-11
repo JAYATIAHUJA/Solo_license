@@ -59,6 +59,8 @@ class ExecutionPermit:
     order_id: str
     amount: float
     expires_at: datetime
+    # Row id of the stored digest: safe to export, unlike ``token``.
+    id: int | None = None
 
 
 @dataclass(frozen=True)

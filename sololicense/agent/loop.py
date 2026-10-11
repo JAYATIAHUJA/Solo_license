@@ -24,11 +24,13 @@ from sololicense.agent.intake import Intake, parse_message
 from sololicense.agent.worker import RefundWorker, RunResult
 from sololicense.config import Config
 from sololicense.db.repositories import orders as orders_repo
+from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.repositories import tickets as tickets_repo
 from sololicense.domain.models import RefundRequest, RunStatus
 from sololicense.domain.task_classes import get_spec
 from sololicense.observability.tracer import Tracer
 from sololicense.security import Actor
+from sololicense.services import economics
 from sololicense.services.license_service import SYSTEM_ACTOR
 
 # Ticket outcomes, as the inbox shows them.
@@ -102,12 +104,30 @@ class TicketAgent:
             trace.flush(self._conn, None)
             raise
         trace.span("ticket.done", status="ok" if outcome.status in (DONE, WAITING) else "error",
-                   outcome=outcome.status, summary=outcome.summary)
+                   outcome=outcome.status, summary=outcome.summary, **self._cost(outcome))
         trace.flush(self._conn, outcome.run_id)
         self._conn.commit()
         outcome.trace_id = trace.trace_id
         outcome.follows_ticket_id = earlier["id"] if earlier is not None else None
         return outcome
+
+    def _cost(self, outcome: TicketOutcome) -> dict:
+        """Human cost of this ticket, from the same assumptions as the P&L:
+        supervision at the level the run acted under, or a full human
+        handling when the ticket was sent to a person."""
+        assumptions = economics.Assumptions.from_settings(settings_repo.get_all(self._conn))
+        if outcome.run is not None:
+            level = int(outcome.run.transition.old.effective_level)
+            basis = f"supervision at L{level}"
+        elif outcome.status == NEEDS_HUMAN:
+            level, basis = 0, "handled by a person"
+        else:
+            return {"cost.usd": 0.0, "cost.basis": "automated reply"}
+        return {
+            "cost.usd": round(economics.cost_per_action(level, assumptions), 4),
+            "cost.level": level,
+            "cost.basis": basis,
+        }
 
     # --- steps ---------------------------------------------------------------
 
@@ -129,6 +149,8 @@ class TicketAgent:
 
         # 1. read -------------------------------------------------------------
         intake = parse_message(text, self._config, self._conn)
+        if intake.llm_call:
+            trace.span("llm.chat", **intake.llm_call)
         spec = get_spec(intake.task_class)
         step("read", "ok",
              f"Asks for {spec.label.lower()}" + (f" on {intake.order_id}" if intake.order_id else "")

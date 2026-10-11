@@ -14,7 +14,7 @@ from dataclasses import replace
 from hashlib import sha256
 from threading import RLock
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -24,6 +24,7 @@ from sololicense.bootstrap import AppContext, build_app
 from sololicense.config import PROVIDERS
 from sololicense.connectors import ConnectorError
 from sololicense.connectors.csv_import import orders_to_csv, parse_orders_csv
+from sololicense.db.repositories import agent as agent_repo
 from sololicense.db.repositories import tickets as tickets_repo
 from sololicense.db.repositories import events as events_repo
 from sololicense.db.repositories import license as license_repo
@@ -36,6 +37,7 @@ from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.domain.policy import PolicyImpact, PolicyRule, PolicyVersion
 from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
+from sololicense.coding.actions import ACTION_CLASSES
 from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 from sololicense.services import economics
@@ -1347,3 +1349,131 @@ def top_up_demo_orders(
             added += 1
         context.conn.commit()
         return dashboard_payload(context)
+
+
+# --- coding agents: Claude Code hooks ------------------------------------------
+
+_HOOK_EVENTS = {
+    "user-prompt": "UserPromptSubmit",
+    "permission": "PermissionRequest",
+    "post-tool": "PostToolUse",
+    "post-tool-failure": "PostToolUseFailure",
+    "stop": "Stop",
+}
+
+
+def _hook_secret(context: AppContext) -> str:
+    """Shared secret for hook calls that do not come from this machine."""
+    stored = settings_repo.get_all(context.conn).get("hook_secret_hint")
+    if stored:
+        return stored
+    secret = "hook_" + secrets.token_urlsafe(18)
+    settings_repo.set_many(context.conn, {"hook_secret_hint": secret})
+    context.conn.commit()
+    return secret
+
+
+def _hook_allowed(context: AppContext, request: Request, given: str | None) -> bool:
+    # Claude Code runs on the developer's machine and calls the local API.
+    host = request.client.host if request.client else ""
+    if host in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return True
+    return bool(given) and secrets.compare_digest(given, _hook_secret(context))
+
+
+@app.post("/api/hooks/{event}")
+def coding_hook(
+    event: str,
+    request: Request,
+    body: dict = Body(default_factory=dict),
+    x_solo_hook_key: str | None = Header(default=None),
+) -> dict:
+    """One endpoint per Claude Code hook. The response is the hook's JSON
+    output: a PermissionRequest decision, or a Stop block with the reason the
+    turn's checks failed. Unknown or failing calls answer ``{}``, which leaves
+    Claude Code's own behaviour unchanged (it asks the person)."""
+    if event not in _HOOK_EVENTS:
+        raise HTTPException(status_code=404, detail="Unknown hook event.")
+    with _lock:
+        context = get_context()
+        if not _hook_allowed(context, request, x_solo_hook_key):
+            raise HTTPException(status_code=401, detail="Invalid hook key.")
+        gate = context.coding_gate
+        if gate is None:
+            return {}
+        if event == "user-prompt":
+            return gate.user_prompt(body)
+        if event == "permission":
+            return gate.permission(body)
+        if event == "stop":
+            return gate.stop(body)
+        return gate.tool_result(body, failed=event == "post-tool-failure")
+
+
+@app.get("/api/hooks/secret")
+def hook_secret(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    with _lock:
+        return {"header": "X-Solo-Hook-Key", "secret": _hook_secret(get_context())}
+
+
+def coding_payload(context: AppContext, repo: str | None = None) -> dict:
+    """Everything the agent dashboard shows: licenses, decisions, turns."""
+    gate = context.coding_gate
+    licenses = []
+    for row in agent_repo.list_licenses(context.conn, repo):
+        spec = ACTION_CLASSES.get(row["action_class"])
+        if spec is None:
+            continue
+        progress = gate.ladder.progress(spec.key, row["level"], row["successes"], row["failures"],
+                                        row["successes_at_level"]) if gate else {}
+        licenses.append({
+            "repo": row["repo"], "action_class": spec.key, "label": spec.label, "level": row["level"],
+            "max_level": spec.max_level, "successes": row["successes"], "failures": row["failures"],
+            "demoted_from": row["demoted_from"], "updated_at": row["updated_at"], **progress,
+        })
+    decisions = [dict(r) for r in agent_repo.recent_decisions(context.conn, 60)
+                 if repo is None or r["repo"] == repo]
+    turns = [dict(r) for r in agent_repo.recent_turns(context.conn, 30) if repo is None or r["repo"] == repo]
+    counts = {k: sum(1 for d in decisions if d["decision"] == k) for k in ("allow", "ask", "deny")}
+    return {
+        "repos": [dict(r) for r in context.conn.execute("SELECT repo, path, test_command FROM agent_repos")],
+        "licenses": licenses,
+        "decisions": decisions,
+        "turns": turns,
+        "counts": counts,
+        "classes": [{"key": c.key, "label": c.label, "max_level": c.max_level, "incident_cost": c.incident_cost}
+                    for c in ACTION_CLASSES.values()],
+    }
+
+
+@app.get("/api/coding")
+def coding_dashboard(
+    request: Request,
+    repo: str | None = Query(default=None, max_length=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Licenses, decisions and turns of the coding agent. Read-only; served to
+    this machine (the plugin's /trust command) and to signed-in users."""
+    with _lock:
+        context = get_context()
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        return coding_payload(context, repo)
+
+
+class TestCommandPayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200)
+    test_command: str = Field(default="", max_length=400)
+
+
+@app.post("/api/coding/test-command")
+def set_coding_test_command(
+    payload: TestCommandPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """The command that verifies a turn in this repository (blank: detect)."""
+    with _lock:
+        context = get_context()
+        agent_repo.set_test_command(context.conn, payload.repo, payload.test_command.strip() or None)
+        context.conn.commit()
+        return coding_payload(context)
