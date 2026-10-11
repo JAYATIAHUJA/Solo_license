@@ -64,6 +64,9 @@ class Config:
     stripe_secret_key: str = ""
     stripe_api_base: str = "https://api.stripe.com"
     inbox_secret: str = ""
+    # Jev (TypeSafe AI) for calibrated gate decisions; optional.
+    typesafe_api_key: str = ""
+    jev_endpoint: str = "https://api.typesafe.ai/v1/systemone"
 
     @property
     def llm_api_key(self) -> str:
@@ -177,6 +180,8 @@ def load_config() -> Config:
         neatlogs_app_url=_get("NEATLOGS_APP_URL", "https://app.neatlogs.com"),
         neatlogs_trace_url=_get("NEATLOGS_TRACE_URL", "{app}/traces/{trace_id}"),
         trust_confidence=_clamp(float(_get("TRUST_CONFIDENCE", "0.9")), 0.5, 0.999),
+        typesafe_api_key=_get("TYPESAFE_API_KEY", _get("JEV_API_KEY", "")),
+        jev_endpoint=_get("JEV_ENDPOINT", "https://api.typesafe.ai/v1/systemone"),
         refund_window_days=max(0, int(_get("REFUND_WINDOW_DAYS", "30"))),
         stripe_secret_key=_get("STRIPE_SECRET_KEY", ""),
         stripe_api_base=_get("STRIPE_API_BASE", "https://api.stripe.com"),
@@ -195,6 +200,7 @@ _STR_KEYS = (
     "compat_api_key", "compat_model", "compat_base_url",
     "neatlogs_api_key", "neatlogs_project", "alert_webhook_url",
     "stripe_secret_key", "inbox_secret",
+    "typesafe_api_key", "jev_endpoint",
 )
 
 

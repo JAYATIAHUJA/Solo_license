@@ -80,6 +80,7 @@ class CodingGate:
     # Finds the Entire checkpoint a failed turn can be explained from / rewound to.
     checkpoint_lookup: Callable[[str, str], dict | None] = entire.last_checkpoint
     _traces: dict[int, Trace] = field(default_factory=dict)
+    _agent: str = "claude-code"
 
     # --- hooks ------------------------------------------------------------
 
@@ -87,10 +88,12 @@ class CodingGate:
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         repo, root = repo_of(cwd)
         agent_repo.ensure_repo(self.conn, repo, root)
-        trace = self.tracer.start_trace("coding.turn", repo=repo, session=session[:12])
+        agent = str(event.get("_agent") or "claude-code")
+        trace = self.tracer.start_trace("coding.turn", repo=repo, session=session[:12], agent=agent)
         turn_id = agent_repo.open_turn(
             self.conn, session_id=session, repo=repo, cwd=root,
             prompt=str(event.get("prompt", ""))[:8000], base_ref=snapshot(root), trace_id=trace.trace_id,
+            agent=agent,
         )
         self._traces[turn_id] = trace
         trace.span("turn.start", turn=turn_id, prompt=str(event.get("prompt", ""))[:300])
@@ -98,6 +101,7 @@ class CodingGate:
         return {}
 
     def permission(self, event: dict) -> dict:
+        self._agent = str(event.get("_agent") or "claude-code")
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
         repo, root = repo_of(cwd)
@@ -120,10 +124,14 @@ class CodingGate:
         elif level >= 1 and agent_repo.pattern_approved(self.conn, repo, result.pattern):
             decision, by, reason = "allow", "license", f"'{result.pattern}' is earned at L1 in {repo}."
         else:
-            decision, by, reason = "ask", "license", self._ask_reason(spec.key, level, lic)
+            # Claude Code / Codex only call this when they would prompt a person;
+            # other agents call it for every action and keep their own settings.
+            by = "license" if event.get("_prompt_only", True) else "agent-settings"
+            decision, reason = "ask", self._ask_reason(spec.key, level, lic)
 
         decision_id = agent_repo.insert_decision(
-            self.conn, session_id=session, turn_id=turn["id"], repo=repo, tool_name=tool,
+            self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
+            turn_id=turn["id"], repo=repo, tool_name=tool,
             action_class=spec.key, pattern=result.pattern, command=command, decision=decision,
             decided_by=by, level=level, source=result.source, reason=reason,
             outcome="denied" if decision == "deny" else "pending", trace_id=trace.trace_id,
@@ -146,15 +154,24 @@ class CodingGate:
             return {}
         trace = self._trace(agent_repo.current_turn(self.conn, session))
         repo, key = row["repo"], row["action_class"]
-        if row["decision"] == "ask":  # it ran, so the person said yes
+        # Trust only grows from a person's yes or from the gate's own earned
+        # "allow". An action the *agent's* settings let through (its hook fires
+        # on every call, so nobody was asked) is observed, never credited.
+        unattended = row["decision"] == "ask" and row["decided_by"] == "agent-settings"
+        if row["decision"] == "ask" and not unattended:  # it ran, so the person said yes
             agent_repo.approve_pattern(self.conn, repo, key, row["pattern"])
             agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
             trace.span("gate.approved_by_person", decision_id=row["id"], pattern=row["pattern"], action_class=key)
         error = str(event.get("error", ""))[:300]
         if failed and key not in DIAGNOSTIC and not event.get("is_interrupt"):
+            # A failure always counts, whoever let the action run.
             agent_repo.set_outcome(self.conn, row["id"], "failed")
             trace.span("tool.failed", status="error", decision_id=row["id"], action_class=key, error=error)
             self._fail(repo, key, f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}", trace)
+        elif unattended:
+            agent_repo.set_outcome(self.conn, row["id"], "observed")
+            trace.span("tool.observed", decision_id=row["id"], action_class=key,
+                       note="ran under the agent's own settings; not credited")
         elif key in DIAGNOSTIC:
             agent_repo.set_outcome(self.conn, row["id"], "verified")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="error" if failed else "ok")
@@ -294,7 +311,7 @@ class CodingGate:
     def _turn(self, session: str, repo: str, root: str) -> sqlite3.Row:
         turn = agent_repo.current_turn(self.conn, session)
         if turn is None or turn["status"] != "open":
-            self.user_prompt({"session_id": session, "cwd": root, "prompt": ""})
+            self.user_prompt({"session_id": session, "cwd": root, "prompt": "", "_agent": self._agent})
             turn = agent_repo.current_turn(self.conn, session)
         return turn
 

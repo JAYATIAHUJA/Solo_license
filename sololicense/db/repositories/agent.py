@@ -70,7 +70,17 @@ def forget_patterns(conn: sqlite3.Connection, repo: str, action_class: str) -> N
 
 # --- decisions -------------------------------------------------------------
 
+DECISION_COLUMNS = frozenset({
+    "session_id", "agent", "turn_id", "repo", "tool_name", "action_class", "pattern", "command",
+    "decision", "decided_by", "level", "source", "reason", "outcome", "trace_id",
+})
+
+
 def insert_decision(conn: sqlite3.Connection, **fields) -> int:
+    """Column names come only from this fixed list; values are always bound."""
+    unknown = set(fields) - DECISION_COLUMNS
+    if unknown:
+        raise ValueError(f"unknown agent_decisions columns: {sorted(unknown)}")
     keys = ", ".join(fields)
     marks = ", ".join("?" for _ in fields)
     cur = conn.execute(f"INSERT INTO agent_decisions ({keys}) VALUES ({marks})", tuple(fields.values()))
@@ -109,10 +119,11 @@ def recent_decisions(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.
 # --- turns ---------------------------------------------------------------
 
 def open_turn(conn: sqlite3.Connection, *, session_id: str, repo: str, cwd: str, prompt: str,
-              base_ref: str | None, trace_id: str | None) -> int:
+              base_ref: str | None, trace_id: str | None, agent: str = "claude-code") -> int:
     cur = conn.execute(
-        "INSERT INTO agent_turns (session_id, repo, cwd, prompt, base_ref, trace_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (session_id, repo, cwd, prompt, base_ref, trace_id),
+        "INSERT INTO agent_turns (session_id, agent, repo, cwd, prompt, base_ref, trace_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (session_id, agent, repo, cwd, prompt, base_ref, trace_id),
     )
     return int(cur.lastrowid)
 
@@ -140,6 +151,14 @@ def set_checkpoint(conn: sqlite3.Connection, turn_id: int, checkpoint_id: str) -
 
 def get_turn(conn: sqlite3.Connection, turn_id: int) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM agent_turns WHERE id = ?", (turn_id,)).fetchone()
+
+
+def agents_seen(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Each coding agent that has called the gate, and when it last did."""
+    return conn.execute(
+        "SELECT agent, COUNT(*) AS decisions, MAX(created_at) AS last_seen "
+        "FROM agent_decisions GROUP BY agent ORDER BY last_seen DESC"
+    ).fetchall()
 
 
 def recent_turns(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]:
