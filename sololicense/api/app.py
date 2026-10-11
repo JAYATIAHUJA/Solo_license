@@ -52,7 +52,7 @@ SETTING_KEYS = (
     "compat_base_url",
     "trust_confidence", "refund_window_days", "orders_source",
     "l2_auto_refund_ceiling", "l2_auto_credit_ceiling",
-    "neatlogs_project", *ECON_KEYS, *SECRET_KEYS,
+    "neatlogs_project", "jev_endpoint", *ECON_KEYS, *SECRET_KEYS,
 )
 _NUMERIC_KEYS = ("trust_confidence", "refund_window_days", "l2_auto_refund_ceiling", "l2_auto_credit_ceiling", *ECON_KEYS)
 ORDER_SOURCES = ("sample", "csv", "stripe")
@@ -339,6 +339,8 @@ def serialize_settings(context: AppContext) -> dict:
         "neatlogs_enabled": cfg.neatlogs_enabled,
         "alerts_enabled": valid_webhook_url(cfg.alert_webhook_url),
         "demo_mode": cfg.demo_mode,
+        "jev_enabled": bool(cfg.typesafe_api_key),
+        "jev_endpoint": cfg.jev_endpoint,
         "active_policy_version": context.policy_service.active().version,
     }
     for spec in PROVIDERS.values():
@@ -1386,6 +1388,7 @@ def coding_hook(
     event: str,
     request: Request,
     body: dict = Body(default_factory=dict),
+    agent: str = Query(default="claude-code", max_length=40, pattern=r"^[a-z0-9-]+$"),
     x_solo_hook_key: str | None = Header(default=None),
 ) -> dict:
     """One endpoint per Claude Code hook. The response is the hook's JSON
@@ -1401,6 +1404,7 @@ def coding_hook(
         gate = context.coding_gate
         if gate is None:
             return {}
+        body = {**body, "_agent": agent}
         if event == "user-prompt":
             return gate.user_prompt(body)
         if event == "permission":
@@ -1474,6 +1478,8 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "turns": turns,
         "counts": counts,
         "savings": savings,
+        "agents": [dict(r) for r in agent_repo.agents_seen(context.conn)],
+        "jev_enabled": bool(gate and gate.jev_client.enabled),
         "classes": [{"key": c.key, "label": c.label, "max_level": c.max_level, "incident_cost": c.incident_cost}
                     for c in ACTION_CLASSES.values()],
     }
@@ -1551,3 +1557,19 @@ def restore_coding_license(
         context.coding_gate.restore(payload.repo, payload.action_class, payload.level,
                                     actor_id=actor.actor_id, reason=payload.reason)
         return coding_payload(context)
+
+
+@app.post("/api/coding/jev/test")
+def test_jev(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """Ask Jev to classify one command with the saved key: proves the key works."""
+    from sololicense.coding import jev
+
+    with _lock:
+        gate = get_context().coding_gate
+        if gate is None or not gate.jev_client.enabled:
+            raise HTTPException(status_code=422, detail="No TypeSafe API key saved yet.")
+        verdict = jev.classify_command(gate.jev_client, "npm run build && npm test", ".")
+        if verdict is None:
+            raise HTTPException(status_code=502, detail="Jev did not answer. Check the key and the endpoint.")
+        return {"ok": True, "action_class": verdict.action_class, "confidence": verdict.confidence,
+                "irreversible": verdict.irreversible}

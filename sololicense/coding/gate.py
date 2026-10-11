@@ -80,6 +80,7 @@ class CodingGate:
     # Finds the Entire checkpoint a failed turn can be explained from / rewound to.
     checkpoint_lookup: Callable[[str, str], dict | None] = entire.last_checkpoint
     _traces: dict[int, Trace] = field(default_factory=dict)
+    _agent: str = "claude-code"
 
     # --- hooks ------------------------------------------------------------
 
@@ -87,10 +88,12 @@ class CodingGate:
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         repo, root = repo_of(cwd)
         agent_repo.ensure_repo(self.conn, repo, root)
-        trace = self.tracer.start_trace("coding.turn", repo=repo, session=session[:12])
+        agent = str(event.get("_agent") or "claude-code")
+        trace = self.tracer.start_trace("coding.turn", repo=repo, session=session[:12], agent=agent)
         turn_id = agent_repo.open_turn(
             self.conn, session_id=session, repo=repo, cwd=root,
             prompt=str(event.get("prompt", ""))[:8000], base_ref=snapshot(root), trace_id=trace.trace_id,
+            agent=agent,
         )
         self._traces[turn_id] = trace
         trace.span("turn.start", turn=turn_id, prompt=str(event.get("prompt", ""))[:300])
@@ -98,6 +101,7 @@ class CodingGate:
         return {}
 
     def permission(self, event: dict) -> dict:
+        self._agent = str(event.get("_agent") or "claude-code")
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
         repo, root = repo_of(cwd)
@@ -123,7 +127,8 @@ class CodingGate:
             decision, by, reason = "ask", "license", self._ask_reason(spec.key, level, lic)
 
         decision_id = agent_repo.insert_decision(
-            self.conn, session_id=session, turn_id=turn["id"], repo=repo, tool_name=tool,
+            self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
+            turn_id=turn["id"], repo=repo, tool_name=tool,
             action_class=spec.key, pattern=result.pattern, command=command, decision=decision,
             decided_by=by, level=level, source=result.source, reason=reason,
             outcome="denied" if decision == "deny" else "pending", trace_id=trace.trace_id,
@@ -294,7 +299,7 @@ class CodingGate:
     def _turn(self, session: str, repo: str, root: str) -> sqlite3.Row:
         turn = agent_repo.current_turn(self.conn, session)
         if turn is None or turn["status"] != "open":
-            self.user_prompt({"session_id": session, "cwd": root, "prompt": ""})
+            self.user_prompt({"session_id": session, "cwd": root, "prompt": "", "_agent": self._agent})
             turn = agent_repo.current_turn(self.conn, session)
         return turn
 

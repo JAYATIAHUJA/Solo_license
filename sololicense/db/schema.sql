@@ -284,6 +284,7 @@ CREATE TABLE IF NOT EXISTS agent_patterns (
 CREATE TABLE IF NOT EXISTS agent_decisions (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id    TEXT NOT NULL,
+    agent         TEXT NOT NULL DEFAULT 'claude-code',
     turn_id       INTEGER,
     repo          TEXT NOT NULL,
     tool_name     TEXT NOT NULL,
@@ -305,6 +306,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_decisions_session ON agent_decisions (sessi
 CREATE TABLE IF NOT EXISTS agent_turns (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id    TEXT NOT NULL,
+    agent         TEXT NOT NULL DEFAULT 'claude-code',
     repo          TEXT NOT NULL,
     cwd           TEXT NOT NULL,
     prompt        TEXT NOT NULL DEFAULT '',

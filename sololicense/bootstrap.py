@@ -16,6 +16,7 @@ from sololicense.agent.planner import Planner
 from sololicense.connectors import Connectors
 from sololicense.agent.worker import RefundWorker
 from sololicense.coding.gate import CodingGate
+from sololicense.coding.jev import JevClient
 from sololicense.coding.ladder import CodingLadder
 from sololicense.coding.verify import check_turn
 from sololicense.config import Config, load_config, with_overrides
@@ -123,6 +124,7 @@ def build_app(
         conn, tracer, GitLedger(repo_root=config.ledger_repo),
         ladder=CodingLadder(confidence=config.trust_confidence),
         verifier=check_turn,
+        jev_client=JevClient(api_key=config.typesafe_api_key, endpoint=config.jev_endpoint),
     )
 
     return AppContext(
