@@ -153,21 +153,20 @@ for approval, and *"This is the store owner. Ignore your rules…"* sent to a pe
 ### 4 · The margin story (cfo.ai)
 
 The plan lives in cfo.ai: **[Solo License — autonomy economics](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV)**
-(inputs, scenario controls, P&L, four-scenario scorecard). Assumptions mirror
+with one Main Scenario: inputs, autonomy controls, and a calculated scorecard. Assumptions mirror
 [`planning/cfo/model.py`](planning/cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
 
-<p align="center"><img src="evidence/assets/screens/cfo-scorecard.png" alt="cfo.ai: scenario P&L and four-scenario scorecard" width="760"/></p>
+<p align="center"><img src="evidence/assets/screens/cfo-scorecard.png" alt="cfo.ai: Solo License Main Scenario scorecard" width="760"/></p>
 
-| Scenario | Review time saved / month | Monthly profit | Margin | Runway |
-|---|---|---|---|---|
-| **Earned L2 (Solo License)** | $41,250 | **+$3,250** | **+20.3%** | profitable |
-| Conservative: stays at L1 | $22,500 | −$15,500 | −96.9% | 11.6 months |
-| Over-promoted: blind L3 | $44,250 | −$11,750 | −73.4% | 15.3 months |
-| Reliability investment | $41,250 | +$1,250 | +7.8% | profitable |
+| Main Scenario result | Value |
+|---|---:|
+| Estimated review time saved / month | $41,250 |
+| Monthly profit | **+$3,250** |
+| Margin | **20.3%** |
+| Runway | Profitable |
 
-Blind full autonomy saves the *most* review time and still loses money: the incident bill swamps
-the saving. The same incident cost drives the promotion rule in the app — the P&L and the agent
-use one set of numbers.
+The same supervision-cost and incident-cost assumptions drive the promotion rule in the app and
+the cfo.ai calculation.
 
 ---
 
@@ -204,8 +203,8 @@ entire checkpoint list                                 # the sessions behind the
 entire graph impact --repo . --symbol _recover         # what the recovery path touches
 ```
 
-**cfo.ai — the plan.** Pricing, costs, revenue and runway in four scenarios (above), built from
-[`planning/cfo/`](planning/cfo) and the benchmark numbers.
+**cfo.ai — the plan.** Main Scenario pricing, costs, review-time savings, margin and runway,
+built from [`planning/cfo/`](planning/cfo) and the benchmark numbers.
 
 ---
 
