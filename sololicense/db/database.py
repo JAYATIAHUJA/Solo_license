@@ -62,6 +62,9 @@ _ADDED_COLUMNS = {
     "agent_turns": (
         ("entire_checkpoint", "TEXT"),             # last Entire checkpoint before a failure
     ),
+    "agent_repos": (
+        ("last_tests", "TEXT"),                    # passed | failed at the last turn check
+    ),
 }
 
 

@@ -327,5 +327,6 @@ CREATE TABLE IF NOT EXISTS agent_repos (
     repo          TEXT PRIMARY KEY,
     path          TEXT NOT NULL,
     test_command  TEXT,
+    last_tests    TEXT,                         -- passed | failed at the last turn check
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
