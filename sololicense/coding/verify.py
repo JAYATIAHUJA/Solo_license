@@ -146,6 +146,25 @@ def run_tests(root: str, command: str) -> tuple[bool, str]:
     return result.returncode == 0, tail
 
 
+def tests_passed_before(root: str, base_ref: str | None, command: str) -> bool | None:
+    """Run the tests on the pre-turn snapshot in a throwaway worktree.
+    ``None`` when the snapshot cannot be checked out."""
+    import tempfile
+
+    if not base_ref:
+        return None
+    with tempfile.TemporaryDirectory(prefix="solo-baseline-") as scratch:
+        tree = str(Path(scratch) / "tree")
+        added = _run(root, ["git", "worktree", "add", "--detach", tree, base_ref], timeout=60)
+        if added is None or added.returncode != 0:
+            return None
+        try:
+            passed, _ = run_tests(tree, command)
+            return passed
+        finally:
+            _run(root, ["git", "worktree", "remove", "--force", tree], timeout=60)
+
+
 def check_turn(gate, turn: sqlite3.Row, decisions: list[sqlite3.Row]) -> tuple[bool, str, dict]:
     """The verifier the gate calls at ``Stop``: (ok, reason, details)."""
     root, request = turn["cwd"], turn["prompt"] or ""
@@ -183,6 +202,17 @@ def check_turn(gate, turn: sqlite3.Row, decisions: list[sqlite3.Row]) -> tuple[b
         details["tests"] = "passed" if passed else "failed"
         details["test_command"] = command
         if not passed:
+            # Only a regression is the agent's fault: tests that were already
+            # failing before the turn are reported, not held against it.
+            before = repo["last_tests"]
+            if before is None:
+                ran = tests_passed_before(root, turn["base_ref"], command)
+                before = None if ran is None else ("passed" if ran else "failed")
+            if before == "failed":
+                details["tests"] = "failing before and after"
+                agent_repo.set_last_tests(gate.conn, turn["repo"], "failed")
+                return True, "", details
             details["blame"] = ["file-edit"]
             return False, f"the tests fail after this turn's changes (`{command}`):\n{tail}\nFix them before finishing.", details
+        agent_repo.set_last_tests(gate.conn, turn["repo"], "passed")
     return True, "", details

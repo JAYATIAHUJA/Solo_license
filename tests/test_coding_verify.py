@@ -64,11 +64,15 @@ def test_over_editing_is_sent_back_with_the_unrelated_files(gate):
 
 
 def test_failing_tests_after_the_change_block_the_turn(gate):
+    # A check that passes now and fails only with the agent's change: a regression.
+    (gate.project / "check_broken.py").write_text("import sys; sys.exit('BROKEN' in open('cart.py').read())\n")
+    subprocess.run(["git", "add", "."], cwd=gate.project, check=True)
+    subprocess.run(["git", "commit", "-qm", "check"], cwd=gate.project, check=True)
+    agent_repo.ensure_repo(gate.conn, "shop", str(gate.project))
+    agent_repo.set_test_command(gate.conn, "shop", f'"{sys.executable}" check_broken.py')
+
     gate.user_prompt(_ev(gate, prompt="refactor the cart module"))
     (gate.project / "cart.py").write_text(PRICE + "\nBROKEN = True\n")
-    agent_repo.ensure_repo(gate.conn, "shop", str(gate.project))
-    agent_repo.set_test_command(gate.conn, "shop", f'"{sys.executable}" -c "import sys; sys.exit(1)"')
-
     answer = gate.stop(_ev(gate))
     assert answer["decision"] == "block" and "tests fail" in answer["reason"]
 
@@ -130,3 +134,29 @@ def test_a_failed_turn_points_at_the_entire_checkpoint_and_can_be_rewound(gate):
     assert (gate.project / "cart.py").read_text() == PRICE
     stashes = subprocess.run(["git", "stash", "list"], cwd=gate.project, capture_output=True, text=True).stdout
     assert "solo-license: rewind turn 1" in stashes
+
+
+def test_tests_that_were_already_failing_are_not_held_against_the_agent(gate):
+    (gate.project / "check.py").write_text("import sys; sys.exit(1)\n")
+    subprocess.run(["git", "add", "."], cwd=gate.project, check=True)
+    subprocess.run(["git", "commit", "-qm", "broken test"], cwd=gate.project, check=True)
+    agent_repo.ensure_repo(gate.conn, "shop", str(gate.project))
+    agent_repo.set_test_command(gate.conn, "shop", f'"{sys.executable}" check.py')
+
+    gate.user_prompt(_ev(gate, prompt="fix the bug in cart.py"))
+    (gate.project / "cart.py").write_text(PRICE.replace("i['price']", "i['price'] * i['qty']"))
+    assert gate.stop(_ev(gate)) == {}
+    turn = agent_repo.current_turn(gate.conn, "s")
+    assert turn["status"] == "verified" and turn["tests"] == "failing before and after"
+
+
+def test_a_regression_after_passing_tests_is_blamed(gate):
+    (gate.project / "check.py").write_text("import cart, sys; sys.exit(0 if 'qty' not in open('cart.py').read() else 1)\n")
+    subprocess.run(["git", "add", "."], cwd=gate.project, check=True)
+    subprocess.run(["git", "commit", "-qm", "test"], cwd=gate.project, check=True)
+    agent_repo.ensure_repo(gate.conn, "shop", str(gate.project))
+    agent_repo.set_test_command(gate.conn, "shop", f'"{sys.executable}" check.py')
+
+    gate.user_prompt(_ev(gate, prompt="fix the bug in cart.py"))
+    (gate.project / "cart.py").write_text(PRICE.replace("i['price']", "i['price'] * i['qty']"))
+    assert gate.stop(_ev(gate))["decision"] == "block"
