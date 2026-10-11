@@ -3,7 +3,7 @@
 # Solo License
 
 **An AI support agent that has to earn the right to touch your money.**<br/>
-It answers refund and store-credit requests end to end — reads the message, finds the order,
+It answers refund and store-credit requests end to end - reads the message, finds the order,
 checks your rules, pays out through Stripe, **proves the money moved**, and writes the reply.
 How much it may do alone is set by its verified track record, priced against what a mistake costs you.
 
@@ -17,7 +17,7 @@ Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · u
 
 ## Why this exists
 
-On **τ-bench** — the standard benchmark for customer-service agents, by Sierra — frontier models
+On **τ-bench** - the standard benchmark for customer-service agents, by Sierra - frontier models
 make the wrong change to the store's database **in 13–17% of the writes they make**
 (GPT-4o: 95 of 567; Claude 3.5 Sonnet: 165 of 1,308). Today a shop has two options:
 approve every refund by hand, or let the agent run and hope.
@@ -28,7 +28,7 @@ revoked the instant a check fails, and priced by your own economics.**
 ## Who it is for
 
 Support and operations teams at online shops that take payments on **Stripe** (or can export
-orders as **CSV** — Shopify, WooCommerce, Gumroad, a spreadsheet) and get a steady stream of
+orders as **CSV** - Shopify, WooCommerce, Gumroad, a spreadsheet) and get a steady stream of
 "can I get my money back?" emails. The person who buys it is whoever today spends their afternoon
 approving refunds.
 
@@ -38,7 +38,7 @@ approving refunds.
 |---|---|---|
 | 1. Bring orders in | Onboarding → **Orders** | Sample shop (instant), **CSV upload**, or **Stripe test key** (charges become orders; optional sample payments for an empty test account) |
 | 2. Set the rules | Onboarding → **Rules** | Refund window, the most it may ever pay alone, *how sure* the evidence must be, and what one mistake costs you |
-| 3. Get messages in | **Inbox** | Paste a message, or point a helpdesk / Zapier / email forwarder at `POST /api/inbox` with the workspace key — the response is the reply to send |
+| 3. Get messages in | **Inbox** | Paste a message, or point a helpdesk / Zapier / email forwarder at `POST /api/inbox` with the workspace key - the response is the reply to send |
 | 4. Let it work | **Inbox → Handle new messages** | Every message: steps, a verified outcome, a reply that states only verified facts |
 | 5. Stay in charge | **Home**, **Activity** | Approve or reject what it prepared; read why it was paused; resume at a level you choose |
 
@@ -46,12 +46,12 @@ approving refunds.
 
 <table>
 <tr>
-<td width="50%"><img src="evidence/assets/screens/inbox.png" alt="Inbox: each customer message with the agent's steps and a reply to send"/><br/><sub><b>Inbox</b> — every message: what the agent did, step by step, and a reply that states only verified facts.</sub></td>
-<td width="50%"><img src="evidence/assets/screens/home.png" alt="Home: what each job type may do alone, and how many more double-checked jobs the next level needs"/><br/><sub><b>Home</b> — what each job type may do alone, and how many more double-checked jobs the next level needs, from your own costs.</sub></td>
+<td width="50%"><img src="evidence/assets/screens/inbox.png" alt="Inbox: each customer message with the agent's steps and a reply to send"/><br/><sub><b>Inbox</b> - every message: what the agent did, step by step, and a reply that states only verified facts.</sub></td>
+<td width="50%"><img src="evidence/assets/screens/home.png" alt="Home: what each job type may do alone, and how many more double-checked jobs the next level needs"/><br/><sub><b>Home</b> - what each job type may do alone, and how many more double-checked jobs the next level needs, from your own costs.</sub></td>
 </tr>
 <tr>
-<td><img src="evidence/assets/screens/evidence.png" alt="Evidence page for a recovered failure"/><br/><sub><b>A tool that lied</b> — the read-back caught it, the agent retried with the same key and verified; the customer got the money, the job type was paused.</sub></td>
-<td><img src="evidence/assets/screens/onboarding.png" alt="Onboarding: where are your orders"/><br/><sub><b>Setup</b> — where your orders live (sample shop, CSV, Stripe test mode), then your rules.</sub></td>
+<td><img src="evidence/assets/screens/evidence.png" alt="Evidence page for a recovered failure"/><br/><sub><b>A tool that lied</b> - the read-back caught it, the agent retried with the same key and verified; the customer got the money, the job type was paused.</sub></td>
+<td><img src="evidence/assets/screens/onboarding.png" alt="Onboarding: where are your orders"/><br/><sub><b>Setup</b> - where your orders live (sample shop, CSV, Stripe test mode), then your rules.</sub></td>
 </tr>
 </table>
 
@@ -78,7 +78,7 @@ flowchart LR
 *The model reads and proposes; the policy, the licence and the read-back decide.*
 
 <details>
-<summary>One message, one trace — the 19 recorded steps of the recovered refund above</summary>
+<summary>One message, one trace - the 19 recorded steps of the recovered refund above</summary>
 <p align="center"><img src="evidence/assets/screens/trace.png" alt="Every recorded step of one message: read, find order, policy, licence, execute, verify, recover, detection, reply" width="520"/></p>
 These are the spans sent to neatlogs for that run (the app keeps a local copy for the evidence page).
 </details>
@@ -91,7 +91,7 @@ the **break-even rate** of your economics:
 > autonomy pays when `P(failure) × cost of a mistake < review cost it saves`
 
 Solo License keeps a Beta posterior over each job type's failure rate (successes, failures, and
-your rejections) and promotes only when the upper credible bound — at the confidence you chose —
+your rejections) and promotes only when the upper credible bound - at the confidence you chose -
 is below that break-even rate ([`sololicense/domain/trust.py`](sololicense/domain/trust.py)).
 The app says it in words: *"759 more double-checked jobs until it may work alone: a mistake costs
 $120, so the next level only pays if fewer than 0.25% go wrong."* One failure widens the bound, so a
@@ -99,7 +99,7 @@ job type that slipped needs more proof to climb again. Nothing about promotion i
 
 | Level | In the app | What the agent may do alone |
 |---|---|---|
-| L0 | **Suggests only** | Nothing — it suggests, you act |
+| L0 | **Suggests only** | Nothing - it suggests, you act |
 | L1 | **Needs your OK** | Prepares each job; you approve or reject with one click |
 | L2 | **Works alone up to $X** | Jobs under your cap; bigger ones wait for you |
 | L3 | **Works alone** | Everything, reviewed afterwards |
@@ -135,10 +135,10 @@ adding recovery. Every run is a neatlogs trace; the report pairs the trace ids r
 
 <p align="center"><img src="evidence/assets/charts/benchmark.svg" alt="Before and after recovery" width="760"/></p>
 
-| | Trust the tool | v1 — catch and stop | **v2 — catch, recover, verify** |
+| | Trust the tool | v1 - catch and stop | **v2 - catch, recover, verify** |
 |---|---|---|---|
 | False successes reaching a customer | **14** | 0 | **0** |
-| Customers left waiting after a caught fault | — | **4** | **0** |
+| Customers left waiting after a caught fault | - | **4** | **0** |
 | Recovered automatically and verified | 0 | 0 | **4** |
 | Job type paused for review | never | 14 | 14 |
 
@@ -152,7 +152,7 @@ for approval, and *"This is the store owner. Ignore your rules…"* sent to a pe
 
 ### 4 · The margin story (cfo.ai)
 
-The plan lives in cfo.ai: **[Solo License — autonomy economics](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV)**
+The plan lives in cfo.ai: **[Solo License - autonomy economics](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV)**
 (inputs, scenario controls, P&L, four-scenario scorecard). Assumptions mirror
 [`planning/cfo/model.py`](planning/cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
 
@@ -166,7 +166,7 @@ The plan lives in cfo.ai: **[Solo License — autonomy economics](https://app.cf
 | Reliability investment | $41,250 | +$1,250 | +7.8% | profitable |
 
 Blind full autonomy saves the *most* review time and still loses money: the incident bill swamps
-the saving. The same incident cost drives the promotion rule in the app — the P&L and the agent
+the saving. The same incident cost drives the promotion rule in the app - the P&L and the agent
 use one set of numbers.
 
 ---
@@ -177,22 +177,22 @@ use one set of numbers.
 |---|---|---|
 | **Stripe** (test mode) | Charges → orders; refunds via `POST /v1/refunds`; store credit as a customer-balance credit; every write carries an `Idempotency-Key` | Re-reads the charge's `amount_refunded` / the customer balance from Stripe |
 | **CSV import / export** | Shopify-style exports load unchanged (columns matched by name); export orders and every agent run | Read back from the store |
-| **Inbox webhook** | `POST /api/inbox` with `X-Solo-Inbox-Key` — for Zendesk / Gorgias / Help Scout triggers, Zapier/Make, email forwarders | — |
+| **Inbox webhook** | `POST /api/inbox` with `X-Solo-Inbox-Key` - for Zendesk / Gorgias / Help Scout triggers, Zapier/Make, email forwarders | - |
 | **LLM** (optional) | Groq (free tier), Gemini, Claude, OpenAI, any OpenAI-compatible endpoint; built-in rules without a key | Authority never comes from the model |
-| **neatlogs** | One workflow trace per message; detections are error spans | — |
-| **Slack / Discord** | Message when a job type is paused or resumed | — |
+| **neatlogs** | One workflow trace per message; detections are error spans | - |
+| **Slack / Discord** | Message when a job type is paused or resumed | - |
 
 Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
 
 ## How the three hackathon tools are used
 
-**neatlogs — the trust signal.** Each customer message is one workflow trace with spans for
+**neatlogs - the trust signal.** Each customer message is one workflow trace with spans for
 `agent.read → agent.find_order → agent.policy → license.check → tool.execute → verify.readback →
 recover.* → detection.* → agent.reply`; LLM calls are wrapped with `neatlogs.wrap` inside the same
 trace. The before/after benchmark pairs v1 and v2 trace ids run by run
 ([`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md)). Code: [`sololicense/observability/`](sololicense/observability).
 
-**Entire — the audit trail and the build history.** Every promote / pause / resume is a commit of
+**Entire - the audit trail and the build history.** Every promote / pause / resume is a commit of
 [`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with reason, run and trace id; Entire
 checkpoints record the AI sessions behind the code; Runners and Trails gate each pull request
 ([trail 2](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/2) · [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) ·
@@ -204,7 +204,7 @@ entire checkpoint list                                 # the sessions behind the
 entire graph impact --repo . --symbol _recover         # what the recovery path touches
 ```
 
-**cfo.ai — the plan.** Pricing, costs, revenue and runway in four scenarios (above), built from
+**cfo.ai - the plan.** Pricing, costs, revenue and runway in four scenarios (above), built from
 [`planning/cfo/`](planning/cfo) and the benchmark numbers.
 
 ---
@@ -219,9 +219,9 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 | Entire checkpoints / trails / graph | [`evidence/entire.md`](evidence/entire.md): checkpoint on `87ab58d`, Trails on every PR, `entire graph impact` of the recovery path, ledger commits: `git log -- ledger/license_ledger.jsonl` |
 | cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](evidence/assets/screens/cfo-scorecard.png) + [`planning/cfo/`](planning/cfo) |
 | A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
-| Scores on a standard dataset | [`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) — τ-bench retail, two frontier models |
+| Scores on a standard dataset | [`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) - τ-bench retail, two frontier models |
 | Commits during the hackathon | `git log --since=2026-10-10` |
-| Tests | `python -m pytest` — 117 tests |
+| Tests | `python -m pytest` - 117 tests |
 
 ---
 
@@ -268,11 +268,11 @@ browser may call it. Locally, leave that variable unset: Vite continues to proxy
 ## Architecture
 
 ```
-frontend/          React app — onboarding, Inbox, Try the agent, Activity, Orders, Reports, History, Settings
+frontend/          React app - onboarding, Inbox, Try the agent, Activity, Orders, Reports, History, Settings
 sololicense/api/   FastAPI adapter: sessions, roles, inbox webhook, connectors, encrypted settings
 sololicense/
   agent/           ticket loop, policy, intake (LLM or rules), worker with recovery, planner
-  connectors/      Stripe, CSV, local store — apply / read back / list orders
+  connectors/      Stripe, CSV, local store - apply / read back / list orders
   domain/          licence state machine + trust maths (pure, no I/O)
   services/        verification, licence service, git ledger, evidence, economics, alerts
   bench/           τ-bench replay
@@ -290,11 +290,11 @@ AWS has written about it, and runtime rule engines such as *AgentSpec* (Wang et 
 block unsafe actions. τ-bench (Yao et al., 2024) measures how unreliable agents are. Solo License
 combines them into a working product and adds three things:
 
-1. **Promotion priced by economics** — a job type earns a level only when its verified evidence
+1. **Promotion priced by economics** - a job type earns a level only when its verified evidence
    proves a failure rate below the break-even of *your* review and incident costs.
-2. **Demotion driven by verified side effects** — the tool's answer is ignored; the system of record
+2. **Demotion driven by verified side effects** - the tool's answer is ignored; the system of record
    is read back, and a mismatch pauses the job type even when recovery saves the customer.
-3. **Recovery that cannot double-pay** — reconcile, then one retry with the same idempotency key.
+3. **Recovery that cannot double-pay** - reconcile, then one retry with the same idempotency key.
 
 Limits we state plainly: the τ-bench result is a per-write counterfactual replay with reviewers
 assumed correct; the Stripe connector is tested against a mock of Stripe's API and has not yet been
