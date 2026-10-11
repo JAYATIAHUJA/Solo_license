@@ -3,7 +3,10 @@ import sys
 from dataclasses import replace
 from types import SimpleNamespace
 
+import pytest
+
 from sololicense.agent.intake import complete, parse_llm_response
+from sololicense.config import load_config
 
 
 def test_parse_llm_response_accepts_valid_schema():
@@ -131,6 +134,50 @@ def test_gemini_completion_uses_configured_model(monkeypatch, harness):
     assert complete(config, "status?", max_tokens=10) == "ready"
     assert calls["model"] == "gemini-test"
     assert calls["client"]["api_key"] == "g-key"
+
+
+@pytest.mark.parametrize(
+    ("provider", "key_field", "model_field", "base_url"),
+    [
+        ("groq", "groq_api_key", "groq_model", "https://api.groq.com/openai/v1"),
+        ("zcode_glm", "zcode_api_key", "zcode_model", "https://api.z.ai/api/coding/paas/v4"),
+    ],
+)
+def test_groq_and_zcode_use_the_openai_compatible_client(
+    monkeypatch, provider, key_field, model_field, base_url
+):
+    calls = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            calls["client"] = kwargs
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: (
+                        calls.update(request=kwargs)
+                        or SimpleNamespace(
+                            choices=[SimpleNamespace(message=SimpleNamespace(content=" ready "))]
+                        )
+                    )
+                )
+            )
+
+    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=FakeClient))
+    config = replace(
+        load_config(),
+        llm_provider=provider,
+        neatlogs_api_key="",
+        **{key_field: "provider-test-key", model_field: "provider-test-model"},
+    )
+
+    assert complete(config, "status?", max_tokens=10) == "ready"
+    assert calls["client"] == {
+        "api_key": "provider-test-key",
+        "base_url": base_url,
+        "timeout": config.llm_timeout_seconds,
+        "max_retries": config.llm_max_retries,
+    }
+    assert calls["request"]["model"] == "provider-test-model"
 
 
 def test_model_failure_falls_back_with_an_explanation(monkeypatch, harness):

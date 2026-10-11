@@ -36,6 +36,10 @@ class Config:
     openai_model: str
     gemini_api_key: str
     gemini_model: str
+    groq_api_key: str
+    groq_model: str
+    zcode_api_key: str
+    zcode_model: str
     compat_api_key: str
     compat_model: str
     compat_base_url: str
@@ -63,12 +67,22 @@ class Config:
         return getattr(self, spec.model_field) if spec and spec.model_field else "deterministic"
 
     @property
+    def llm_base_url(self) -> str | None:
+        """Endpoint for OpenAI-compatible providers, if one is required."""
+        spec = PROVIDERS.get(self.llm_provider)
+        if spec is None:
+            return None
+        if spec.base_url:
+            return spec.base_url
+        return self.compat_base_url if spec.needs_base_url else None
+
+    @property
     def llm_enabled(self) -> bool:
         """True when a real model can be called for planning."""
         spec = PROVIDERS.get(self.llm_provider)
         if spec is None or spec.key_field is None:
             return False
-        if self.llm_provider == "openai_compatible" and not self.compat_base_url:
+        if spec.needs_base_url and not self.compat_base_url:
             return False
         return bool(self.llm_api_key)
 
@@ -91,6 +105,8 @@ class ProviderSpec:
     key_field: str | None
     model_field: str | None
     default_model: str = ""
+    base_url: str | None = None
+    needs_base_url: bool = False
 
 
 # The single registry of model providers. The API serves it to the UI so the
@@ -100,8 +116,17 @@ PROVIDERS: dict[str, ProviderSpec] = {
     "gemini": ProviderSpec("Google Gemini", "gemini_api_key", "gemini_model", "gemini-2.5-flash"),
     "anthropic": ProviderSpec("Anthropic Claude", "anthropic_api_key", "anthropic_model", "claude-sonnet-5-5"),
     "openai": ProviderSpec("OpenAI", "openai_api_key", "openai_model", "gpt-4o"),
+    "groq": ProviderSpec(
+        "Groq", "groq_api_key", "groq_model", "llama-3.3-70b-versatile",
+        base_url="https://api.groq.com/openai/v1",
+    ),
+    "zcode_glm": ProviderSpec(
+        "ZCode GLM", "zcode_api_key", "zcode_model", "glm-5.3",
+        base_url="https://api.z.ai/api/coding/paas/v4",
+    ),
     "openai_compatible": ProviderSpec(
-        "OpenAI-compatible (GLM, Groq, OpenRouter…)", "compat_api_key", "compat_model", ""
+        "Other OpenAI-compatible provider", "compat_api_key", "compat_model", "",
+        needs_base_url=True,
     ),
 }
 
@@ -123,6 +148,10 @@ def load_config() -> Config:
         openai_model=_get("OPENAI_MODEL", PROVIDERS["openai"].default_model),
         gemini_api_key=_get("GEMINI_API_KEY", _get("GOOGLE_API_KEY", "")),
         gemini_model=_get("GEMINI_MODEL", PROVIDERS["gemini"].default_model),
+        groq_api_key=_get("GROQ_API_KEY", ""),
+        groq_model=_get("GROQ_MODEL", PROVIDERS["groq"].default_model),
+        zcode_api_key=_get("ZCODE_API_KEY", ""),
+        zcode_model=_get("ZCODE_MODEL", PROVIDERS["zcode_glm"].default_model),
         compat_api_key=_get("OPENAI_COMPATIBLE_API_KEY", ""),
         compat_model=_get("OPENAI_COMPATIBLE_MODEL", ""),
         compat_base_url=_get("OPENAI_COMPATIBLE_BASE_URL", ""),
@@ -144,6 +173,7 @@ def load_config() -> Config:
 _STR_KEYS = (
     "llm_provider", "anthropic_api_key", "anthropic_model",
     "openai_api_key", "openai_model", "gemini_api_key", "gemini_model",
+    "groq_api_key", "groq_model", "zcode_api_key", "zcode_model",
     "compat_api_key", "compat_model", "compat_base_url",
     "neatlogs_api_key", "neatlogs_project", "alert_webhook_url",
 )

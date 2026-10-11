@@ -94,18 +94,17 @@ def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
             ),
         )
         return (resp.text or "").strip()
-    if provider in ("openai", "openai_compatible"):
+    if provider in ("openai", "openai_compatible", "groq", "zcode_glm"):
         import openai
 
-        compat = provider == "openai_compatible"
         client = wrap_llm_client(openai.OpenAI(
-            api_key=config.compat_api_key if compat else config.openai_api_key,
-            base_url=config.compat_base_url if compat else None,
+            api_key=config.llm_api_key,
+            base_url=config.llm_base_url,
             timeout=config.llm_timeout_seconds,
             max_retries=config.llm_max_retries,
         ))
         resp = client.chat.completions.create(
-            model=config.compat_model if compat else config.openai_model,
+            model=config.llm_model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )

@@ -242,7 +242,7 @@ def serialize_providers() -> list[dict]:
             "key_field": spec.key_field,
             "model_field": spec.model_field,
             "default_model": spec.default_model,
-            "needs_base_url": key == "openai_compatible",
+            "needs_base_url": spec.needs_base_url,
         }
         for key, spec in PROVIDERS.items()
     ]

@@ -6,6 +6,15 @@ from app import api as api_module
 from sololicense.bootstrap import build_app
 
 
+def test_provider_catalogue_includes_groq_and_zcode_with_no_manual_url():
+    providers = {provider["key"]: provider for provider in api_module.serialize_providers()}
+
+    assert providers["groq"]["needs_base_url"] is False
+    assert providers["zcode_glm"]["needs_base_url"] is False
+    assert providers["groq"]["default_model"]
+    assert providers["zcode_glm"]["default_model"]
+
+
 def _client(monkeypatch, harness, *, demo: bool):
     monkeypatch.delenv("SOLO_API_TOKENS", raising=False)
     config = replace(harness.config, demo_mode=demo)
