@@ -47,6 +47,16 @@ from sololicense.services.policy_service import PolicyService
 
 _EXECUTING = (Decision.AUTO_EXECUTE, Decision.AUTO_EXECUTE_AUDITED)
 
+# Why recovery changed course after a failed read-back: (reason_code, note).
+_REPLANS = {
+    "no_change": ("no_change", "Re-planned: the tool reported success but the read-back showed no change, "
+                               "so the agent retried once with the same idempotency key."),
+    "landed_late": ("landed_late", "Re-planned: the first read-back disagreed, but reconciling showed the "
+                                   "change had landed, so no retry was needed."),
+    "partial_change": ("partial_change", "Re-planned: only part of the change landed, so the agent stopped "
+                                         "and handed it to a person instead of retrying."),
+}
+
 
 @dataclass(frozen=True)
 class RunResult:
@@ -66,6 +76,8 @@ class RunResult:
     recovered: bool = False          # verification failed, recovery fixed it
     error: str | None = None         # the system of record refused the action
     reference: str | None = None     # e.g. Stripe refund id
+    recovery_reason: str | None = None  # no_change | landed_late | partial_change
+    recovery_note: str | None = None    # why the agent changed course, in plain words
 
     @property
     def actual_delta(self) -> float:
@@ -240,11 +252,11 @@ class RefundWorker:
             verified=first.verified,
         )
 
-        result, recovered = first, False
+        result, recovered, replan = first, False, None
         authorised_execution = authorized in _EXECUTING
         if (self.recovery_enabled and will_execute and error is None and authorised_execution
                 and not (first.verified and first.matched)):
-            result, recovered = self._recover(
+            result, recovered, replan = self._recover(
                 trace, connector, request, order, task_class, column, key, before, intended_delta,
                 policy, state, authorized, attempted, approved, actor,
             )
@@ -314,6 +326,8 @@ class RefundWorker:
             recovered=recovered,
             error=error,
             reference=reference,
+            recovery_reason=replan[0] if replan else None,
+            recovery_note=replan[1] if replan else None,
         )
 
     # --- helpers ---------------------------------------------------------
@@ -392,24 +406,34 @@ class RefundWorker:
         self, trace, connector, request: RefundRequest, order, task_class: str, column: str,
         key: str, before: float, intended_delta: float, policy, state, authorized,
         attempted, approved: bool, actor: Actor,
-    ) -> tuple[verification.VerificationResult, bool]:
+    ) -> tuple[verification.VerificationResult, bool, tuple[str, str]]:
         """Verification disagreed with the tool. Reconcile first, retry once
         with the same idempotency key only when nothing moved, verify again.
 
         Retrying is safe because the key makes the write idempotent: if the
         first call did land after all, the system of record returns it instead
-        of paying twice. A partial or excess change is never retried."""
+        of paying twice. A partial or excess change is never retried.
+
+        Returns the result, whether it recovered, and the re-plan as
+        ``(reason_code, note)``."""
         trace.span("recover.start", reason="read-back did not match the intended change")
         after = self._read(connector, task_class, order, column)
         result = verification.verify(before=before, after=after, intended_delta=intended_delta)
         trace.span("recover.reconcile", after=after, actual_delta=result.actual_delta, matched=result.matched)
         if result.matched:
+            replan = _REPLANS["landed_late"]
+            trace.span("recover.replan", reason_code="landed_late", next_action="accept_reconciled", note=replan[1])
             trace.span("recover.done", recovered=True, how="reconciled: the change had landed")
-            return result, True
+            return result, True, replan
         if abs(result.actual_delta) >= 0.005:
+            replan = _REPLANS["partial_change"]
+            trace.span("recover.replan", status="error", reason_code="partial_change",
+                       next_action="hand_to_person", note=replan[1])
             trace.span("recover.done", status="error", recovered=False,
                        how="partial change; left for a person")
-            return result, False
+            return result, False, replan
+        replan = _REPLANS["no_change"]
+        trace.span("recover.replan", reason_code="no_change", next_action="retry_same_key", note=replan[1])
         try:
             trace.span("recover.retry", idempotency_key=key)
             retry_permit = PolicyGate(self._conn).issue(
@@ -433,7 +457,7 @@ class RefundWorker:
                        reference=tool_result.reference, trusted=False, attempt=2)
         except ConnectorError as refusal:
             trace.span("recover.done", status="error", recovered=False, how=str(refusal)[:200])
-            return result, False
+            return result, False, replan
         after = self._read(connector, task_class, order, column)
         result = verification.verify(before=before, after=after, intended_delta=intended_delta)
         trace.span("verify.readback", source=connector.name, before=before, after=after,
@@ -441,7 +465,7 @@ class RefundWorker:
                    matched=result.matched, verified=True, attempt=2)
         trace.span("recover.done", status="ok" if result.matched else "error",
                    recovered=result.matched, how="retried with the same idempotency key")
-        return result, result.matched
+        return result, result.matched, replan
 
     def _run_detections(
         self, *, authorized, attempted, intended_delta, result, duplicate

@@ -144,7 +144,7 @@ class TicketAgent:
             )
 
         # 2. find the order -----------------------------------------------------
-        order, why = self._find_order(intake, sender)
+        order, why = self._find_order(intake, sender, trace)
         if order is None:
             step("find_order", "stop", why)
             return TicketOutcome(NEEDS_INFO, why, self._reply_ask_order(), steps, intake)
@@ -177,13 +177,21 @@ class TicketAgent:
         )
         step("act", "ok" if run.status in (RunStatus.CLEAN, RunStatus.PENDING_APPROVAL, RunStatus.SUGGESTED) else "error",
              self._act_detail(run, spec.label.lower()), run_status=run.status.value)
+        if run.recovery_note:
+            step("replan", "ok" if run.recovered else "stop", run.recovery_note,
+                 reason_code=run.recovery_reason)
         return self._finish(run, order, verdict.amount, intake, steps, step)
 
-    def _find_order(self, intake: Intake, sender: str | None):
+    def _find_order(self, intake: Intake, sender: str | None, trace):
+        def attempt(strategy: str, result: str, **attrs) -> None:
+            trace.span("agent.find_order.attempt", strategy=strategy, result=result, **attrs)
+
         if intake.order_id:
             order = orders_repo.get_order(self._conn, intake.order_id)
             if order is not None:
+                attempt("order_number", "found", order_id=order["order_id"])
                 return order, f"Found {order['order_id']} ({order['customer']}, {_money(order['amount'])})."
+            attempt("order_number", "not_found", order_id=intake.order_id)
             if not sender:
                 return None, f"No order {intake.order_id} in this store."
         if sender:
@@ -194,10 +202,13 @@ class TicketAgent:
                 candidates = exact or candidates
             if len(candidates) == 1:
                 order = candidates[0]
+                attempt("sender_email", "found", order_id=order["order_id"], candidates=1)
                 return order, f"No order number given; {sender} has one open order, {order['order_id']}."
             if candidates:
+                attempt("sender_email", "ambiguous", candidates=len(candidates))
                 ids = ", ".join(o["order_id"] for o in candidates[:5])
                 return None, f"{sender} has {len(candidates)} open orders ({ids}); asked which one."
+            attempt("sender_email", "not_found", candidates=0)
             return None, f"No open order found for {sender}."
         return None, "No order number in the message and no sender email to look it up."
 

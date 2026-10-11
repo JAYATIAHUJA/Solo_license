@@ -20,10 +20,12 @@ export const TICKET_STATUS = {
 };
 
 const STEP_NAMES = {
+  context: 'Picked up the conversation',
   read: 'Read the message',
   find_order: 'Found the order',
   policy: 'Checked your rules',
   act: 'Acted within its licence',
+  replan: 'Changed its plan',
   reply: 'Wrote the reply',
 };
 
