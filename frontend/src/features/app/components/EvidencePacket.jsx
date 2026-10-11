@@ -62,8 +62,14 @@ export function EvidencePacket({ packet, taskClass }) {
   const toolAttrs = parseAttrs(spanNamed('tool.result')?.attributes);
   const executed = Boolean(run.executed) || spans.some((s) => s.name.startsWith('tool.execute'));
   const verified = verifyAttrs.verified !== false;
-  const before = packet.before_refunded ?? run.before_refunded;
-  const after = packet.after_refunded ?? run.after_refunded;
+  // The first read-back is what judged the tool; a recovery adds a second one.
+  const before = verifyAttrs.before ?? packet.before_refunded ?? run.before_refunded;
+  const after = verifyAttrs.after ?? packet.after_refunded ?? run.after_refunded;
+  const firstMatched = verifyAttrs.matched !== undefined ? verifyAttrs.matched
+    : Math.abs((packet.intended_delta ?? 0) - (packet.actual_delta ?? 0)) <= 1e-9;
+  const recoverDone = parseAttrs(spanNamed('recover.done')?.attributes);
+  const recoverySteps = spans.filter((sp) => sp.name.startsWith('recover.')).map((sp) => sp.name);
+  const finalAfter = packet.after_refunded ?? run.after_refunded;
   const out = outcome(run.status);
   const caught = run.status === 'demoted' || detections.length > 0;
   const customer = packet.order?.customer;
@@ -101,10 +107,27 @@ export function EvidencePacket({ packet, taskClass }) {
     steps.push(verified
       ? {
         title: 'Double-checked the order',
-        tone: Math.abs((packet.intended_delta ?? 0) - (packet.actual_delta ?? 0)) > 1e-9 ? 'bad' : 'ok',
-        body: <>Before: <b>{money(before)}</b> {effect} · After: <b>{money(after)}</b> {effect}</>,
+        tone: firstMatched ? 'ok' : 'bad',
+        body: <>Before: <b>{money(before)}</b> {effect} · After: <b>{money(after)}</b> {effect}{firstMatched ? '' : ' — not what the tool claimed.'}</>,
       }
       : { title: 'Skipped the double-check', tone: 'bad', body: 'The order was never re-read to confirm the result.' });
+  }
+  if (recoverySteps.length) {
+    const how = recoverDone.how || '';
+    const retried = recoverySteps.includes('recover.retry');
+    steps.push(run.recovered
+      ? {
+        title: 'Recovered it safely',
+        tone: 'ok',
+        body: retried
+          ? <>Re-read the order (still nothing), then retried once with the <b>same request key</b> — so it could never pay twice — and checked again: <b>{money(finalAfter)}</b> {effect}.</>
+          : <>Re-read the order and found the change had landed after all: <b>{money(finalAfter)}</b> {effect}.</>,
+      }
+      : {
+        title: 'Could not recover it',
+        tone: 'bad',
+        body: `Tried to put it right but could not confirm the result${how ? ` (${how})` : ''}. A person needs to look.`,
+      });
   }
 
   return (
@@ -146,6 +169,7 @@ export function EvidencePacket({ packet, taskClass }) {
                     const p = problem(d.rule);
                     return <p key={d.id}><b>{p.title}.</b> {p.explain}</p>;
                   })}
+                  {run.recovered ? <p><b>The customer still got their money</b> — but the tool could not be trusted, so the licence drops anyway.</p> : null}
                   <p className="act-paused">{pausedSentence(data, key)} — nothing more runs until someone reviews this and presses Resume.</p>
                 </>
               ) : run.status === 'clean' ? (

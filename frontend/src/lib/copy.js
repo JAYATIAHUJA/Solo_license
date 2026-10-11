@@ -52,7 +52,7 @@ export const outcome = (status) => OUTCOME[status] || { label: status, tone: 'mu
 export const PROBLEMS = {
   state_mismatch: {
     title: 'The tool said “done”, but nothing changed',
-    explain: 'We re-checked the order after the agent acted and the money never moved.',
+    explain: 'We re-checked the order after the agent acted and the money had not moved.',
   },
   policy_breach: {
     title: 'The agent went beyond its permission',

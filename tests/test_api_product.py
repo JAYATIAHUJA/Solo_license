@@ -173,3 +173,28 @@ def test_stripe_key_is_validated_before_saving(monkeypatch, harness):
     bad = client.put("/api/settings", headers=headers, json={"values": {"stripe_secret_key": "pk_test_123"}})
     live = client.put("/api/settings", headers=headers, json={"values": {"stripe_secret_key": "sk_live_123"}})
     assert bad.status_code == 422 and live.status_code == 422
+
+
+def test_onboarding_with_a_csv_and_rules(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+    harness.conn.execute("DELETE FROM tickets")
+    harness.conn.execute("DELETE FROM runs")
+    harness.conn.execute("DELETE FROM orders")
+    harness.conn.commit()
+    body = client.post("/api/onboarding/complete", headers=headers, json={
+        "business_name": "Lamp Shop",
+        "load_sample_orders": False,
+        "orders_csv": "Name,Email,Total,Created at\n#5001,jo@example.com,19.99,2026-10-01\n",
+        "values": {"orders_source": "csv", "trust_confidence": 0.95, "refund_window_days": 14,
+                   "econ_incident_cost": 60},
+    }).json()
+    assert body["settings"]["onboarded"] and body["settings"]["orders_source"] == "csv"
+    assert [o["order_id"] for o in body["orders"]] == ["5001"]
+    # The real API rebuilds its context after saving; do the same here.
+    fresh = build_app(replace(harness.config, demo_mode=True), check_same_thread=False)
+    monkeypatch.setattr(api_module, "_context", fresh)
+    body = client.get("/api/dashboard", headers=headers).json()
+    assert body["settings"]["refund_window_days"] == 14 and body["trust"]["confidence"] == 0.95
+    # A cheaper mistake lowers the bar: the break-even rate doubles from $120 to $60.
+    assert body["trust"]["break_even"]["1"] == round(1.875 / 60, 4)

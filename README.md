@@ -42,6 +42,19 @@ approving refunds.
 | 4. Let it work | **Inbox → Handle new messages** | Every message: steps, a verified outcome, a reply that states only verified facts |
 | 5. Stay in charge | **Home**, **Activity** | Approve or reject what it prepared; read why it was paused; resume at a level you choose |
 
+## See it
+
+<table>
+<tr>
+<td width="50%"><img src="docs/assets/screens/inbox.png" alt="Inbox: each customer message with the agent's steps and a reply to send"/><br/><sub><b>Inbox</b> — every message: what the agent did, step by step, and a reply that states only verified facts.</sub></td>
+<td width="50%"><img src="docs/assets/screens/home.png" alt="Home: what each job type may do and how much more evidence it needs"/><br/><sub><b>Home</b> — what each job type may do alone, and how many more double-checked jobs the next level needs, from your own costs.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/assets/screens/evidence.png" alt="Evidence page for a recovered failure"/><br/><sub><b>A tool that lied</b> — the read-back caught it, the agent retried with the same key and verified; the customer got the money, the job type was paused.</sub></td>
+<td><img src="docs/assets/screens/onboarding.png" alt="Onboarding: where are your orders"/><br/><sub><b>Setup</b> — where your orders live (sample shop, CSV, Stripe test mode), then your rules.</sub></td>
+</tr>
+</table>
+
 ## How one message is handled
 
 ```mermaid
@@ -63,6 +76,12 @@ flowchart LR
 ```
 
 *The model reads and proposes; the policy, the licence and the read-back decide.*
+
+<details>
+<summary>One message, one trace — the 19 recorded steps of the recovered refund above</summary>
+<p align="center"><img src="docs/assets/screens/trace.png" alt="Every recorded step of one message: read, find order, policy, licence, execute, verify, recover, detection, reply" width="520"/></p>
+These are the spans sent to neatlogs for that run (the app keeps a local copy for the evidence page).
+</details>
 
 ## Earned trust, not "N clean runs"
 
@@ -137,6 +156,8 @@ The plan lives in cfo.ai: **[Solo License — autonomy economics](https://app.cf
 (inputs, scenario controls, P&L, four-scenario scorecard). Assumptions mirror
 [`cfo/model.py`](cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
 
+<p align="center"><img src="docs/assets/screens/cfo-scorecard.png" alt="cfo.ai: scenario P&L and four-scenario scorecard" width="760"/></p>
+
 | Scenario | Review time saved / month | Monthly profit | Margin | Runway |
 |---|---|---|---|---|
 | **Earned L2 (Solo License)** | $41,250 | **+$3,250** | **+20.3%** | profitable |
@@ -173,7 +194,9 @@ trace. The before/after benchmark pairs v1 and v2 trace ids run by run
 
 **Entire — the audit trail and the build history.** Every promote / pause / resume is a commit of
 [`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with reason, run and trace id; Entire
-checkpoints record the AI sessions behind the code; Runners and Trails review each pull request.
+checkpoints record the AI sessions behind the code; Runners and Trails gate each pull request
+([trail 2](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/2) · [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) ·
+[trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4)). Details and commands: [`artifacts/entire.md`](artifacts/entire.md).
 
 ```bash
 git log --oneline -- ledger/license_ledger.jsonl       # how each job type earned and lost its licence
@@ -192,13 +215,13 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 |---|---|
 | A real end-to-end agent task | Ticket agent [`loop.py`](sololicense/agent/loop.py) + worker [`worker.py`](sololicense/agent/worker.py); try **Inbox → Handle new messages** |
 | The agent improved (before/after with numbers) | [`artifacts/benchmark.md`](artifacts/benchmark.md): customers left waiting 4 → 0, paired neatlogs traces |
-| neatlogs traces | Trace ids in `artifacts/benchmark.md`; each run's evidence page deep-links to its trace |
-| Entire checkpoints / graph | `entire checkpoint list`; 27 ledger commits: `git log -- ledger/license_ledger.jsonl` |
-| cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [`cfo/`](cfo) |
+| neatlogs traces | Paired trace ids in `artifacts/benchmark.md`; [one message's 19 spans](docs/assets/screens/trace.png); each evidence page deep-links to its trace |
+| Entire checkpoints / trails | [`artifacts/entire.md`](artifacts/entire.md): checkpoint on `87ab58d`, Trails on every PR, ledger commits: `git log -- ledger/license_ledger.jsonl` |
+| cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](docs/assets/screens/cfo-scorecard.png) + [`cfo/`](cfo) |
 | A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
 | Scores on a standard dataset | [`artifacts/taubench.md`](artifacts/taubench.md) — τ-bench retail, two frontier models |
 | Commits during the hackathon | `git log --since=2026-10-10` |
-| Tests | `python -m pytest` — 116 tests |
+| Tests | `python -m pytest` — 117 tests |
 
 ---
 

@@ -213,7 +213,7 @@ def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | str
     """The model's reading of the message, or a note explaining why not."""
     known = [r["order_id"] for r in orders_repo.list_orders(conn)[:50]]
     try:
-        text = complete(config, build_prompt(message, known), max_tokens=300)
+        text = complete(config, build_prompt(message, known), max_tokens=800)
     except Exception as error:
         return _failure_note(error)
     parsed = parse_llm_response(text, model=config.llm_model)
