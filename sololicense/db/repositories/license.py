@@ -19,6 +19,8 @@ def _row_to_state(row: sqlite3.Row) -> LicenseState:
             if row["demoted_from"] is not None
             else None
         ),
+        successes=row["successes"],
+        failures=row["failures"],
     )
 
 
@@ -42,13 +44,15 @@ def upsert_state(conn: sqlite3.Connection, state: LicenseState) -> None:
         """
         INSERT INTO license_state
             (task_class, level, consecutive_clean_runs, quarantined,
-             demoted_from, updated_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+             demoted_from, successes, failures, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(task_class) DO UPDATE SET
             level = excluded.level,
             consecutive_clean_runs = excluded.consecutive_clean_runs,
             quarantined = excluded.quarantined,
             demoted_from = excluded.demoted_from,
+            successes = excluded.successes,
+            failures = excluded.failures,
             updated_at = excluded.updated_at
         """,
         (
@@ -57,5 +61,7 @@ def upsert_state(conn: sqlite3.Connection, state: LicenseState) -> None:
             state.consecutive_clean_runs,
             1 if state.quarantined else 0,
             int(state.demoted_from) if state.demoted_from is not None else None,
+            state.successes,
+            state.failures,
         ),
     )

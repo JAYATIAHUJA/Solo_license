@@ -16,6 +16,7 @@ from sololicense.faults.injector import FaultInjector
 from sololicense.observability.neatlogs_client import init_neatlogs
 from sololicense.observability.tracer import Tracer
 from sololicense.services.git_ledger import GitLedger
+from sololicense.services import economics
 from sololicense.services.license_service import LicenseService
 
 
@@ -27,6 +28,7 @@ class Harness:
     license_service: LicenseService
     fault_injector: FaultInjector
     repo: object
+    agent: object = None
 
 
 @pytest.fixture
@@ -55,11 +57,14 @@ def harness(tmp_path) -> Harness:
     tracer = Tracer(init_neatlogs(config))
     license_service = LicenseService(
         conn, GitLedger(repo_root=repo),
-        promotion_threshold=config.promotion_clean_runs,
+        ladder=economics.trust_ladder({}, config.trust_confidence),
     )
     faults = FaultInjector(conn)
     worker = RefundWorker(
         conn, config, tracer=tracer, license_service=license_service,
         fault_injector=faults, planner=Planner(config),
     )
-    return Harness(conn, config, worker, license_service, faults, repo)
+    from sololicense.agent.loop import TicketAgent
+
+    agent = TicketAgent(conn, config, tracer=tracer, worker=worker)
+    return Harness(conn, config, worker, license_service, faults, repo, agent)

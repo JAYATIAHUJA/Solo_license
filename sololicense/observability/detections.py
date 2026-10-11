@@ -8,7 +8,7 @@ when a live neatlogs key is absent.
 
 Three rules, matching the spec:
     state_mismatch        the DB side effect did not match what was intended
-    missing_verification  the agent reported done without reading SQLite back
+    missing_verification  the agent reported done without reading the result back
     policy_breach         the attempted action exceeded the current license
 """
 
@@ -44,7 +44,7 @@ def detect_state_mismatch(
             rule="state_mismatch",
             severity=CRITICAL,
             message=(
-                f"Intended refund delta ${intended_delta:.2f} but SQLite moved "
+                f"Intended change ${intended_delta:.2f} but the system of record moved "
                 f"${actual_delta:.2f}. Tool response cannot be trusted."
             ),
         )
@@ -57,7 +57,7 @@ def detect_missing_verification(*, verified: bool) -> Detection | None:
         return Detection(
             rule="missing_verification",
             severity=CRITICAL,
-            message="Execution reported complete without verifying SQLite state.",
+            message="Execution reported complete without reading the result back.",
         )
     return None
 

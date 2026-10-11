@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS orders (
     credit_issued    REAL NOT NULL DEFAULT 0,  -- verified side effect (store_credit)
     status           TEXT NOT NULL DEFAULT 'paid',
     updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    -- email, ordered_at, currency, source, external_id, customer_ref are
+    -- added by database._migrate so older databases gain them too.
 );
 
 -- The autonomy dial. One row per task class; the live source of truth the
@@ -24,6 +26,8 @@ CREATE TABLE IF NOT EXISTS license_state (
     consecutive_clean_runs INTEGER NOT NULL DEFAULT 0,
     quarantined            INTEGER NOT NULL DEFAULT 0,  -- 0/1
     demoted_from           INTEGER,                     -- level it fell from
+    successes              INTEGER NOT NULL DEFAULT 0,  -- verified evidence
+    failures               INTEGER NOT NULL DEFAULT 0,
     updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -126,3 +130,22 @@ CREATE TABLE IF NOT EXISTS intakes (
     run_id      INTEGER,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Customer messages waiting for (or handled by) the agent. They arrive by
+-- paste, by the inbox webhook (helpdesk / email forwarder) or by CSV import.
+CREATE TABLE IF NOT EXISTS tickets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source      TEXT NOT NULL DEFAULT 'paste',   -- paste | webhook | sample
+    sender      TEXT,                            -- customer email, if known
+    subject     TEXT,
+    body        TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'new',     -- new | done | waiting | needs_human
+    outcome     TEXT,                            -- one-line result for the inbox
+    reply       TEXT,                            -- reply drafted for the customer
+    steps       TEXT NOT NULL DEFAULT '[]',      -- JSON: the agent's steps
+    run_id      INTEGER,
+    trace_id    TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    handled_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_created ON tickets (created_at DESC);

@@ -11,7 +11,9 @@ import sqlite3
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from sololicense.agent.loop import TicketAgent
 from sololicense.agent.planner import Planner
+from sololicense.connectors import Connectors
 from sololicense.agent.worker import RefundWorker
 from sololicense.config import Config, load_config, with_overrides
 from sololicense.db.repositories import settings as settings_repo
@@ -19,6 +21,7 @@ from sololicense.db.database import init_db
 from sololicense.faults.injector import FaultInjector
 from sololicense.observability.neatlogs_client import NeatlogsClient, init_neatlogs
 from sololicense.observability.tracer import Tracer
+from sololicense.services import economics
 from sololicense.services.alerts import AlertNotifier
 from sololicense.services.git_ledger import GitLedger
 from sololicense.services.license_service import LicenseService
@@ -36,6 +39,8 @@ class AppContext:
     fault_injector: FaultInjector
     alerts: AlertNotifier | None = None
     warnings: list[str] = field(default_factory=list)
+    connectors: Connectors | None = None
+    agent: TicketAgent | None = None
 
 
 def _local_encryption_key(db_path: Path) -> str:
@@ -89,11 +94,12 @@ def build_app(
     )
     license_service = LicenseService(
         conn, GitLedger(repo_root=config.ledger_repo),
-        promotion_threshold=config.promotion_clean_runs,
+        ladder=economics.trust_ladder(revealed, config.trust_confidence),
         on_transition=alerts.notify,
     )
     fault_injector = FaultInjector(conn)
     planner = Planner(config)
+    connectors = Connectors(conn, config)
     worker = RefundWorker(
         conn,
         config,
@@ -101,7 +107,9 @@ def build_app(
         license_service=license_service,
         fault_injector=fault_injector,
         planner=planner,
+        connectors=connectors,
     )
+    agent = TicketAgent(conn, config, tracer=tracer, worker=worker)
 
     return AppContext(
         config=config,
@@ -112,4 +120,6 @@ def build_app(
         fault_injector=fault_injector,
         alerts=alerts,
         warnings=warnings,
+        connectors=connectors,
+        agent=agent,
     )

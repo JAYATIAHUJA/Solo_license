@@ -7,7 +7,9 @@ entry → back-link the git sha to the event.
 
 Only three things move the dial, and they map one-to-one onto the ladder's
 rules:
-    * a verified-clean run may *promote*;
+    * a verified-clean run adds evidence and may *promote* once the evidence
+      proves the job type is reliable enough to be worth it (see
+      :mod:`sololicense.domain.trust`);
     * a detection *demotes* (crash to L0 + quarantine);
     * a human *restores* after reading the evidence packet.
 """
@@ -25,8 +27,10 @@ from sololicense.domain.license import (
     LicenseState,
     demote_on_detection,
     record_clean_run,
+    record_rejection,
     restore,
 )
+from sololicense.domain.trust import TrustLadder
 from sololicense.services.git_ledger import GitLedger, LedgerEntry
 from sololicense.security import Actor, Role
 
@@ -50,13 +54,21 @@ class LicenseService:
         conn: sqlite3.Connection,
         ledger: GitLedger,
         *,
-        promotion_threshold: int,
+        ladder: TrustLadder,
         on_transition: Callable[..., None] | None = None,
     ) -> None:
         self._conn = conn
         self._ledger = ledger
-        self._threshold = promotion_threshold
+        self._ladder = ladder
         self._on_transition = on_transition
+
+    @property
+    def ladder(self) -> TrustLadder:
+        return self._ladder
+
+    def progress(self, state: LicenseState) -> dict:
+        """Evidence so far and how many verified jobs the next rung needs."""
+        return self._ladder.progress(int(state.level), state.successes, state.failures)
 
     def get_or_create(self, task_class: str) -> LicenseState:
         """Return the task class's state, seeding a fresh L0 row if absent."""
@@ -75,17 +87,19 @@ class LicenseService:
         trace_id: str | None,
         actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
-        """Credit a verified-clean run; promote if the threshold is reached."""
+        """Credit a verified-clean run; promote once the evidence earns it."""
         old = self.get_or_create(task_class)
-        new = record_clean_run(old, promotion_threshold=self._threshold)
+        new = record_clean_run(old, ladder=self._ladder)
         if new.level > old.level:
+            step = self._ladder.step(int(old.level))
             return self._persist(
                 old,
                 new,
                 kind="promote",
                 reason=(
-                    f"{self._threshold} consecutive clean runs; earned "
-                    f"{new.level.name} ({new.level.label})."
+                    f"{new.successes} verified jobs, {new.failures} failures: failure rate is below "
+                    f"{step.target_rate:.2%} with {self._ladder.confidence:.0%} confidence "
+                    f"(break-even for this step). Earned {new.level.name} ({new.level.label})."
                 ),
                 run_id=run_id,
                 trace_id=trace_id,
@@ -95,6 +109,13 @@ class LicenseService:
         license_repo.upsert_state(self._conn, new)
         self._conn.commit()
         return Transition(old=old, new=new, kind="noop", git_sha=None)
+
+    def apply_rejection(self, task_class: str) -> LicenseState:
+        """A person rejected the agent's proposal: record it as a failure."""
+        new = record_rejection(self.get_or_create(task_class))
+        license_repo.upsert_state(self._conn, new)
+        self._conn.commit()
+        return new
 
     def apply_detection(
         self,

@@ -128,3 +128,41 @@ class TrustPolicy:
 
     def runs_needed(self, successes: int, failures: int) -> int | None:
         return runs_needed(successes, failures, self.target_rate, self.confidence)
+
+
+@dataclass(frozen=True)
+class TrustLadder:
+    """One :class:`TrustPolicy` per step of the autonomy ladder.
+
+    ``minutes_by_level`` is the human time each action costs at L0..L3; the
+    saving of a step is the difference between two rungs. Climbing to a rung
+    that saves little (L2 -> L3) therefore needs far more evidence than a step
+    that saves a lot — exactly the trade-off the cfo model describes.
+    """
+
+    minutes_by_level: tuple[float, ...]
+    hourly_cost: float
+    incident_cost: float
+    confidence: float = 0.9
+
+    def step(self, level: int) -> TrustPolicy:
+        """Policy for climbing from ``level`` to ``level + 1``."""
+        saved = (self.minutes_by_level[level] - self.minutes_by_level[level + 1]) / 60.0 * self.hourly_cost
+        return TrustPolicy(review_cost_saved=saved, incident_cost=self.incident_cost, confidence=self.confidence)
+
+    @property
+    def top(self) -> int:
+        return len(self.minutes_by_level) - 1
+
+    def progress(self, level: int, successes: int, failures: int) -> dict:
+        """What the UI shows: evidence so far and what the next rung needs."""
+        bound = failure_upper_bound(successes, failures, self.confidence)
+        if level >= self.top:
+            return {"next_level": None, "runs_needed": 0, "upper_bound": round(bound, 4), "target_rate": None}
+        policy = self.step(level)
+        return {
+            "next_level": level + 1,
+            "runs_needed": policy.runs_needed(successes, failures),
+            "upper_bound": round(bound, 4),
+            "target_rate": round(policy.target_rate, 4),
+        }

@@ -38,10 +38,33 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+_ADDED_COLUMNS = {
+    "orders": (
+        ("credit_issued", "REAL NOT NULL DEFAULT 0"),
+        ("email", "TEXT"),
+        ("ordered_at", "TEXT"),                     # ISO date the customer paid
+        ("currency", "TEXT NOT NULL DEFAULT 'usd'"),
+        ("source", "TEXT NOT NULL DEFAULT 'manual'"),  # manual | sample | csv | stripe
+        ("external_id", "TEXT"),                    # e.g. Stripe charge id
+        ("customer_ref", "TEXT"),                   # e.g. Stripe customer id
+    ),
+    "license_state": (
+        ("successes", "INTEGER NOT NULL DEFAULT 0"),
+        ("failures", "INTEGER NOT NULL DEFAULT 0"),
+    ),
+    "runs": (
+        ("recovered", "INTEGER NOT NULL DEFAULT 0"),   # agent fixed a failed action
+        ("ticket_id", "INTEGER"),
+    ),
+}
+
+
 def _migrate_runs(conn: sqlite3.Connection) -> None:
-    order_columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
-    if "credit_issued" not in order_columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN credit_issued REAL NOT NULL DEFAULT 0")
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, ddl in columns:
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}
     if "idempotency_key" not in columns:
         conn.execute("ALTER TABLE runs ADD COLUMN idempotency_key TEXT")
