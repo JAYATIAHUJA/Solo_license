@@ -376,6 +376,7 @@ class RefundWorker:
             amount=request.amount,
             idempotency_key=key,
             suppress_write=effects.suppress_write,
+            **{"policy.version": permit.policy_version, "permit.id": permit.id},
         )
         tool_result = connector.apply(
             task_class, order, request.amount, idempotency_key=key, suppress_write=effects.suppress_write,

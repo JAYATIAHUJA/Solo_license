@@ -45,6 +45,8 @@ class Intake:
     # The message tries to steer the agent (rules, limits, payment details).
     # Checked by the same rules on every path, model or not.
     suspicious: bool = False
+    # OpenTelemetry GenAI attributes of the model call that read the message.
+    llm_call: dict | None = None
 
 
 class _LLMIntake(BaseModel):
@@ -57,7 +59,13 @@ class _LLMIntake(BaseModel):
 
 
 def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
-    """One-shot completion against the configured provider. Raises on failure.
+    """One-shot completion against the configured provider. Raises on failure."""
+    return complete_with_usage(config, prompt, max_tokens=max_tokens)[0]
+
+
+def complete_with_usage(config: Config, prompt: str, *, max_tokens: int = 300) -> tuple[str, dict]:
+    """Completion text plus token usage (``input_tokens`` / ``output_tokens``,
+    ``None`` when the provider does not report it). Raises on failure.
 
     Every client is passed through neatlogs' wrapper, so when a neatlogs key is
     configured the model call itself shows up inside the run's trace."""
@@ -77,7 +85,9 @@ def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return "".join(b.text for b in msg.content if b.type == "text").strip()
+        usage = getattr(msg, "usage", None)
+        return "".join(b.text for b in msg.content if b.type == "text").strip(), _usage(
+            getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None))
     if provider == "gemini":
         from google import genai
         from google.genai import types
@@ -96,7 +106,9 @@ def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
                 thinking_config=types.ThinkingConfig(thinking_budget=128),
             ),
         )
-        return (resp.text or "").strip()
+        meta = getattr(resp, "usage_metadata", None)
+        return (resp.text or "").strip(), _usage(
+            getattr(meta, "prompt_token_count", None), getattr(meta, "candidates_token_count", None))
     if provider in ("openai", "openai_compatible", "groq", "zcode_glm"):
         import openai
 
@@ -111,8 +123,30 @@ def complete(config: Config, prompt: str, *, max_tokens: int = 300) -> str:
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return (resp.choices[0].message.content or "").strip()
+        usage = getattr(resp, "usage", None)
+        return (resp.choices[0].message.content or "").strip(), _usage(
+            getattr(usage, "prompt_tokens", None), getattr(usage, "completion_tokens", None))
     raise RuntimeError(f"Unsupported LLM provider: {provider}")
+
+
+def _usage(input_tokens, output_tokens) -> dict:
+    def count(value):
+        return int(value) if isinstance(value, (int, float)) else None
+
+    return {"input_tokens": count(input_tokens), "output_tokens": count(output_tokens)}
+
+
+def gen_ai_attributes(config: Config, usage: dict, *, operation: str = "chat") -> dict:
+    """OpenTelemetry GenAI semantic-convention attributes for one model call."""
+    attrs = {
+        "gen_ai.operation.name": operation,
+        "gen_ai.provider.name": config.llm_provider,
+        "gen_ai.request.model": config.llm_model,
+    }
+    for key in ("input_tokens", "output_tokens"):
+        if usage.get(key) is not None:
+            attrs[f"gen_ai.usage.{key}"] = usage[key]
+    return attrs
 
 
 def _remaining(conn: sqlite3.Connection, order_id: str | None) -> float | None:
@@ -213,7 +247,7 @@ def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | str
     """The model's reading of the message, or a note explaining why not."""
     known = [r["order_id"] for r in orders_repo.list_orders(conn)[:50]]
     try:
-        text = complete(config, build_prompt(message, known), max_tokens=800)
+        text, usage = complete_with_usage(config, build_prompt(message, known), max_tokens=800)
     except Exception as error:
         return _failure_note(error)
     parsed = parse_llm_response(text, model=config.llm_model)
@@ -229,6 +263,7 @@ def _llm(message: str, config: Config, conn: sqlite3.Connection) -> Intake | str
         note=_SUSPICIOUS_NOTE if suspicious else "",
         task_class=parsed.task_class,
         suspicious=suspicious or parsed.needs_human,
+        llm_call=gen_ai_attributes(config, usage),
     )
 
 

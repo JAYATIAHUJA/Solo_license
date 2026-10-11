@@ -186,7 +186,7 @@ def test_model_failure_falls_back_with_an_explanation(monkeypatch, harness):
     def quota(*_a, **_k):
         raise RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded")
 
-    monkeypatch.setattr(intake_module, "complete", quota)
+    monkeypatch.setattr(intake_module, "complete_with_usage", quota)
     config = replace(harness.config, llm_provider="gemini", gemini_api_key="k")
 
     parsed = intake_module.parse_message("Refund ORD-1001 $5 please", config, harness.conn)

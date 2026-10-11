@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import secrets
 import sqlite3
@@ -46,8 +47,8 @@ class PolicyGate:
             task_class=task_class, tool=tool, order_id=order_id, amount=amount,
             expires_at=datetime.now(timezone.utc) + timedelta(seconds=self._ttl_seconds),
         )
-        permits.create(self._conn, permit, actor_id=actor.actor_id)
-        return permit
+        permit_id = permits.create(self._conn, permit, actor_id=actor.actor_id)
+        return replace(permit, id=permit_id)
 
     def consume_for_write(self, permit: ExecutionPermit) -> None:
         reason = permits.consume(self._conn, permit)
