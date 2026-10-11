@@ -376,3 +376,30 @@ CREATE TABLE IF NOT EXISTS agent_remediations (
     delivered_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_agent_remediations_session ON agent_remediations (session_id, delivered_at);
+
+-- Rolling per-session fingerprints of tool calls (loop detection). Repeat
+-- counters reset on every edit; 'edit:<turn>:<path>' rows count edits per file.
+CREATE TABLE IF NOT EXISTS agent_fingerprints (
+    session_id    TEXT NOT NULL,
+    fingerprint   TEXT NOT NULL,
+    count         INTEGER NOT NULL DEFAULT 0,
+    failures      INTEGER NOT NULL DEFAULT 0,    -- consecutive failures with the same error
+    last_outcome  TEXT,                          -- ok | failed
+    last_error    TEXT,
+    seq           INTEGER NOT NULL DEFAULT 0,    -- recency within the session window
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, fingerprint)
+);
+
+-- A person said a decision or a turn was wrong. Its classes went back to L0
+-- and the session's next prompt carries the remediation.
+CREATE TABLE IF NOT EXISTS agent_flags (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id    INTEGER,
+    turn_id        INTEGER,
+    actor_id       TEXT NOT NULL,
+    reason         TEXT NOT NULL,
+    remediation_id INTEGER,                      -- the queued message for the agent
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    delivered_at   TEXT
+);

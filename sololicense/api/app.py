@@ -478,6 +478,7 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "turns": turns,
         "events": [dict(r) for r in agent_repo.list_events(context.conn, repo, 60)],
         "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30)],
+        "flags": [dict(r) for r in agent_repo.list_flags(context.conn, 30)],
         "counts": counts,
         "savings": savings,
         "agents": [dict(r) for r in agent_repo.agents_seen(context.conn)],
@@ -558,6 +559,35 @@ def restore_coding_license(
             raise HTTPException(status_code=422, detail="Unknown action class.")
         context.coding_gate.restore(payload.repo, payload.action_class, payload.level,
                                     actor_id=actor.actor_id, reason=payload.reason)
+        return coding_payload(context)
+
+
+class CodingFlagPayload(BaseModel):
+    decision_id: int | None = Field(default=None, ge=1)
+    turn_id: int | None = Field(default=None, ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@app.post("/api/coding/flags")
+def flag_coding_decision(
+    payload: CodingFlagPayload, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
+    """A person marks one decision or one turn as wrong: its classes go back
+    to L0 and the agent's next prompt is told what to revert."""
+    if (payload.decision_id is None) == (payload.turn_id is None):
+        raise HTTPException(status_code=422, detail="Flag exactly one decision_id or one turn_id.")
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="Say what was wrong.")
+    with _lock:
+        context = get_context()
+        if context.coding_gate is None:
+            raise HTTPException(status_code=422, detail="The coding gate is not running.")
+        try:
+            context.coding_gate.flag(decision_id=payload.decision_id, turn_id=payload.turn_id,
+                                     actor_id=actor.actor_id, reason=reason)
+        except LookupError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
         return coding_payload(context)
 
 

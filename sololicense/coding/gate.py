@@ -29,9 +29,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from sololicense.coding import agents, entire, jev, remediation
+from sololicense.coding import agents, entire, jev, loops, remediation
 from sololicense.coding import policy as policy_mod
-from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe
+from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe, edited_path
 from sololicense.coding.ladder import CodingLadder
 from sololicense.db.repositories import agent as agent_repo
 from sololicense.observability.tracer import Trace, Tracer
@@ -43,6 +43,8 @@ DIAGNOSTIC = {"read", "test-run", "lint-format", "build"}
 GATE_ACTOR = "system:coding-gate"
 # Denied attempts in one turn after which the agent is stopped, not just refused.
 INTERRUPT_AFTER_DENIALS = 3
+# Decisions whose action actually ran, so a flagged turn holds them to account.
+FLAGGABLE_OUTCOMES = ("ran", "verified", "observed", "failed")
 
 
 def turn_reason(conn: sqlite3.Connection, turn_id: int) -> str | None:
@@ -146,6 +148,12 @@ class CodingGate:
             # other agents call it for every action and keep their own settings.
             by = "license" if event.get("_prompt_only", True) else "agent-settings"
             decision, reason = "ask", self._ask_reason(spec.key, level, lic, ceiling)
+        # Counted when calls run (tool_result); here only read, so nothing counts twice.
+        repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
+        if decision != "deny" and repeats >= loops.STOP_AT:
+            decision, by = "deny", "loop-guard"
+            reason = remediation.compose("loop-stop", command=command, attempts=repeats).text.removeprefix(
+                "Solo License: ")
 
         decision_id = agent_repo.insert_decision(
             self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
@@ -163,6 +171,12 @@ class CodingGate:
             trace.span("detection.policy_violation", status="error", severity="critical",
                        message=reason, action_class=spec.key, command=command, policy=rules.digest)
             self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace)
+        elif decision == "deny" and by == "loop-guard":
+            # A halt, not evidence: the class keeps its level.
+            trace.span("detection.loop", status="error", severity="warning", message=reason,
+                       action_class=spec.key, command=command, repeats=repeats)
+            self.conn.commit()
+            return self._permission_response(decision, reason, interrupt=True)
         elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
                        message=reason, action_class=spec.key, command=command)
@@ -184,9 +198,11 @@ class CodingGate:
     def tool_result(self, event: dict, *, failed: bool) -> dict:
         session = str(event.get("session_id", ""))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
+        loop_note, halt = self._watch_loops(session, tool, tool_input, event, failed)
         row = agent_repo.pending_decision(self.conn, session, tool, describe(tool, tool_input))
         if row is None:  # never went through the gate (already allowed by settings)
-            return {}
+            self.conn.commit()
+            return self._with_loop_note({}, loop_note, halt, failed)
         trace = self._trace(agent_repo.current_turn(self.conn, session))
         repo, key = row["repo"], row["action_class"]
         # Trust only grows from a person's yes or from the gate's own earned
@@ -218,12 +234,47 @@ class CodingGate:
             agent_repo.set_outcome(self.conn, row["id"], "ran")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="ok")
         self.conn.commit()
+        return self._with_loop_note(answer, loop_note, halt, failed)
+
+    def _watch_loops(self, session: str, tool: str, tool_input: dict, event: dict,
+                     failed: bool) -> tuple[str, bool]:
+        """Count a call that ran; (guidance for the agent or "", halt it)."""
+        if event.get("is_interrupt"):
+            return "", False
+        turn = agent_repo.current_turn(self.conn, session)
+        if loops.is_edit(tool):
+            loops.record_edit(self.conn, session, turn["id"] if turn else None, edited_path(tool_input))
+        seen = loops.record(self.conn, session, loops.fingerprint(tool, tool_input), failed=failed,
+                            error=str(event.get("error", "")))
+        command = describe(tool, tool_input)
+        if seen.count >= loops.STOP_AT:
+            kind, halt = "loop-stop", True
+        elif failed and seen.failures >= loops.SAME_FAILURE_AT:
+            kind, halt = "same-failure", False
+        elif seen.count >= loops.WARN_AT:
+            kind, halt = "repeat", False
+        else:
+            return "", False
+        text = remediation.compose(kind, command=command, reason=seen.error, attempts=seen.count).text
+        self._trace(turn).span("detection.loop", status="error", severity="critical" if halt else "warning",
+                               kind=kind, command=command, repeats=seen.count, failures=seen.failures)
+        return text, halt
+
+    @staticmethod
+    def _with_loop_note(answer: dict, note: str, halt: bool, failed: bool) -> dict:
+        if not note:
+            return answer
+        out = answer.setdefault("hookSpecificOutput", {
+            "hookEventName": "PostToolUseFailure" if failed else "PostToolUse"})
+        out["additionalContext"] = "\n\n".join(t for t in (out.get("additionalContext"), note) if t)
+        if halt:  # nobody was asked before this run, so stop the agent after it
+            answer.update({"continue": False, "stopReason": note})
         return answer
 
     def _remedy_failed_tool(self, row: sqlite3.Row, tool_input: dict, *, demoted: bool, trace: Trace) -> dict:
         """Tell the agent, next to the failed tool's result, what to undo. Claude
         Code's PostToolUseFailure takes only ``additionalContext`` (it cannot block)."""
-        path = str(tool_input.get("file_path") or "")
+        path = edited_path(tool_input)
         fix = remediation.compose("tool-failed", action_class=row["action_class"], command=row["command"],
                                   files=(path,) if path else (), demoted=demoted)
         delivered = row["agent"] in agents.TAKES_CONTEXT
@@ -282,6 +333,16 @@ class CodingGate:
                                          text=fix.text, delivered=True)
             self.conn.commit()
             return {"decision": "block", "reason": fix.text}
+        thrash = loops.thrashed(self.conn, session, turn["id"]) if ok and not retrying else []
+        if thrash:
+            # Guidance, not evidence: sent back once, no level changes.
+            text = remediation.compose("edit-thrash", files=thrash).text
+            trace.span("detection.edit_thrash", status="error", severity="warning", turn=turn["id"],
+                       files=[p for p, _ in thrash])
+            agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn["id"], kind="edit-thrash",
+                                         text=text, delivered=True)
+            self.conn.commit()
+            return {"decision": "block", "reason": text}
         for d in decisions:
             if d["outcome"] == "pending":  # left to a person who said no
                 agent_repo.set_outcome(self.conn, d["id"], "not-run")
@@ -329,6 +390,55 @@ class CodingGate:
         self.conn.commit()
         return level
 
+    def flag(self, *, decision_id: int | None = None, turn_id: int | None = None, actor_id: str,
+             reason: str) -> dict:
+        """A person says a decision (or a whole turn) was wrong: its classes go
+        back to L0 (a hard reset, not one failure's worth of evidence), approved
+        command families are forgotten, and the session's next prompt is told
+        what to revert."""
+        command, action_class, files = "", "", ()
+        if decision_id is not None:
+            decision = agent_repo.get_decision(self.conn, decision_id)
+            if decision is None:
+                raise LookupError(f"No decision {decision_id}.")
+            repo, session, turn_id = decision["repo"], decision["session_id"], decision["turn_id"]
+            classes = [decision["action_class"]]
+            command, action_class = decision["command"], decision["action_class"]
+            prefix = f"{decision['tool_name']} "
+            if action_class == "file-edit" and command.startswith(prefix):
+                files = (command[len(prefix):],)
+            turn = agent_repo.get_turn(self.conn, turn_id) if turn_id else None
+        elif turn_id is not None:
+            turn = agent_repo.get_turn(self.conn, turn_id)
+            if turn is None:
+                raise LookupError(f"No turn {turn_id}.")
+            repo, session = turn["repo"], turn["session_id"]
+            ran = {d["action_class"] for d in agent_repo.decisions_for_turn(self.conn, turn_id)
+                   if d["outcome"] in FLAGGABLE_OUTCOMES}
+            # Edits Claude Code already allows never reach the gate; a turn is still its edits.
+            classes = sorted(ran) or ["file-edit"]
+            files = tuple(self._turn_files(turn))
+        else:
+            raise ValueError("Flag a decision or a turn.")
+
+        trace = self.tracer.start_trace("coding.flag", repo=repo)
+        for key in classes:
+            lic = agent_repo.get_license(self.conn, repo, key)
+            self._change(repo, key, "flag", lic["level"], 0, f"{actor_id}: {reason}", trace, actor_id=actor_id)
+            agent_repo.forget_patterns(self.conn, repo, key)
+        fix = remediation.compose("flagged", reason=reason, action_class=action_class, command=command,
+                                  files=files, classes=classes, base_ref=turn["base_ref"] if turn else None,
+                                  checkpoint=turn["entire_checkpoint"] if turn else None)
+        remediation_id = agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn_id,
+                                                      kind="flagged", text=fix.text)
+        flag_id = agent_repo.insert_flag(self.conn, decision_id=decision_id, turn_id=turn_id, actor_id=actor_id,
+                                         reason=reason, remediation_id=remediation_id)
+        trace.span("turn.flagged", status="error", flag=flag_id, decision_id=decision_id or 0, turn=turn_id or 0,
+                   classes=classes, actor_id=actor_id, reason=reason)
+        trace.flush(self.conn, None)
+        self.conn.commit()
+        return {"flag_id": flag_id, "repo": repo, "classes": classes, "session_id": session, "text": fix.text}
+
     def record_policy(self, repo: str, summary: str, actor_id: str) -> str | None:
         """A policy change on this machine: an event and a ledger commit."""
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class="policy", kind="policy",
@@ -340,13 +450,14 @@ class CodingGate:
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
                 actor_id: str = GATE_ACTOR) -> None:
-        agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if kind == "demote" else None)
+        lost = kind in ("demote", "flag")
+        agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if lost else None)
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class=key, kind=kind,
                                            from_level=old, to_level=new, reason=reason, actor_id=actor_id)
         sha = self.ledger.record(LedgerEntry(f"{key}@{repo}", kind, old, new, reason, None, trace.trace_id))
         if sha:
             agent_repo.set_event_sha(self.conn, event_id, sha)
-        trace.span(f"license.{kind}", status="error" if kind == "demote" else "ok", action_class=key,
+        trace.span(f"license.{kind}", status="error" if lost else "ok", action_class=key,
                    repo=repo, from_level=old, to_level=new, reason=reason, git_sha=sha or "")
 
     # --- helpers -----------------------------------------------------------

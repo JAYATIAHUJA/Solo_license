@@ -207,13 +207,33 @@ def take_remediations(conn: sqlite3.Connection, session_id: str) -> list[sqlite3
         "SELECT * FROM agent_remediations WHERE session_id = ? AND delivered_at IS NULL ORDER BY id", (session_id,)
     ).fetchall()
     if rows:
-        conn.executemany("UPDATE agent_remediations SET delivered_at = datetime('now') WHERE id = ?",
-                         [(r["id"],) for r in rows])
+        ids = [(r["id"],) for r in rows]
+        conn.executemany("UPDATE agent_remediations SET delivered_at = datetime('now') WHERE id = ?", ids)
+        conn.executemany("UPDATE agent_flags SET delivered_at = datetime('now') WHERE remediation_id = ?", ids)
     return rows
 
 
 def recent_remediations(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM agent_remediations ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
+# --- flags --------------------------------------------------------------------
+
+def get_decision(conn: sqlite3.Connection, decision_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM agent_decisions WHERE id = ?", (decision_id,)).fetchone()
+
+
+def insert_flag(conn: sqlite3.Connection, *, decision_id: int | None, turn_id: int | None, actor_id: str,
+                reason: str, remediation_id: int | None) -> int:
+    cur = conn.execute(
+        "INSERT INTO agent_flags (decision_id, turn_id, actor_id, reason, remediation_id) VALUES (?, ?, ?, ?, ?)",
+        (decision_id, turn_id, actor_id, reason, remediation_id),
+    )
+    return int(cur.lastrowid)
+
+
+def list_flags(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM agent_flags ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
 
 # --- repositories ------------------------------------------------------------
