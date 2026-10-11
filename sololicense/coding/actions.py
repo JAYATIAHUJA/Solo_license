@@ -158,6 +158,11 @@ def classify_tool(tool_name: str, tool_input: dict) -> Classification:
     return Classification("unknown", tool_name, "rules")
 
 
+def edited_path(tool_input: dict) -> str:
+    """The file an edit tool writes (notebooks name it ``notebook_path``)."""
+    return str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
+
+
 def describe(tool_name: str, tool_input: dict) -> str:
     """One readable line for logs, traces and the UI."""
     if tool_name in _SHELL_TOOLS:

@@ -44,6 +44,11 @@ def _edit(gate, path="app.py", old="a", new="b"):
     return _event(gate, tool_name="Edit", tool_input={"file_path": path, "old_string": old, "new_string": new})
 
 
+def _notebook(gate, path="nb.ipynb", cell="c1", source="x = 1"):
+    return _event(gate, tool_name="NotebookEdit", tool_input={
+        "notebook_path": path, "cell_id": cell, "new_source": source, "cell_type": "code", "edit_mode": "replace"})
+
+
 def _context(answer):
     return (answer.get("hookSpecificOutput") or {}).get("additionalContext", "")
 
@@ -59,6 +64,16 @@ def test_fingerprints_ignore_spacing_descriptions_and_volatile_values():
     assert loops.fingerprint("Bash", {"command": "npm test"}) != loops.fingerprint("Bash", {"command": "npm run lint"})
     assert loops.fingerprint("Edit", {"file_path": "a.py", "old_string": "x", "new_string": "y"}) != \
         loops.fingerprint("Edit", {"file_path": "a.py", "old_string": "x", "new_string": "z"})
+
+
+def test_notebook_edits_are_fingerprinted_by_notebook_cell_and_source():
+    base = {"notebook_path": "a.ipynb", "cell_id": "c1", "new_source": "x = 1", "cell_type": "code",
+            "edit_mode": "replace"}
+    fp = loops.fingerprint("NotebookEdit", base)
+    assert fp == loops.fingerprint("NotebookEdit", dict(base))
+    for change in ({"notebook_path": "b.ipynb"}, {"cell_id": "c2"}, {"new_source": "x = 2"},
+                   {"cell_type": "markdown"}, {"edit_mode": "insert"}):
+        assert loops.fingerprint("NotebookEdit", base | change) != fp
 
 
 def test_the_error_head_skips_the_exit_code_line():
@@ -129,6 +144,32 @@ def test_permission_and_post_tool_count_a_call_once(gate):
     assert row["count"] == 2
 
 
+def _fingerprints(conn, session_id):
+    return {r["fingerprint"] for r in conn.execute(
+        "SELECT fingerprint FROM agent_fingerprints WHERE session_id = ?", (session_id,))}
+
+
+def test_an_edit_clears_edit_tool_fingerprints_but_keeps_the_turn_bookkeeping(gate):
+    conn = gate.conn
+    bash = loops.fingerprint("Bash", {"command": "npm test"})
+    edit = loops.fingerprint("Edit", {"file_path": "a.py", "old_string": "x", "new_string": "y"})
+    loops.record_edit(conn, "s9", 1, "a.py")
+    loops.record(conn, "s9", bash, failed=False)
+    loops.record(conn, "s9", edit, failed=False)
+    loops.record_edit(conn, "s9", 1, "b.py")
+    assert _fingerprints(conn, "s9") == {"edit:1:a.py", "edit:1:b.py"}
+
+
+def test_the_window_caps_edit_tool_fingerprints_too(gate):
+    conn = gate.conn
+    loops.record_edit(conn, "s9", 1, "a.py")
+    for i in range(loops.WINDOW + 5):
+        loops.record(conn, "s9", loops.fingerprint("Edit", {"file_path": f"f{i}.py"}), failed=False)
+    remembered = _fingerprints(conn, "s9")
+    assert "edit:1:a.py" in remembered
+    assert len(remembered - {"edit:1:a.py"}) == loops.WINDOW
+
+
 def test_editing_the_same_file_again_and_again_sends_the_turn_back_once(gate):
     gate.user_prompt(_event(gate, prompt="fix app.py"))
     for i in range(4):
@@ -137,6 +178,21 @@ def test_editing_the_same_file_again_and_again_sends_the_turn_back_once(gate):
     assert blocked["decision"] == "block" and "app.py" in blocked["reason"] and "4 times" in blocked["reason"]
     assert gate.stop(_event(gate, stop_hook_active=True)) == {}
     assert not gate.conn.execute("SELECT 1 FROM agent_events WHERE kind = 'demote'").fetchone()
+
+
+def test_distinct_notebook_edits_are_not_a_loop(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    answers = [gate.tool_result(_notebook(gate, path=f"nb{i}.ipynb", cell=f"c{i}", source=f"x = {i}"),
+                                failed=False) for i in range(5)]
+    assert answers == [{}] * 5
+
+
+def test_editing_the_same_notebook_again_and_again_sends_the_turn_back_once(gate):
+    gate.user_prompt(_event(gate, prompt="fix nb.ipynb"))
+    for i in range(4):
+        gate.tool_result(_notebook(gate, source=f"x = {i}"), failed=False)
+    blocked = gate.stop(_event(gate))
+    assert blocked["decision"] == "block" and "nb.ipynb" in blocked["reason"] and "4 times" in blocked["reason"]
 
 
 def test_loop_guidance_reaches_codex_and_is_a_no_op_for_cursor(gate, harness, tmp_path, monkeypatch):

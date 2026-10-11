@@ -31,7 +31,7 @@ from typing import Callable
 
 from sololicense.coding import agents, entire, jev, loops, remediation
 from sololicense.coding import policy as policy_mod
-from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe
+from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe, edited_path
 from sololicense.coding.ladder import CodingLadder
 from sololicense.db.repositories import agent as agent_repo
 from sololicense.observability.tracer import Trace, Tracer
@@ -253,7 +253,7 @@ class CodingGate:
             return "", False
         turn = agent_repo.current_turn(self.conn, session)
         if loops.is_edit(tool):
-            loops.record_edit(self.conn, session, turn["id"] if turn else None, str(tool_input.get("file_path") or ""))
+            loops.record_edit(self.conn, session, turn["id"] if turn else None, edited_path(tool_input))
         seen = loops.record(self.conn, session, loops.fingerprint(tool, tool_input), failed=failed,
                             error=str(event.get("error", "")))
         command = describe(tool, tool_input)
@@ -287,7 +287,7 @@ class CodingGate:
                             reason: str, level: int, checkpoint: str | None) -> dict:
         """Tell the agent, next to the failed tool's result, what to undo. Claude
         Code's PostToolUseFailure takes only ``additionalContext`` (it cannot block)."""
-        path = str(tool_input.get("file_path") or "")
+        path = edited_path(tool_input)
         fix = remediation.compose("tool-failed", action_class=row["action_class"], command=row["command"],
                                   files=(path,) if path else (), demoted=demoted, checkpoint=checkpoint)
         delivered = row["agent"] in agents.TAKES_CONTEXT
