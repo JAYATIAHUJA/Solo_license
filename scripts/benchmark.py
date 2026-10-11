@@ -11,6 +11,15 @@ scores the same runs two ways:
   and the dial demotes. A run counts as leaked only if it executed with a
   mismatch *and* was not caught.
 
+The same seeded batch runs twice through the real worker:
+
+* **v1 — catch and stop** (recovery off): a caught fault pauses the job type and
+  the customer waits for a person;
+* **v2 — catch, recover, verify** (recovery on): the agent reconciles, retries
+  once with the same idempotency key and verifies again.
+
+That pair is the measured "agent improved" comparison, with paired traces.
+
 After each demotion the script plays the human reviewer and restores the class
 to L2 (logged as an automated benchmark restore), so the batch keeps going.
 Every run is a real trace — with NEATLOGS_API_KEY set they land in neatlogs.
@@ -75,10 +84,13 @@ def _ensure_order(context, rng: random.Random, n: int, ceiling: float) -> Refund
     return RefundRequest(order_id, f"Bench customer {n}", amount, "benchmark")
 
 
-def run_benchmark(runs: int, seed_value: int, fault_rate: float, *, with_neatlogs: bool) -> dict:
+def run_benchmark(
+    runs: int, seed_value: int, fault_rate: float, *, with_neatlogs: bool, recovery: bool = True
+) -> dict:
     rng = random.Random(seed_value)
     with tempfile.TemporaryDirectory() as tmpdir:
         context = _fresh_context(Path(tmpdir), with_neatlogs=with_neatlogs)
+        context.worker.recovery_enabled = recovery
         classes = list(TASK_CLASSES)
         for key in classes:  # both classes start from an earned L2
             context.license_service.restore_license(
@@ -113,12 +125,17 @@ def run_benchmark(runs: int, seed_value: int, fault_rate: float, *, with_neatlog
             executed = result.attempted.name.startswith("AUTO_EXECUTE")
             mismatch = executed and abs(landed - request.amount) > 1e-6
             unauthorized = executed and not result.authorized.name.startswith("AUTO_EXECUTE")
+            made_whole = executed and not unauthorized and abs(landed - request.amount) < 0.005
             rows.append({
                 "i": i, "task_class": task_class, "fault": fault.value,
                 "status": result.status.value, "executed": executed,
                 "naive_success": executed,  # the tool said "Processed"
                 "false_success": mismatch or unauthorized,
                 "caught": result.status is RunStatus.DEMOTED,
+                "recovered": result.recovered,
+                # A caught, authorised action whose money never arrived: the
+                # customer now waits for a person.
+                "customer_waiting": result.status is RunStatus.DEMOTED and not unauthorized and not made_whole,
                 "trace_id": result.trace_id,
             })
             if result.status is RunStatus.DEMOTED:
@@ -154,7 +171,15 @@ def run_benchmark(runs: int, seed_value: int, fault_rate: float, *, with_neatlog
             "false_success_leaked": len(leaked),
             "verified_success_rate": 1.0 if not leaked else round(1 - len(leaked) / max(1, len(executed)), 4),
             "license_events": {row["kind"]: row["n"] for row in events},
+            "recovered": sum(r["recovered"] for r in rows),
+            "customers_waiting": sum(r["customer_waiting"] for r in rows),
         },
+        "recovery": recovery,
+        "faulted_runs": [
+            {"i": r["i"], "fault": r["fault"], "status": r["status"], "recovered": r["recovered"],
+             "customer_waiting": r["customer_waiting"], "trace_id": r["trace_id"]}
+            for r in rows if r["fault"] != "none"
+        ],
         "latency_ms": {
             "mean": round(statistics.mean(latencies), 1),
             "p95": round(sorted(latencies)[int(0.95 * (len(latencies) - 1))], 1),
@@ -164,33 +189,47 @@ def run_benchmark(runs: int, seed_value: int, fault_rate: float, *, with_neatlog
     }
 
 
-def _markdown(report: dict) -> str:
-    b, a = report["before"], report["after"]
+def _markdown(report: dict, v1: dict) -> str:
+    b, a, o = v1["before"], report["after"], v1["after"]
+    pairs = {r["i"]: r for r in v1["faulted_runs"]}
+    trace_rows = [
+        f"| {r['i']} | {r['fault']} | `{pairs[r['i']]['trace_id']}` — "
+        f"{'customer waiting' if pairs[r['i']]['customer_waiting'] else pairs[r['i']]['status']} | "
+        f"`{r['trace_id']}` — {'recovered, verified' if r['recovered'] else r['status']} |"
+        for r in report["faulted_runs"] if r["i"] in pairs
+    ]
     return "\n".join([
-        "# Before / after: trusting the tool vs. verifying the side effect",
+        "# Before / after: trusting the tool, catching, and recovering",
         "",
         f"_Generated {report['generated_at']} · {report['runs']} runs · seed {report['seed']} · "
         f"fault rate {report['fault_rate']:.0%} · deterministic planner_",
         "",
-        "| Metric | Before — trust the tool | After — Solo License |",
-        "|---|---|---|",
-        f"| Runs that executed | {report['executed']} | {report['executed']} |",
-        f"| Reported as success | {b['claimed_success']} | {report['executed'] - a['caught']} |",
-        f"| False successes reaching the customer | **{b['false_success']}** | **{a['false_success_leaked']}** |",
-        f"| Verified success rate | {b['verified_success_rate']:.1%} | {a['verified_success_rate']:.1%} |",
-        f"| Faults caught by a detection | 0 | {a['caught']} |",
-        f"| Autonomy demotions | 0 (keeps acting) | {a['license_events'].get('demote', 0)} |",
-        f"| Mean / p95 latency per run | — | {report['latency_ms']['mean']} ms / {report['latency_ms']['p95']} ms |",
+        "The same seeded batch through the real worker, three ways.",
         "",
-        f"{report['faults_injected']} faults were injected (quiet failures + policy violations), "
-        f"all labelled in the run records; {b['false_success']} of them would have produced a false "
-        "success (a policy-violation fault on a class already at L3 is within its license, so it is "
-        "harmless). After each demotion the script restored the class to L2 as the human reviewer "
-        "would, so the batch could continue.",
+        "| Metric | Trust the tool | Solo License v1 (catch and stop) | **Solo License v2 (catch, recover, verify)** |",
+        "|---|---|---|---|",
+        f"| Runs that executed | {report['executed']} | {v1['executed']} | {report['executed']} |",
+        f"| False successes reaching the customer | **{b['false_success']}** | {o['false_success_leaked']} | **{a['false_success_leaked']}** |",
+        f"| Faults caught by a detection | 0 | {o['caught']} | {a['caught']} |",
+        f"| Customers left waiting for a person after a caught fault | — | **{o['customers_waiting']}** | **{a['customers_waiting']}** |",
+        f"| Recovered automatically and verified | 0 | 0 | {a['recovered']} |",
+        f"| Job type paused for review | never | {o['license_events'].get('demote', 0)} | {a['license_events'].get('demote', 0)} |",
+        f"| Mean / p95 latency per run | — | {v1['latency_ms']['mean']} / {v1['latency_ms']['p95']} ms | {report['latency_ms']['mean']} / {report['latency_ms']['p95']} ms |",
         "",
-        "Sample traces of caught faults: " + (", ".join(f"`{t}`" for t in report["sample_traces"]) or "—"),
+        f"{report['faults_injected']} faults were injected (quiet failures + policy violations), all labelled "
+        "in the run records. A quiet failure is a tool that answers \"Processed\" while nothing moved. "
+        "v2 still pauses the job type — the tool lied — but the customer gets their money. Policy violations "
+        "(executing beyond the licence) are never retried; they are caught and left for a person.",
         "",
-        f"neatlogs export: {'on — these traces are in your neatlogs project' if report['neatlogs'] else 'off (local span mirror only)'}.",
+        "After each pause the script restored the class to L2 as the human reviewer would, so the batch could continue.",
+        "",
+        "## Paired traces (same run, before and after the change)",
+        "",
+        "| Run | Fault | v1 trace | v2 trace |",
+        "|---|---|---|---|",
+        *trace_rows,
+        "",
+        f"neatlogs export: {'on — every trace above is in the neatlogs project' if report['neatlogs'] else 'off (local span mirror only)'}.",
         "",
         "Reproduce: `python -m scripts.benchmark "
         f"--runs {report['runs']} --seed {report['seed']} --fault-rate {report['fault_rate']}`",
@@ -204,11 +243,14 @@ def main() -> None:
     parser.add_argument("--fault-rate", type=float, default=0.2)
     parser.add_argument("--no-neatlogs", action="store_true", help="do not export traces")
     args = parser.parse_args()
-    report = run_benchmark(args.runs, args.seed, args.fault_rate, with_neatlogs=not args.no_neatlogs)
+    common = dict(with_neatlogs=not args.no_neatlogs)
+    v1 = run_benchmark(args.runs, args.seed, args.fault_rate, recovery=False, **common)
+    report = run_benchmark(args.runs, args.seed, args.fault_rate, recovery=True, **common)
+    report["v1"] = v1
     _ARTIFACTS.mkdir(exist_ok=True)
     (_ARTIFACTS / "benchmark.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    (_ARTIFACTS / "benchmark.md").write_text(_markdown(report) + "\n", encoding="utf-8")
-    print(_markdown(report))
+    (_ARTIFACTS / "benchmark.md").write_text(_markdown(report, v1) + "\n", encoding="utf-8")
+    print(f"Wrote {_ARTIFACTS / 'benchmark.md'}")
 
 
 if __name__ == "__main__":

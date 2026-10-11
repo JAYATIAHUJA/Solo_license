@@ -40,34 +40,35 @@ def _text(x, y, s, size=14, fill=INK, weight=400, anchor="start") -> str:
 
 def benchmark_chart(report: dict) -> str:
     w, h = 760, 380
-    b, a = report["before"], report["after"]
+    v1 = report.get("v1", report)
+    trust, before, after = v1["before"], v1["after"], report["after"]
     rows = [
-        ("False successes reaching a customer", b["false_success"], a["false_success_leaked"]),
-        ("Faults caught by a safety check", 0, a["caught"]),
-        ("Times the agent was paused", 0, a["license_events"].get("demote", 0)),
+        ("False successes reaching a customer", "trust the tool", trust["false_success"], after["false_success_leaked"]),
+        ("Customers left waiting after a caught fault", "v1: catch and stop", before.get("customers_waiting", 0),
+         after.get("customers_waiting", 0)),
+        ("Recovered automatically and verified", "v1: catch and stop", 0, after.get("recovered", 0)),
     ]
-    top = max(1, max(max(r[1], r[2]) for r in rows))
+    top = max(1, max(max(r[2], r[3]) for r in rows))
     body = [
-        _text(32, 44, "Trusting the tool vs. checking the result", 20, weight=600),
-        _text(32, 68, f"{report['runs']} real runs · {report['faults_injected']} injected faults · seed {report['seed']}", 13, MUTED),
-        f'<rect x="32" y="84" width="12" height="12" fill="{RED}"/>', _text(50, 95, "Trust the tool (before)", 13, MUTED),
-        f'<rect x="230" y="84" width="12" height="12" fill="{INK}"/>', _text(248, 95, "Solo License (after)", 13, MUTED),
+        _text(32, 44, "Before and after: catch, recover, verify", 20, weight=600),
+        _text(32, 68, f"{report['runs']} real runs · {report['faults_injected']} injected faults · seed {report['seed']} · same batch each way", 13, MUTED),
+        f'<rect x="32" y="84" width="12" height="12" fill="{RED}"/>', _text(50, 95, "Before", 13, MUTED),
+        f'<rect x="120" y="84" width="12" height="12" fill="{INK}"/>', _text(138, 95, "After — Solo License v2", 13, MUTED),
     ]
-    x0, bar_max, y = 300, 400, 122
-    for label, before, after in rows:
-        body.append(_text(32, y + 20, label, 14))
-        for i, (value, color) in enumerate(((before, RED), (after, INK))):
+    x0, bar_max, y = 330, 330, 122
+    for label, baseline, value_before, value_after in rows:
+        body.append(_text(32, y + 14, label, 14))
+        body.append(_text(32, y + 32, f"before = {baseline}", 12, MUTED))
+        for i, (value, color) in enumerate(((value_before, RED), (value_after, INK))):
             yy = y + i * 26
             width = 0 if value == 0 else max(4, value / top * bar_max)
             body.append(f'<rect x="{x0}" y="{yy}" width="{bar_max}" height="20" fill="#f3f1ec"/>')
             if width:
                 body.append(f'<rect x="{x0}" y="{yy}" width="{width:.1f}" height="20" fill="{color}"/>')
-            body.append(_text(x0 + width + 8 if width < bar_max - 40 else x0 + width - 8, yy + 15, value,
-                              13, INK if width < bar_max - 40 else BG, 600,
-                              "start" if width < bar_max - 40 else "end"))
+            body.append(_text(x0 + width + 8, yy + 15, value, 13, INK, 600))
         y += 78
-    body.append(_text(32, h - 22, f"Verified success rate: {b['verified_success_rate']:.0%} → {a['verified_success_rate']:.0%}", 14, GREEN, 600))
-    return _svg(w, h, body, "Benchmark: trusting the tool versus Solo License")
+    body.append(_text(32, h - 22, "The job type is still paused each time: the customer is made whole, the trust is not.", 14, GREEN, 600))
+    return _svg(w, h, body, "Benchmark: before and after recovery")
 
 
 def supervision_chart() -> str:
