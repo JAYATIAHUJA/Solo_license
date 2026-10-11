@@ -103,7 +103,8 @@ def compose(kind: str, *, action_class: str = "", command: str = "", reason: str
                 else "Check `git status` and undo anything it left half-done")
         # The agent already has the error next to the tool result; say what to do about it.
         text = (f"Solo License: `{command}` failed and {action_class} "
-                f"{'is back to asking' if demoted else 'still asks'}. {undo} and continue without it.")
+                f"{'is back to asking' if demoted else 'still asks'}. {undo} and continue without it."
+                f"{_checkpoint(checkpoint)}")
         return Remediation(text, commands)
 
     if kind == "repeat":

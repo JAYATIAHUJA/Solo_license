@@ -1,3 +1,2 @@
-"""Application services: orchestration that sits above the domain and
-repositories - the license service, side-effect verification, the git ledger,
-and the evidence-packet builder."""
+"""Application services that sit above the domain and repositories: the git
+ledger every license change is committed to."""

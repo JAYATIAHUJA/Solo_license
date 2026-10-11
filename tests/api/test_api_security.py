@@ -36,9 +36,9 @@ def test_operator_cannot_restore_a_license(monkeypatch, harness):
     client = TestClient(api_module.app, raise_server_exceptions=False)
 
     response = client.post(
-        "/api/restore",
+        "/api/coding/licenses/restore",
         headers={"Authorization": "Bearer operator-token"},
-        json={"level": 2, "reason": "reviewed"},
+        json={"repo": "shop-api", "action_class": "test-run", "level": 1, "reason": "reviewed"},
     )
 
     assert response.status_code == 403
@@ -56,7 +56,7 @@ def test_settings_secret_requires_server_encryption_key(monkeypatch, harness):
     response = client.put(
         "/api/settings",
         headers={"Authorization": "Bearer admin-token"},
-        json={"values": {"anthropic_api_key": "sk-live-secret"}},
+        json={"values": {"neatlogs_api_key": "nlk-live-secret"}},
     )
 
     assert response.status_code == 503

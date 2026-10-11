@@ -14,6 +14,13 @@ def test_a_failed_install_says_what_to_undo():
     assert r.text.endswith("continue without it.")
 
 
+def test_a_demoting_failure_names_the_entire_checkpoint_after_the_undo():
+    r = compose("tool-failed", action_class="install-dep", command="npm install left-pad", demoted=True,
+                checkpoint="a3b2c4d5e6f7aa")
+    assert r.text.startswith("Solo License: `npm install left-pad` failed and install-dep is back to asking.")
+    assert r.text.endswith("continue without it. Entire checkpoint: `entire checkpoint explain a3b2c4d5e6f7`.")
+
+
 def test_each_package_manager_reverts_its_own_manifest():
     assert compose("tool-failed", action_class="install-dep", command="pnpm add zod").revert_commands == \
         ("git checkout -- package.json pnpm-lock.yaml",)

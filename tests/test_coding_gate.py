@@ -25,7 +25,7 @@ def _git_init(path):
 @pytest.fixture
 def gate(harness, tmp_path):
     project = _git_init(tmp_path / "shop-api")
-    gate = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    gate = CodingGate(harness.conn, harness.tracer, GitLedger(repo_root=harness.repo),
                       jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     gate.project = project
     return gate
@@ -149,7 +149,7 @@ def test_hook_endpoint_round_trip(gate, harness, tmp_path, monkeypatch):
 
     # The API serves from worker threads.
     conn = init_db(tmp_path / "api.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
         coding_gate = threaded
@@ -185,7 +185,7 @@ def test_coding_dashboard_lists_licenses_with_progress(gate, harness, tmp_path, 
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "dash.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
         coding_gate = threaded
@@ -283,7 +283,7 @@ def test_the_claude_route_cannot_be_used_to_pose_as_another_agent(gate, harness,
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "route.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
@@ -311,7 +311,7 @@ def test_the_coding_dashboard_lists_license_events(gate, harness, tmp_path, monk
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "events.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     agent_repo.ensure_repo(conn, "shop-api", str(gate.project))
     threaded.restore("shop-api", "test-run", 1, actor_id="human:jayati", reason="reviewed")
@@ -395,7 +395,7 @@ def test_remediation_through_the_claude_and_codex_routes(gate, harness, tmp_path
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "remedy.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:

@@ -3,6 +3,12 @@
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
 
+-- Legacy: the payments agent's tables (orders, license_state, runs,
+-- policies, policy_rules, policy_impacts, execution_permits, detections,
+-- license_events, armed_faults, intakes, tickets) stay for one release so
+-- older databases keep opening. Only the startup migration in database.py
+-- touches them; the app reads settings, spans and the agent_* tables.
+
 -- The "real world" the agent acts on. orders.refunded_amount is the ONLY
 -- authority on whether a refund actually landed - the verifier reads it
 -- back after every execution rather than trusting the tool's response.
@@ -354,6 +360,8 @@ CREATE TABLE IF NOT EXISTS agent_events (
     reason        TEXT NOT NULL,
     actor_id      TEXT NOT NULL,
     git_sha       TEXT,
+    trace_id      TEXT,                          -- the neatlogs trace that recorded the change
+    entire_checkpoint TEXT,                      -- the agent's last Entire checkpoint, when known
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_agent_events_repo ON agent_events (repo, id DESC);

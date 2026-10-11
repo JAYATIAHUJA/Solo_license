@@ -87,6 +87,10 @@ _ADDED_COLUMNS = {
     "agent_repos": (
         ("last_tests", "TEXT"),                    # passed | failed at the last turn check
     ),
+    "agent_events": (
+        ("trace_id", "TEXT"),                      # the neatlogs trace that recorded the change
+        ("entire_checkpoint", "TEXT"),             # the agent's last Entire checkpoint
+    ),
 }
 
 
