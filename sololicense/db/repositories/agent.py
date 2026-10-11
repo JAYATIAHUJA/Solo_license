@@ -168,11 +168,12 @@ def recent_turns(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]
 # --- events ------------------------------------------------------------------
 
 def insert_event(conn: sqlite3.Connection, *, repo: str, action_class: str, kind: str, from_level: int,
-                 to_level: int, reason: str, actor_id: str, principal: str = "main") -> int:
+                 to_level: int, reason: str, actor_id: str, principal: str = "main",
+                 trace_id: str | None = None, entire_checkpoint: str | None = None) -> int:
     cur = conn.execute(
-        "INSERT INTO agent_events (repo, principal, action_class, kind, from_level, to_level, reason, actor_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (repo, principal, action_class, kind, from_level, to_level, reason, actor_id),
+        "INSERT INTO agent_events (repo, principal, action_class, kind, from_level, to_level, reason, actor_id, "
+        "trace_id, entire_checkpoint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (repo, principal, action_class, kind, from_level, to_level, reason, actor_id, trace_id, entire_checkpoint),
     )
     return int(cur.lastrowid)
 

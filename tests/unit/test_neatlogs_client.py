@@ -83,10 +83,10 @@ def test_flushing_a_trace_closes_the_remote_workflow_once(harness):
     closed: list[object] = []
 
     class _Client:
-        def start_workflow(self, trace_id, attributes=None):
+        def start_workflow(self, trace_id, attributes=None, *, session_id=None):
             return SimpleNamespace(trace_id="remote-1")
 
-        def record_span(self, workflow, name, status, attributes):
+        def record_span(self, workflow, name, status, attributes, *, incident=None):
             pass
 
         def finish_workflow(self, workflow):

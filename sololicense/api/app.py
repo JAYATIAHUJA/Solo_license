@@ -25,6 +25,7 @@ from sololicense.bootstrap import AppContext, build_app
 from sololicense.db.repositories import agent as agent_repo
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.coding.actions import ACTION_CLASSES
+from sololicense.observability.links import event_payload
 from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 
@@ -204,7 +205,8 @@ def _observability(context: AppContext) -> dict:
 
 def dashboard_payload(context: AppContext) -> dict:
     """The workspace view: settings, the license history and where it is kept."""
-    events = [{**dict(e), "id": f"agent-{e['id']}", "task_class": f"{e['action_class']}@{e['repo']}"}
+    events = [{**event_payload(e, context.config), "id": f"agent-{e['id']}",
+               "task_class": f"{e['action_class']}@{e['repo']}"}
               for e in agent_repo.list_events(context.conn, limit=60)]
     return {
         "settings": serialize_settings(context),
@@ -476,7 +478,8 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "licenses": licenses,
         "decisions": decisions,
         "turns": turns,
-        "events": [dict(r) for r in agent_repo.list_events(context.conn, repo, 60)],
+        "events": [event_payload(r, getattr(context, "config", None))
+                   for r in agent_repo.list_events(context.conn, repo, 60)],
         "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30)],
         "flags": [dict(r) for r in agent_repo.list_flags(context.conn, 30)],
         "counts": counts,
