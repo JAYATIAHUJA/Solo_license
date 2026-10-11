@@ -316,6 +316,7 @@ CREATE TABLE IF NOT EXISTS agent_turns (
     tests         TEXT,                         -- passed | failed | none
     reason        TEXT,
     trace_id      TEXT,
+    entire_checkpoint TEXT,                     -- last Entire checkpoint before a failure
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     closed_at     TEXT
 );

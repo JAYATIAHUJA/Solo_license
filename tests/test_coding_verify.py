@@ -32,7 +32,8 @@ def _project(path):
 def gate(harness, tmp_path):
     project = _project(tmp_path / "shop")
     gate = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
-                      jev_client=JevClient(), verifier=verify.check_turn)
+                      jev_client=JevClient(), verifier=verify.check_turn,
+                      checkpoint_lookup=lambda cwd, session: None)
     gate.project = project
     return gate
 
@@ -108,3 +109,24 @@ def test_tooling_files_and_old_untracked_files_are_not_the_agents_changes(gate):
     gate.user_prompt(_ev(gate, prompt="explain cart.py"))
     assert gate.stop(_ev(gate)) == {}
     assert agent_repo.current_turn(gate.conn, "s")["files_changed"] == 0
+
+
+def test_a_failed_turn_points_at_the_entire_checkpoint_and_can_be_rewound(gate):
+    from sololicense.coding import entire
+
+    gate.checkpoint_lookup = lambda cwd, session: {"checkpoint_id": "abc123def4567890", "date": "x"}
+    gate.user_prompt(_ev(gate, prompt="fix the bug in cart.py"))
+    (gate.project / "cart.py").write_text(PRICE.replace("i['price']", "i['price'] * i['qty']"))
+    (gate.project / "util.py").write_text("\n".join(f"CONSTANT_{i} = {i * 2}" for i in range(80)) + "\n")
+    gate.stop(_ev(gate))
+
+    turn = agent_repo.current_turn(gate.conn, "s")
+    assert turn["entire_checkpoint"] == "abc123def4567890"
+    event = gate.conn.execute("SELECT reason FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    assert event is None or "entire checkpoint explain abc123def456" in event["reason"]
+
+    result = entire.rewind(str(gate.project), turn["base_ref"], "solo-license: rewind turn 1")
+    assert result["ok"]
+    assert (gate.project / "cart.py").read_text() == PRICE
+    stashes = subprocess.run(["git", "stash", "list"], cwd=gate.project, capture_output=True, text=True).stdout
+    assert "solo-license: rewind turn 1" in stashes
