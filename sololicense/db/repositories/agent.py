@@ -25,6 +25,7 @@ def list_licenses(conn: sqlite3.Connection, repo: str | None = None) -> list[sql
 
 
 def add_evidence(conn: sqlite3.Connection, repo: str, action_class: str, *, ok: bool) -> None:
+    get_license(conn, repo, action_class)  # create the row on first evidence
     change = ("successes = successes + 1, successes_at_level = successes_at_level + 1"
               if ok else "failures = failures + 1")
     conn.execute(

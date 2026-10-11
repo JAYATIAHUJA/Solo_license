@@ -17,6 +17,7 @@ from sololicense.connectors import Connectors
 from sololicense.agent.worker import RefundWorker
 from sololicense.coding.gate import CodingGate
 from sololicense.coding.ladder import CodingLadder
+from sololicense.coding.verify import check_turn
 from sololicense.config import Config, load_config, with_overrides
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.database import init_db
@@ -121,6 +122,7 @@ def build_app(
     coding_gate = CodingGate(
         conn, tracer, GitLedger(repo_root=config.ledger_repo),
         ladder=CodingLadder(confidence=config.trust_confidence),
+        verifier=check_turn,
     )
 
     return AppContext(
