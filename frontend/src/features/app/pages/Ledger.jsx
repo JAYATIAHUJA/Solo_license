@@ -21,7 +21,16 @@ function CopyCmd({ cmd }) {
 }
 
 /** One permission change as a sentence a shop owner can read. */
+function codingSentence(e) {
+  const [cls, repo] = e.task_class.split('@');
+  const verb = { promote: 'earned', demote: 'lost', restore: 'was resumed at' }[e.kind] || 'changed to';
+  const level = e.kind === 'demote' ? `L${e.from_level}` : `L${e.to_level}`;
+  const why = (e.reason || '').split('\n')[0];
+  return <><code>{cls}</code> in <b>{repo}</b> {verb} <b>{level}</b>{why ? <> - {why}</> : ''}</>;
+}
+
 function sentence(data, e) {
+  if ((e.task_class || '').includes('@')) return codingSentence(e);
   const key = e.task_class || 'refund';
   const jobs = jobsName(data, key);
   const to = levelWords(data, key, e.to_level).short;
@@ -50,7 +59,8 @@ export function Ledger() {
   const { data } = useStore();
   const [cls, setCls] = useState('all');
   const classes = (data.task_classes || []).map((c) => c.key);
-  const events = data.events.filter((e) => cls === 'all' || (e.task_class || 'refund') === cls);
+  const events = data.events.filter((e) => cls === 'all'
+    || (cls === 'coding' ? (e.task_class || '').includes('@') : (e.task_class || 'refund') === cls));
   const repo = data.observability?.ledger?.repo;
 
   return (
@@ -58,12 +68,13 @@ export function Ledger() {
       <header className="pl-head">
         <div>
           <h1>Permission history</h1>
-          <p>Every change to what the agent may do is recorded here and in your code repository's history.</p>
+          <p>Every change to what an agent may do - earned, lost or resumed by a person - is recorded here and as a commit in your repository's history.</p>
         </div>
         {classes.length > 1 && (
           <select className="act-select" value={cls} onChange={(e) => setCls(e.target.value)} aria-label="Job type">
             <option value="all">All job types</option>
             {classes.map((k) => <option key={k} value={k}>{jobsName(data, k)}</option>)}
+            <option value="coding">Coding agent</option>
           </select>
         )}
       </header>

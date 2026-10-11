@@ -30,7 +30,8 @@ export function AppShell() {
       </div>
     );
   }
-  if (!data.settings.onboarded) return <Navigate to="/onboarding" replace />;
+  // The coding agent needs no shop set-up; only the payments pages use onboarding.
+  if (!data.settings.onboarded && location.pathname === '/app/payments') return <Navigate to="/onboarding" replace />;
 
   return (
     <div className={`app ${navOpen ? 'nav-open' : ''}`}>

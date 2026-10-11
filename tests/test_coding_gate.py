@@ -198,3 +198,24 @@ def test_coding_dashboard_lists_licenses_with_progress(gate, harness, tmp_path, 
     row = next(l for l in body["licenses"] if l["action_class"] == "test-run")
     assert row["level"] == 0 and row["runs_needed"] >= 3
     assert body["counts"]["ask"] == 1
+
+
+def test_a_person_resumes_a_paused_class_within_its_ceiling(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    agent_repo.get_license(gate.conn, "shop-api", "install-dep")
+    agent_repo.set_level(gate.conn, "shop-api", "install-dep", 2)
+    gate.permission(_bash(gate, "npm install left-pad"))
+    gate.tool_result(_bash(gate, "npm install left-pad") | {"error": "Exit code 1"}, failed=True)
+    assert _license(gate, "install-dep")["level"] == 0
+
+    assert gate.restore("shop-api", "install-dep", 2, actor_id="human:jayati", reason="flaky registry") == 2
+    assert gate.restore("shop-api", "git-remote", 2, actor_id="human:jayati", reason="x") == 1  # capped
+    event = gate.conn.execute("SELECT * FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    assert event["kind"] == "restore" and event["actor_id"] == "human:jayati"
+
+
+def test_a_tool_that_ran_after_the_prompt_is_recorded_as_the_persons_approval(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    _approve_and_run(gate, "npm test")
+    row = gate.conn.execute("SELECT decided_by, outcome FROM agent_decisions ORDER BY id DESC LIMIT 1").fetchone()
+    assert row["decided_by"] == "person" and row["outcome"] == "verified"

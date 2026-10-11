@@ -42,6 +42,11 @@ DIAGNOSTIC = {"read", "test-run", "lint-format", "build"}
 GATE_ACTOR = "system:coding-gate"
 
 
+def turn_reason(conn: sqlite3.Connection, turn_id: int) -> str | None:
+    row = agent_repo.get_turn(conn, turn_id)
+    return row["reason"] if row else None
+
+
 def _git(cwd: str, *args: str, timeout: float = 10.0) -> str:
     try:
         result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
@@ -143,6 +148,7 @@ class CodingGate:
         repo, key = row["repo"], row["action_class"]
         if row["decision"] == "ask":  # it ran, so the person said yes
             agent_repo.approve_pattern(self.conn, repo, key, row["pattern"])
+            agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
             trace.span("gate.approved_by_person", decision_id=row["id"], pattern=row["pattern"], action_class=key)
         error = str(event.get("error", ""))[:300]
         if failed and key not in DIAGNOSTIC and not event.get("is_interrupt"):
@@ -190,13 +196,15 @@ class CodingGate:
         if not ok and not retrying:
             # Send the agent back to fix it; the turn stays open and is checked again.
             trace.span("turn.blocked", status="error", turn=turn["id"], reason=reason, **measured)
+            agent_repo.note_block(self.conn, turn["id"], reason)
             self.conn.commit()
             return {"decision": "block", "reason": f"Solo License: {reason}"}
         for d in decisions:
             if d["outcome"] == "pending":  # left to a person who said no
                 agent_repo.set_outcome(self.conn, d["id"], "not-run")
         status = "verified" if ok else "failed"
-        agent_repo.close_turn(self.conn, turn["id"], status=status, reason=reason or None,
+        # A turn that was sent back once keeps that reason, even once fixed.
+        agent_repo.close_turn(self.conn, turn["id"], status=status, reason=reason or turn_reason(self.conn, turn["id"]),
                               **{k: details[k] for k in ("scope_score", "lines_changed", "files_changed", "tests")
                                  if k in details})
         trace.span("turn.end", status="ok" if ok else "error", turn=turn["id"], verdict=status,
@@ -225,12 +233,24 @@ class CodingGate:
             self._change(repo, key, "demote", lic["level"], 0, reason, trace)
         agent_repo.forget_patterns(self.conn, repo, key)
 
-    def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace) -> None:
+    def restore(self, repo: str, key: str, level: int, *, actor_id: str, reason: str) -> int:
+        """A person resumes a paused class at a level they choose (up to its
+        ceiling). Recorded like every other change: ledger commit + event."""
+        level = max(0, min(level, ACTION_CLASSES[key].max_level))
+        lic = agent_repo.get_license(self.conn, repo, key)
+        trace = self.tracer.start_trace("coding.restore", repo=repo, action_class=key)
+        self._change(repo, key, "restore", lic["level"], level, f"{actor_id}: {reason}", trace, actor_id=actor_id)
+        trace.flush(self.conn, None)
+        self.conn.commit()
+        return level
+
+    def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
+                actor_id: str = GATE_ACTOR) -> None:
         agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if kind == "demote" else None)
         label = f"{key}@{repo}"
         event_id = events_repo.insert_event(
             self.conn, task_class=label, kind=kind, from_level=old, to_level=new,
-            reason=reason, run_id=None, actor_id=GATE_ACTOR, actor_role="admin",
+            reason=reason, run_id=None, actor_id=actor_id, actor_role="admin",
         )
         sha = self.ledger.record(LedgerEntry(label, kind, old, new, reason, None, trace.trace_id))
         if sha:

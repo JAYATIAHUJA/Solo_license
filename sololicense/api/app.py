@@ -1416,6 +1416,37 @@ def hook_secret(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
         return {"header": "X-Solo-Hook-Key", "secret": _hook_secret(get_context())}
 
 
+def coding_savings(context: AppContext, repo: str | None = None) -> dict:
+    """What the gate did, in developer time: every auto-allowed action is a
+    prompt nobody had to answer (the L0 minutes of the coding ladder)."""
+    from sololicense.coding.ladder import DEVELOPER_HOURLY_COST, MINUTES_BY_LEVEL
+
+    where, args = ("WHERE repo = ?", (repo,)) if repo else ("", ())
+    d = context.conn.execute(
+        f"""SELECT COALESCE(SUM(decision = 'allow'), 0) AS allowed,
+                   COALESCE(SUM(decision = 'deny'), 0) AS denied,
+                   COALESCE(SUM(decision = 'ask'), 0) AS asked
+              FROM agent_decisions {where}""", args).fetchone()
+    verified = context.conn.execute(
+        f"SELECT COUNT(*) AS n FROM agent_turns {where} {'AND' if repo else 'WHERE'} status = 'verified'", args,
+    ).fetchone()["n"]
+    # A turn sent back once leaves a turn.blocked span on its trace.
+    sent_back = context.conn.execute(
+        "SELECT COUNT(DISTINCT trace_id) AS n FROM spans WHERE name = 'turn.blocked'"
+        + (" AND trace_id IN (SELECT trace_id FROM agent_turns WHERE repo = ?)" if repo else ""), args,
+    ).fetchone()["n"]
+    minutes = int(d["allowed"]) * (MINUTES_BY_LEVEL[0] - MINUTES_BY_LEVEL[2])
+    return {
+        "auto_allowed": int(d["allowed"]),
+        "asked": int(d["asked"]),
+        "blocked": int(d["denied"]),
+        "sent_back": int(sent_back),
+        "verified_turns": int(verified),
+        "minutes_saved": round(minutes, 1),
+        "usd_saved": round(minutes / 60.0 * DEVELOPER_HOURLY_COST, 2),
+    }
+
+
 def coding_payload(context: AppContext, repo: str | None = None) -> dict:
     """Everything the agent dashboard shows: licenses, decisions, turns."""
     gate = context.coding_gate
@@ -1435,12 +1466,14 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
                  if repo is None or r["repo"] == repo]
     turns = [dict(r) for r in agent_repo.recent_turns(context.conn, 30) if repo is None or r["repo"] == repo]
     counts = {k: sum(1 for d in decisions if d["decision"] == k) for k in ("allow", "ask", "deny")}
+    savings = coding_savings(context, repo)
     return {
         "repos": [dict(r) for r in context.conn.execute("SELECT repo, path, test_command FROM agent_repos")],
         "licenses": licenses,
         "decisions": decisions,
         "turns": turns,
         "counts": counts,
+        "savings": savings,
         "classes": [{"key": c.key, "label": c.label, "max_level": c.max_level, "incident_cost": c.incident_cost}
                     for c in ACTION_CLASSES.values()],
     }
@@ -1497,3 +1530,24 @@ def rewind_coding_turn(turn_id: int, actor: Actor = Depends(require_role(Role.AP
                               reason=f"Rewound by {actor.actor_id}; changes kept in `git stash list`.")
         context.conn.commit()
         return {"rewind": result, **coding_payload(context)}
+
+
+class CodingRestorePayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200)
+    action_class: str = Field(min_length=1, max_length=40)
+    level: int = Field(ge=0, le=2)
+    reason: str = Field(default="Reviewed and resumed.", max_length=300)
+
+
+@app.post("/api/coding/licenses/restore")
+def restore_coding_license(
+    payload: CodingRestorePayload, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
+    """A person resumes a paused action class at a level they choose."""
+    with _lock:
+        context = get_context()
+        if payload.action_class not in ACTION_CLASSES or context.coding_gate is None:
+            raise HTTPException(status_code=422, detail="Unknown action class.")
+        context.coding_gate.restore(payload.repo, payload.action_class, payload.level,
+                                    actor_id=actor.actor_id, reason=payload.reason)
+        return coding_payload(context)

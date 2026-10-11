@@ -5,13 +5,14 @@ import { classMeta } from '../../../lib/format.js';
 import { jobName } from './mission/derive.js';
 
 const TITLES = {
-  '': 'Home',
+  '': 'Coding agent',
+  payments: 'Payments agent',
   inbox: 'Inbox',
-  agent: 'Try the agent',
+  agent: 'Try the payments agent',
   orders: 'Orders',
   runs: 'Activity',
   reports: 'Reports',
-  ledger: 'History',
+  ledger: 'Permission history',
   settings: 'Settings',
 };
 
@@ -37,7 +38,7 @@ export function Topbar({ onMenu }) {
             </span>
           );
         })}
-        {section !== 'agent' && <Link to="/app/agent" className="btn btn-ink btn-sm">Try the agent</Link>}
+        {section !== '' && <Link to="/app" className="btn btn-ink btn-sm">Coding agent</Link>}
       </div>
     </header>
   );
