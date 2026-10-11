@@ -124,7 +124,10 @@ class CodingGate:
         elif level >= 1 and agent_repo.pattern_approved(self.conn, repo, result.pattern):
             decision, by, reason = "allow", "license", f"'{result.pattern}' is earned at L1 in {repo}."
         else:
-            decision, by, reason = "ask", "license", self._ask_reason(spec.key, level, lic)
+            # Claude Code / Codex only call this when they would prompt a person;
+            # other agents call it for every action and keep their own settings.
+            by = "license" if event.get("_prompt_only", True) else "agent-settings"
+            decision, reason = "ask", self._ask_reason(spec.key, level, lic)
 
         decision_id = agent_repo.insert_decision(
             self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
@@ -151,9 +154,10 @@ class CodingGate:
             return {}
         trace = self._trace(agent_repo.current_turn(self.conn, session))
         repo, key = row["repo"], row["action_class"]
-        if row["decision"] == "ask":  # it ran, so the person said yes
+        if row["decision"] == "ask":  # it ran: the person (or the agent's own settings) said yes
             agent_repo.approve_pattern(self.conn, repo, key, row["pattern"])
-            agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
+            if row["decided_by"] == "license":
+                agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
             trace.span("gate.approved_by_person", decision_id=row["id"], pattern=row["pattern"], action_class=key)
         error = str(event.get("error", ""))[:300]
         if failed and key not in DIAGNOSTIC and not event.get("is_interrupt"):

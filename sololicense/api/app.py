@@ -1573,3 +1573,60 @@ def test_jev(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
             raise HTTPException(status_code=502, detail="Jev did not answer. Check the key and the endpoint.")
         return {"ok": True, "action_class": verdict.action_class, "confidence": verdict.confidence,
                 "irreversible": verdict.irreversible}
+
+
+@app.post("/api/hooks/{agent}/{native_event}")
+def agent_hook(
+    agent: str,
+    native_event: str,
+    request: Request,
+    body: dict = Body(default_factory=dict),
+    envelope: bool = Query(default=False),
+    x_solo_hook_key: str | None = Header(default=None),
+) -> dict:
+    """Any coding agent's native hook event. The payload is translated to the
+    gate's common event and the answer back into that agent's own format.
+    ``envelope=1`` (used by the command shim) wraps it as body + exit code."""
+    from sololicense.coding import agents
+
+    try:
+        spec = agents.resolve(agent)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    with _lock:
+        context = get_context()
+        if not _hook_allowed(context, request, x_solo_hook_key):
+            raise HTTPException(status_code=401, detail="Invalid hook key.")
+        gate = context.coding_gate
+        translated = agents.normalize(spec.key, native_event, body)
+        if gate is None or translated is None:
+            native = agents.Native()
+        else:
+            event, payload = translated
+            payload["_agent"] = spec.key
+            payload["_prompt_only"] = native_event == "PermissionRequest"
+            if event == "user-prompt":
+                answer = gate.user_prompt(payload)
+            elif event == "permission":
+                answer = gate.permission(payload)
+            elif event == "stop":
+                answer = gate.stop(payload)
+            else:
+                answer = gate.tool_result(payload, failed=event == "post-tool-failure")
+            native = agents.render(spec.key, native_event, answer)
+        if envelope:
+            return native.envelope()
+        return native.body or {}
+
+
+@app.get("/api/coding/agents")
+def coding_agents() -> dict:
+    """Supported agents and how each one is installed (public: no data)."""
+    from sololicense.coding import agents
+
+    return {"agents": [
+        {"key": a.key, "label": a.label, "transport": a.transport, "config_path": a.config_path,
+         "can_send_back": a.can_send_back, "notes": a.notes, "docs": a.docs,
+         "install": f"solo-license init --agent {a.key}"}
+        for a in agents.AGENTS.values()
+    ], "unsupported": agents.UNSUPPORTED}
