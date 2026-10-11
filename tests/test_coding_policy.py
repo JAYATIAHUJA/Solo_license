@@ -181,3 +181,17 @@ def test_path_traversal_cannot_dodge_a_deny_rule(gate, target):
 def test_unrelated_paths_outside_the_repo_are_not_denied(gate):
     rules = policy.Policy(deny_paths=(".env",))
     assert not policy.denied(rules, "Edit", {"file_path": "../notes/todo.md"}, gate.project)
+
+
+@pytest.mark.parametrize("command, denied", [
+    ("cat .env", True),
+    ("cp ../secrets/.env /tmp/x", True),
+    ("terraform apply infra/prod/main.tf", True),
+    ("echo hi > .env", True),
+    ("cd deployment && npm test", False),       # contains 'env', not the file .env
+    ("npm run env:check", False),
+    ("ls environments/", False),
+])
+def test_paths_in_commands_are_matched_as_paths_not_substrings(gate, command, denied):
+    rules = policy.Policy(deny_paths=(".env", "infra/prod/**"))
+    assert bool(policy.denied(rules, "Bash", {"command": command}, gate.project)) is denied

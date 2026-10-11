@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import shlex
 import hashlib
 import json
 import sqlite3
@@ -166,10 +167,13 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
             r = rule.lower()
             if ("*" in r and fnmatch.fnmatch(low, r)) or ("*" not in r and r in low):
                 return f"this repo's policy forbids '{rule}'"
-        for pattern in policy.deny_paths:
-            bare = pattern.rstrip("*").rstrip("/")
-            if bare and bare in command:
-                return f"this repo's policy forbids touching '{pattern}'"
+        # Paths in a command: split it like a shell, and match each argument
+        # as a path (normalised, traversal-proof) - never a raw substring.
+        for token in _command_paths(command):
+            for candidate in _path_forms(token, root):
+                for pattern in policy.deny_paths:
+                    if fnmatch.fnmatch(candidate, pattern):
+                        return f"this repo's policy forbids touching '{pattern}'"
     path = str(tool_input.get("file_path", "") or "")
     if path:
         for candidate in _path_forms(path, root):
@@ -177,6 +181,21 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
                 if fnmatch.fnmatch(candidate, pattern):
                     return f"this repo's policy forbids editing '{pattern}'"
     return ""
+
+
+def _command_paths(command: str) -> list[str]:
+    """Arguments of a shell command that could name a file: shell-split,
+    options and operators dropped, ``key=value`` / redirections unwrapped."""
+    try:
+        words = shlex.split(command, posix=True)
+    except ValueError:
+        words = command.split()
+    out = []
+    for word in words:
+        word = word.lstrip("<>").split("=", 1)[-1] if not word.startswith("-") else ""
+        if word and word not in ("&&", "||", "|", ";", "&"):
+            out.append(word)
+    return out
 
 
 def _path_forms(path: str, root: str | Path) -> list[str]:
