@@ -15,6 +15,8 @@ from sololicense.agent.loop import TicketAgent
 from sololicense.agent.planner import Planner
 from sololicense.connectors import Connectors
 from sololicense.agent.worker import RefundWorker
+from sololicense.coding.gate import CodingGate
+from sololicense.coding.ladder import CodingLadder
 from sololicense.config import Config, load_config, with_overrides
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.database import init_db
@@ -43,6 +45,7 @@ class AppContext:
     warnings: list[str] = field(default_factory=list)
     connectors: Connectors | None = None
     agent: TicketAgent | None = None
+    coding_gate: CodingGate | None = None
 
 
 def _local_encryption_key(db_path: Path) -> str:
@@ -115,6 +118,10 @@ def build_app(
         connectors=connectors,
     )
     agent = TicketAgent(conn, config, tracer=tracer, worker=worker)
+    coding_gate = CodingGate(
+        conn, tracer, GitLedger(repo_root=config.ledger_repo),
+        ladder=CodingLadder(confidence=config.trust_confidence),
+    )
 
     return AppContext(
         config=config,
@@ -128,4 +135,5 @@ def build_app(
         warnings=warnings,
         connectors=connectors,
         agent=agent,
+        coding_gate=coding_gate,
     )

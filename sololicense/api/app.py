@@ -14,7 +14,7 @@ from dataclasses import replace
 from hashlib import sha256
 from threading import RLock
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -1347,3 +1347,68 @@ def top_up_demo_orders(
             added += 1
         context.conn.commit()
         return dashboard_payload(context)
+
+
+# --- coding agents: Claude Code hooks ------------------------------------------
+
+_HOOK_EVENTS = {
+    "user-prompt": "UserPromptSubmit",
+    "permission": "PermissionRequest",
+    "post-tool": "PostToolUse",
+    "post-tool-failure": "PostToolUseFailure",
+    "stop": "Stop",
+}
+
+
+def _hook_secret(context: AppContext) -> str:
+    """Shared secret for hook calls that do not come from this machine."""
+    stored = settings_repo.get_all(context.conn).get("hook_secret_hint")
+    if stored:
+        return stored
+    secret = "hook_" + secrets.token_urlsafe(18)
+    settings_repo.set_many(context.conn, {"hook_secret_hint": secret})
+    context.conn.commit()
+    return secret
+
+
+def _hook_allowed(context: AppContext, request: Request, given: str | None) -> bool:
+    if given:
+        return secrets.compare_digest(given, _hook_secret(context))
+    # Claude Code runs on the developer's machine and calls the local API.
+    host = request.client.host if request.client else ""
+    return host in ("127.0.0.1", "::1", "localhost", "testclient")
+
+
+@app.post("/api/hooks/{event}")
+def coding_hook(
+    event: str,
+    request: Request,
+    body: dict = Body(default_factory=dict),
+    x_solo_hook_key: str | None = Header(default=None),
+) -> dict:
+    """One endpoint per Claude Code hook. The response is the hook's JSON
+    output: a PermissionRequest decision, or a Stop block with the reason the
+    turn's checks failed. Unknown or failing calls answer ``{}``, which leaves
+    Claude Code's own behaviour unchanged (it asks the person)."""
+    if event not in _HOOK_EVENTS:
+        raise HTTPException(status_code=404, detail="Unknown hook event.")
+    with _lock:
+        context = get_context()
+        if not _hook_allowed(context, request, x_solo_hook_key):
+            raise HTTPException(status_code=401, detail="Invalid hook key.")
+        gate = context.coding_gate
+        if gate is None:
+            return {}
+        if event == "user-prompt":
+            return gate.user_prompt(body)
+        if event == "permission":
+            return gate.permission(body)
+        if event == "stop":
+            return gate.stop(body)
+        return gate.tool_result(body, failed=event == "post-tool-failure")
+
+
+@app.get("/api/hooks/secret")
+def hook_secret(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    with _lock:
+        return {"header": "X-Solo-Hook-Key", "secret": _hook_secret(get_context())}
