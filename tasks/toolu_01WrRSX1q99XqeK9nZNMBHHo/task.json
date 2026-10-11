@@ -1,0 +1,16 @@
+{
+  "tool_use_id": "toolu_01WrRSX1q99XqeK9nZNMBHHo",
+  "agent_id": "a2014eeaf151ccbf1",
+  "subagent_type": "general-purpose",
+  "task_description": "Research control-layer capabilities",
+  "token_usage": {
+    "input_tokens": 50,
+    "cache_creation_tokens": 139631,
+    "cache_read_tokens": 2368765,
+    "output_tokens": 1644,
+    "api_call_count": 25
+  },
+  "started_at": "2026-10-12T01:27:39.0971897+05:30",
+  "completed_at": "2026-10-12T01:33:34.3536177+05:30",
+  "transcript_unavailable_reason": "transcript unreadable"
+}

@@ -1,0 +1,151 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4PASBCJ5D25E0GYMXVNT08Y",
+  "session_id": "731c3b7d-ed84-496f-90a6-07e013e76614",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-11T20:34:39.3017717Z",
+  "branch": "docs/prd-v3",
+  "checkpoints_count": 20,
+  "save_step_count": 5,
+  "files_touched": [
+    "docs/PRD-v3-control-layer.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "5cecd04d0e37",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 766,
+    "cache_creation_tokens": 982884,
+    "cache_read_tokens": 200906722,
+    "output_tokens": 436529,
+    "api_call_count": 377,
+    "subagent_tokens": {
+      "input_tokens": 74,
+      "cache_creation_tokens": 401377,
+      "cache_read_tokens": 3974250,
+      "output_tokens": 2028,
+      "api_call_count": 37
+    }
+  },
+  "session_metrics": {
+    "turn_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-11T20:34:38.6811891Z",
+    "agent_lines": 453,
+    "agent_removed": 0,
+    "human_added": 524,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 977,
+    "total_lines_changed": 977,
+    "agent_percentage": 46.36642784032753,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 974,
+      "user_lines_removed": 188,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".cursor/hooks.json": 40,
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "docs/IMPLEMENTATION_PLAN.md": 179,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260,
+        "sololicense/agent/intake.py": 40,
+        "sololicense/agent/loop.py": 23,
+        "sololicense/agent/worker.py": 1,
+        "sololicense/db/repositories/permits.py": 4,
+        "sololicense/domain/models.py": 2,
+        "sololicense/observability/neatlogs_client.py": 184,
+        "sololicense/services/policy_gate.py": 3,
+        "tests/test_neatlogs_depth.py": 128,
+        "tests/unit/test_intake.py": 1
+      },
+      "user_removed_per_file": {
+        "sololicense/agent/intake.py": 5,
+        "sololicense/agent/loop.py": 1,
+        "sololicense/db/repositories/permits.py": 2,
+        "sololicense/observability/neatlogs_client.py": 177,
+        "sololicense/services/policy_gate.py": 2,
+        "tests/unit/test_intake.py": 1
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 93,
+      "user_lines_removed": 0,
+      "agent_lines_added": 881,
+      "agent_lines_removed": 188,
+      "user_added_per_file": {
+        ".cursor/hooks.json": 40,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 93,
+      "user_lines_removed": 0,
+      "agent_lines_added": 881,
+      "agent_lines_removed": 188,
+      "user_added_per_file": {
+        ".cursor/hooks.json": 40,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 1889,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".cursor/hooks.json": 40,
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "demo/shop-api/README.md": 16,
+        "demo/shop-api/cart.js": 6,
+        "demo/shop-api/cart.test.js": 17,
+        "demo/shop-api/discount.js": 6,
+        "demo/shop-api/format.js": 6,
+        "demo/shop-api/package.json": 6,
+        "docs/IMPLEMENTATION_PLAN.md": 179,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/strategy/2026-10-11-pivot-and-winning-plan.md": 651,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260,
+        "evidence/benchmarks/coding_before_after.json": 250,
+        "evidence/benchmarks/coding_before_after.md": 61,
+        "scripts/coding_demo.py": 282
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 1239,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".cursor/hooks.json": 40,
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "docs/IMPLEMENTATION_PLAN.md": 179,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/strategy/2026-10-11-pivot-and-winning-plan.md": 651,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260
+      }
+    }
+  ]
+}

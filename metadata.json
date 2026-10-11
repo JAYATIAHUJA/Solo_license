@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4PASBCJ5D25E0GYMXVNT08Y",
+  "strategy": "manual-commit",
+  "branch": "docs/prd-v3",
+  "checkpoints_count": 20,
+  "files_touched": [
+    "docs/PRD-v3-control-layer.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 766,
+    "cache_creation_tokens": 982884,
+    "cache_read_tokens": 200906722,
+    "output_tokens": 436529,
+    "api_call_count": 377,
+    "subagent_tokens": {
+      "input_tokens": 74,
+      "cache_creation_tokens": 401377,
+      "cache_read_tokens": 3974250,
+      "output_tokens": 2028,
+      "api_call_count": 37
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "tool_use_id": "toolu_01LqyjSvGwGEvF7AtWjUV74C",
+  "agent_id": "a2be23a66ee60f266",
+  "subagent_type": "general-purpose",
+  "task_description": "Research coding agent hook systems",
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 261746,
+    "cache_read_tokens": 1605485,
+    "output_tokens": 384,
+    "api_call_count": 12
+  },
+  "started_at": "2026-10-11T23:45:53.5333578+05:30",
+  "completed_at": "2026-10-11T23:49:13.9894629+05:30",
+  "transcript_unavailable_reason": "transcript unreadable"
+}
