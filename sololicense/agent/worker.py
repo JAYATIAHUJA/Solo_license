@@ -7,10 +7,14 @@ One run does exactly this, in order, tracing every step:
     3. plan around that decision;
     4. execute only what is authorised (a fault may push it beyond — on
        purpose, to be caught);
-    5. verify the side effect by reading SQLite back — never trusting the tool;
-    6. run the detections; any hit demotes, otherwise a clean executed run
-       earns track-record credit;
-    7. persist the run, its spans, its detections, and the dial change.
+    5. verify the side effect by reading it back from the system of record
+       (Stripe or the local store) — never trusting the tool's response;
+    6. recover when verification disagrees: reconcile (read again), then retry
+       once with the *same* idempotency key, then verify again;
+    7. run the detections; any hit demotes — even when recovery saved the
+       customer, because the tool lied or a step was skipped — otherwise a clean
+       executed run adds verified evidence;
+    8. persist the run, its spans, its detections, and the dial change.
 
 Authority lives in :func:`sololicense.domain.license.decide`; truth lives in
 the verifier. The worker only wires them together.
@@ -22,9 +26,10 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from sololicense.agent.planner import Plan, Planner
-from sololicense.agent.tools import execute_refund
 from sololicense.config import Config
+from sololicense.connectors import ConnectorError, Connectors
 from sololicense.db.repositories import detections as detections_repo
+from sololicense.db.repositories import orders as orders_repo
 from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
@@ -56,6 +61,9 @@ class RunResult:
     plan: Plan
     transition: Transition
     detections: list[Detection] = field(default_factory=list)
+    recovered: bool = False          # verification failed, recovery fixed it
+    error: str | None = None         # the system of record refused the action
+    reference: str | None = None     # e.g. Stripe refund id
 
     @property
     def actual_delta(self) -> float:
@@ -72,6 +80,7 @@ class RefundWorker:
         license_service: LicenseService,
         fault_injector: FaultInjector,
         planner: Planner,
+        connectors: Connectors | None = None,
     ) -> None:
         self._conn = conn
         self._config = config
@@ -79,6 +88,7 @@ class RefundWorker:
         self._licenses = license_service
         self._faults = fault_injector
         self._planner = planner
+        self._connectors = connectors or Connectors(conn, config)
 
     def run_refund(
         self,
@@ -88,25 +98,38 @@ class RefundWorker:
         approved: bool = False,
         idempotency_key: str | None = None,
         actor: Actor = SYSTEM_ACTOR,
+        trace=None,
+        ticket_id: int | None = None,
     ) -> RunResult:
+        """Work one request. Pass ``trace`` to record into a caller's trace (the
+        ticket agent's); the caller then flushes it. Otherwise the worker owns
+        and flushes its own trace."""
         get_spec(task_class)  # fail fast on an unknown class
-        trace = self._tracer.start_trace(
-            task_class, order_id=request.order_id, amount=request.amount,
-            actor=actor.actor_id,
-        )
+        owns_trace = trace is None
+        if owns_trace:
+            trace = self._tracer.start_trace(
+                task_class, order_id=request.order_id, amount=request.amount,
+                actor=actor.actor_id,
+            )
         try:
-            return self._run_refund(
+            result = self._run_refund(
                 request,
                 task_class=task_class,
                 approved=approved,
                 idempotency_key=idempotency_key,
                 actor=actor,
                 trace=trace,
+                ticket_id=ticket_id,
             )
         except Exception as error:
             trace.span("run.error", status="error", error_type=type(error).__name__)
-            trace.close()
+            if owns_trace:
+                trace.close()
             raise
+        if owns_trace:
+            trace.flush(self._conn, result.run_id)
+            self._conn.commit()
+        return result
 
     def _run_refund(
         self,
@@ -117,6 +140,7 @@ class RefundWorker:
         idempotency_key: str | None,
         actor: Actor,
         trace,
+        ticket_id: int | None = None,
     ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
         column = get_spec(task_class).effect_column
@@ -135,7 +159,11 @@ class RefundWorker:
         plan = self._planner.plan(request, authorized, state)
         trace.span("plan", source=plan.source, rationale=plan.rationale)
 
-        before = verification.read_refunded(self._conn, request.order_id, column)
+        order = orders_repo.get_order(self._conn, request.order_id)
+        if order is None:
+            raise KeyError(f"unknown order_id: {request.order_id!r}")
+        connector = self._connectors.for_order(order)
+        before = self._read(connector, task_class, order, column)
         will_execute = attempted in _EXECUTING
         duplicate = (
             bool(idempotency_key)
@@ -151,47 +179,64 @@ class RefundWorker:
         if will_execute and armed_effects.active:
             effects = self._faults.consume_effects(task_class)
         intended_delta = request.amount if will_execute else 0.0
+        key = idempotency_key or f"run:{trace.trace_id}"
 
+        error: str | None = None
+        reference: str | None = None
         if will_execute:
-            self._do_execute(trace, request, effects, task_class, column)
+            try:
+                reference = self._do_execute(trace, connector, request, order, effects, task_class, key)
+            except ConnectorError as refusal:
+                error = str(refusal)
+                trace.span("tool.error", status="error", message=error[:200])
         else:
             trace.span("execute.skipped", reason=attempted.name)
+        if error is not None:
+            intended_delta = 0.0  # an honest refusal: nothing should have moved
 
-        if will_execute and effects.skip_verification:
-            result = verification.missing_refund_verification(
-                before=before,
-                intended_delta=intended_delta,
-            )
+        if will_execute and error is None and effects.skip_verification:
+            first = verification.unverified(before=before, intended_delta=intended_delta)
         else:
-            result = verification.verify_refund(
-                self._conn,
-                order_id=request.order_id,
+            first = verification.verify(
                 before=before,
+                after=self._read(connector, task_class, order, column),
                 intended_delta=intended_delta,
-                column=column,
             )
         trace.span(
             "verify.readback",
-            before=result.before,
-            after=result.after,
-            actual_delta=result.actual_delta,
-            intended_delta=intended_delta,
-            matched=result.matched,
-            verified=result.verified,
+            source=connector.name,
+            before=first.before,
+            after=first.after,
+            actual_delta=first.actual_delta,
+            intended_delta=first.intended_delta,
+            matched=first.matched,
+            verified=first.verified,
         )
 
+        result, recovered = first, False
+        authorised_execution = authorized in _EXECUTING
+        if will_execute and error is None and authorised_execution and not (first.verified and first.matched):
+            result, recovered = self._recover(
+                trace, connector, request, order, task_class, column, key, before, intended_delta,
+            )
+
+        # Detections judge the first attempt: a tool that lied, or a skipped
+        # check, costs the licence even when recovery saved the customer.
         found = self._run_detections(
             authorized=authorized,
             attempted=attempted,
             intended_delta=intended_delta,
-            result=result,
+            result=first,
             duplicate=duplicate,
         )
         for d in found:
             trace.span(f"detection.{d.rule}", status="error", severity=d.severity,
                        message=d.message)
 
-        status = self._status(found, will_execute, authorized)
+        status = (
+            RunStatus.FAILED if error is not None and not found
+            else self._status(found, will_execute, authorized)
+        )
         run_id = self._persist_run(
             request=request,
             task_class=task_class,
@@ -205,8 +250,9 @@ class RefundWorker:
             effects=effects,
             trace=trace,
             plan=plan,
+            recovered=recovered,
+            ticket_id=ticket_id,
         )
-        trace.flush(self._conn, run_id)
 
         for d in found:
             detections_repo.insert_detection(
@@ -235,6 +281,9 @@ class RefundWorker:
             plan=plan,
             transition=transition,
             detections=found,
+            recovered=recovered,
+            error=error,
+            reference=reference,
         )
 
     # --- helpers ---------------------------------------------------------
@@ -266,27 +315,72 @@ class RefundWorker:
             )
         return authorized
 
+    def _read(self, connector, task_class: str, order, column: str) -> float:
+        """Authoritative amount from the system of record. An external value is
+        cached on the order so the app shows what Stripe shows."""
+        value = connector.read_effect(task_class, order)
+        if connector.name != "local":
+            orders_repo.set_effect_amount(self._conn, order["order_id"], column, value)
+        return value
+
     def _do_execute(
-        self, trace, request: RefundRequest, effects, task_class: str, column: str
-    ) -> None:
+        self, trace, connector, request: RefundRequest, order, effects, task_class: str, key: str
+    ) -> str | None:
         trace.span(
             f"tool.execute_{task_class}",
+            connector=connector.name,
             order_id=request.order_id,
             amount=request.amount,
+            idempotency_key=key,
             suppress_write=effects.suppress_write,
         )
-        tool_result = execute_refund(
-            self._conn,
-            order_id=request.order_id,
-            amount=request.amount,
-            suppress_write=effects.suppress_write,
-            column=column,
+        tool_result = connector.apply(
+            task_class, order, request.amount, idempotency_key=key, suppress_write=effects.suppress_write,
         )
         # The tool's claim is recorded but explicitly marked untrusted.
         trace.span(
             "tool.result", ok=tool_result.ok, message=tool_result.message,
-            trusted=False,
+            reference=tool_result.reference, trusted=False,
         )
+        return tool_result.reference
+
+    def _recover(
+        self, trace, connector, request: RefundRequest, order, task_class: str, column: str,
+        key: str, before: float, intended_delta: float,
+    ) -> tuple[verification.VerificationResult, bool]:
+        """Verification disagreed with the tool. Reconcile first, retry once
+        with the same idempotency key only when nothing moved, verify again.
+
+        Retrying is safe because the key makes the write idempotent: if the
+        first call did land after all, the system of record returns it instead
+        of paying twice. A partial or excess change is never retried."""
+        trace.span("recover.start", reason="read-back did not match the intended change")
+        after = self._read(connector, task_class, order, column)
+        result = verification.verify(before=before, after=after, intended_delta=intended_delta)
+        trace.span("recover.reconcile", after=after, actual_delta=result.actual_delta, matched=result.matched)
+        if result.matched:
+            trace.span("recover.done", recovered=True, how="reconciled: the change had landed")
+            return result, True
+        if abs(result.actual_delta) >= 0.005:
+            trace.span("recover.done", status="error", recovered=False,
+                       how="partial change; left for a person")
+            return result, False
+        try:
+            trace.span("recover.retry", idempotency_key=key)
+            tool_result = connector.apply(task_class, order, request.amount, idempotency_key=key)
+            trace.span("tool.result", ok=tool_result.ok, message=tool_result.message,
+                       reference=tool_result.reference, trusted=False, attempt=2)
+        except ConnectorError as refusal:
+            trace.span("recover.done", status="error", recovered=False, how=str(refusal)[:200])
+            return result, False
+        after = self._read(connector, task_class, order, column)
+        result = verification.verify(before=before, after=after, intended_delta=intended_delta)
+        trace.span("verify.readback", source=connector.name, before=before, after=after,
+                   actual_delta=result.actual_delta, intended_delta=intended_delta,
+                   matched=result.matched, verified=True, attempt=2)
+        trace.span("recover.done", status="ok" if result.matched else "error",
+                   recovered=result.matched, how="retried with the same idempotency key")
+        return result, result.matched
 
     def _run_detections(
         self, *, authorized, attempted, intended_delta, result, duplicate
@@ -314,7 +408,7 @@ class RefundWorker:
 
     def _persist_run(
         self, *, request, task_class, state_level, authorized, status, executed,
-        result, idempotency_key, actor, effects, trace, plan,
+        result, idempotency_key, actor, effects, trace, plan, recovered=False, ticket_id=None,
     ) -> int:
         return insert_run(
             self._conn,
@@ -325,7 +419,7 @@ class RefundWorker:
                 level_at_run=int(state_level),
                 decision=authorized.name,
                 status=status.value,
-                executed=executed and status is not RunStatus.SUGGESTED,
+                executed=executed and status not in (RunStatus.SUGGESTED, RunStatus.FAILED),
                 before_refunded=result.before,
                 after_refunded=result.after,
                 idempotency_key=idempotency_key,
@@ -334,6 +428,8 @@ class RefundWorker:
                 fault_mode=effects.mode.value,
                 trace_id=trace.trace_id,
                 notes=plan.rationale,
+                recovered=recovered,
+                ticket_id=ticket_id,
             ),
         )
 

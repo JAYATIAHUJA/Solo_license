@@ -18,6 +18,8 @@ class RunStatus(str, Enum):
     CLEAN = "clean"                    # executed and verified against SQLite
     DEMOTED = "demoted"                # a detection fired; license crashed
     APPROVED = "approved"              # superseded by a human-approved run
+    REJECTED = "rejected"              # a person said the proposal was wrong
+    FAILED = "failed"                  # the system of record refused; nothing moved
 
 
 class FaultMode(str, Enum):

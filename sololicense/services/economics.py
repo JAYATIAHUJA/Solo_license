@@ -14,6 +14,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from cfo import model as cfo
+from sololicense.domain.trust import TrustLadder
 
 SETTING_DEFAULTS: dict[str, float] = {
     "econ_hourly_cost": cfo.LOADED_HUMAN_COST_PER_HOUR,
@@ -48,6 +49,17 @@ class Assumptions:
             monthly_volume=value("econ_monthly_volume"),
             incident_cost=value("econ_incident_cost"),
         )
+
+
+def trust_ladder(stored: dict[str, str], confidence: float) -> TrustLadder:
+    """The promotion rule, derived from the same assumptions as the P&L."""
+    a = Assumptions.from_settings(stored)
+    return TrustLadder(
+        minutes_by_level=tuple(cfo.SUPERVISION_MINUTES_PER_RUN[level] for level in sorted(cfo.SUPERVISION_MINUTES_PER_RUN)),
+        hourly_cost=a.hourly_cost,
+        incident_cost=a.incident_cost,
+        confidence=confidence,
+    )
 
 
 def cost_per_action(level: int, a: Assumptions) -> float:

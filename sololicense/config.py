@@ -43,7 +43,6 @@ class Config:
     compat_api_key: str
     compat_model: str
     compat_base_url: str
-    promotion_clean_runs: int
     l2_auto_refund_ceiling: float
     ledger_repo: Path
     settings_encryption_key: str
@@ -55,6 +54,14 @@ class Config:
     neatlogs_endpoint: str = "https://ingest.neatlogs.com"
     neatlogs_app_url: str = "https://app.neatlogs.com"
     neatlogs_trace_url: str = "{app}/traces/{trace_id}"
+    # How sure the evidence must be before a job type climbs a rung.
+    trust_confidence: float = 0.9
+    # Refund policy the agent checks before acting.
+    refund_window_days: int = 30
+    # Connectors.
+    stripe_secret_key: str = ""
+    stripe_api_base: str = "https://api.stripe.com"
+    inbox_secret: str = ""
 
     @property
     def llm_api_key(self) -> str:
@@ -117,7 +124,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
     "anthropic": ProviderSpec("Anthropic Claude", "anthropic_api_key", "anthropic_model", "claude-sonnet-5-5"),
     "openai": ProviderSpec("OpenAI", "openai_api_key", "openai_model", "gpt-4o"),
     "groq": ProviderSpec(
-        "Groq", "groq_api_key", "groq_model", "llama-3.3-70b-versatile",
+        "Groq", "groq_api_key", "groq_model", "openai/gpt-oss-120b",
         base_url="https://api.groq.com/openai/v1",
     ),
     "zcode_glm": ProviderSpec(
@@ -155,7 +162,6 @@ def load_config() -> Config:
         compat_api_key=_get("OPENAI_COMPATIBLE_API_KEY", ""),
         compat_model=_get("OPENAI_COMPATIBLE_MODEL", ""),
         compat_base_url=_get("OPENAI_COMPATIBLE_BASE_URL", ""),
-        promotion_clean_runs=int(_get("PROMOTION_CLEAN_RUNS", "3")),
         l2_auto_refund_ceiling=float(_get("L2_AUTO_REFUND_CEILING", "50")),
         ledger_repo=Path(_get("SOLO_LEDGER_REPO", "data/ledger-repo")),
         settings_encryption_key=_get("SOLO_SETTINGS_ENCRYPTION_KEY", ""),
@@ -167,7 +173,16 @@ def load_config() -> Config:
         neatlogs_endpoint=_get("NEATLOGS_ENDPOINT", "https://ingest.neatlogs.com"),
         neatlogs_app_url=_get("NEATLOGS_APP_URL", "https://app.neatlogs.com"),
         neatlogs_trace_url=_get("NEATLOGS_TRACE_URL", "{app}/traces/{trace_id}"),
+        trust_confidence=_clamp(float(_get("TRUST_CONFIDENCE", "0.9")), 0.5, 0.999),
+        refund_window_days=max(0, int(_get("REFUND_WINDOW_DAYS", "30"))),
+        stripe_secret_key=_get("STRIPE_SECRET_KEY", ""),
+        stripe_api_base=_get("STRIPE_API_BASE", "https://api.stripe.com"),
+        inbox_secret=_get("SOLO_INBOX_SECRET", ""),
     )
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
 
 
 _STR_KEYS = (
@@ -176,6 +191,7 @@ _STR_KEYS = (
     "groq_api_key", "groq_model", "zcode_api_key", "zcode_model",
     "compat_api_key", "compat_model", "compat_base_url",
     "neatlogs_api_key", "neatlogs_project", "alert_webhook_url",
+    "stripe_secret_key", "inbox_secret",
 )
 
 
@@ -187,8 +203,10 @@ def with_overrides(config: Config, stored: dict[str, str]) -> Config:
     for key in _STR_KEYS:
         if stored.get(key, "").strip():
             changes[key] = stored[key].strip()
-    if stored.get("promotion_clean_runs", "").strip():
-        changes["promotion_clean_runs"] = max(1, int(stored["promotion_clean_runs"]))
+    if stored.get("trust_confidence", "").strip():
+        changes["trust_confidence"] = _clamp(float(stored["trust_confidence"]), 0.5, 0.999)
+    if stored.get("refund_window_days", "").strip():
+        changes["refund_window_days"] = max(0, int(float(stored["refund_window_days"])))
     if stored.get("l2_auto_refund_ceiling", "").strip():
         changes["l2_auto_refund_ceiling"] = max(0.0, float(stored["l2_auto_refund_ceiling"]))
     if stored.get("l2_auto_credit_ceiling", "").strip():

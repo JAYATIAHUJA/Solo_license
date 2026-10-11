@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { stampDate } from '../../../../lib/format.js';
 import { levelCopy } from '../../../../lib/copy.js';
-import { licenseFacts, limitOf } from './derive.js';
+import { licenseFacts, limitOf, progressOf } from './derive.js';
 
 /* The card is ONE self-contained SVG (literal colours, inline attributes, no
    CSS variables or classes) so it serialises straight to a PNG. Colours mirror
@@ -52,19 +52,21 @@ function Value({ x, y, size = 13, color = INK, weight = 500, children }) {
   return <text x={x} y={y} fontFamily={SANS} fontSize={size} fontWeight={weight} fill={color}>{children}</text>;
 }
 
-export function shareText({ business, card, threshold }) {
+export function shareText({ business, card }) {
   const { name, license, ceiling } = card;
   const who = business ? `${business}'s` : 'Our';
   if (license.quarantined) {
     return `${who} AI agent was paused on ${name.toLowerCase()} the moment it hit a problem. Nothing wrong reached a customer, and a person decides when it can carry on. Freedom is earned, not assumed. #neatHack`;
   }
   const now = levelCopy(license.effective_level, limitOf(ceiling)).short;
-  const next = license.effective_level >= 3 ? 'It has reached the highest level.' : `It earns more freedom after ${threshold} correct jobs in a row.`;
+  const p = progressOf(card);
+  const next = license.effective_level >= 3 ? 'It has reached the highest level.'
+    : `It has ${license.successes} double-checked jobs on record and needs ${p.needed ?? 'more'} more before it gets more freedom — earned from evidence, priced by what a mistake costs.`;
   return `${who} AI agent holds a license for ${name.toLowerCase()}: “${now}”. ${next} Every result is double-checked and every change is on record. #neatHack`;
 }
 
 /** The agent's license for one job type, plus download and share buttons below it. */
-export function LicenseCard({ data, card, threshold = 3 }) {
+export function LicenseCard({ data, card }) {
   const svgRef = useRef(null);
   const [note, setNote] = useState('');
   const { key, name, license, ceiling } = card;
@@ -77,7 +79,7 @@ export function LicenseCard({ data, card, threshold = 3 }) {
   const allowed = paused ? 'Paused — suggests only until reviewed' : copy.short;
   const progress = paused
     ? 'On hold'
-    : level >= 3 ? 'Highest level' : `${Math.min(license.clean_runs || 0, threshold)} of ${threshold} correct jobs`;
+    : level >= 3 ? 'Highest level' : `${license.successes} verified · ${progressOf(card).needed ?? '—'} more to go`;
   const incident = facts.lastIncident
     ? `${stampDate(facts.lastIncident.created_at)} · ${facts.incidentProblem?.title || 'Problem caught'}`
     : 'None on record';
@@ -115,7 +117,7 @@ export function LicenseCard({ data, card, threshold = 3 }) {
   }
 
   async function copyText() {
-    const text = shareText({ business: data.settings?.business_name, card, threshold });
+    const text = shareText({ business: data.settings?.business_name, card });
     try {
       await navigator.clipboard.writeText(text);
       setNote('Post text copied.');
@@ -173,7 +175,7 @@ export function LicenseCard({ data, card, threshold = 3 }) {
 
         {/* footer */}
         <line x1={X} y1="358" x2={W - X} y2="358" stroke={LINE} />
-        <text x={X} y="377" fontFamily={SANS} fontSize="10.5" fill={MUTED}>Earns more freedom after {threshold} correct jobs. Paused the moment a problem is caught.</text>
+        <text x={X} y="377" fontFamily={SANS} fontSize="10.5" fill={MUTED}>Freedom earned from double-checked results. Paused the moment a problem is caught.</text>
         <text x={X} y="391" fontFamily={SANS} fontSize="10.5" fill={MUTED}>Every change is saved in history.</text>
         <g fill={INK}>{code.map(([bx, bw]) => <rect key={bx} x={W - X - 120 + bx} y="366" width={bw} height="24" />)}</g>
       </svg>

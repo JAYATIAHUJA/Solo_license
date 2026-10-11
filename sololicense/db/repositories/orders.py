@@ -73,3 +73,61 @@ def list_orders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM orders ORDER BY order_id"
     ).fetchall()
+
+
+def upsert_orders(conn: sqlite3.Connection, records) -> tuple[int, int]:
+    """Insert new orders and refresh known ones from a connector.
+
+    Returns ``(added, updated)``. Side-effect columns are only taken from a
+    connector that is itself the system of record (Stripe); an imported CSV
+    never overwrites what the agent has already paid out. The caller commits.
+    """
+    added = updated = 0
+    for r in records:
+        existing = get_order(conn, r.order_id)
+        if existing is None:
+            conn.execute(
+                """
+                INSERT INTO orders (order_id, customer, amount, refunded_amount, credit_issued,
+                                    status, email, ordered_at, currency, source, external_id, customer_ref)
+                VALUES (?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?, ?, ?)
+                """,
+                (r.order_id, r.customer, round(r.amount, 2), r.refunded_amount, r.credit_issued,
+                 r.email, r.ordered_at, r.currency, r.source, r.external_id, r.customer_ref),
+            )
+            added += 1
+            continue
+        if existing["source"] != r.source and existing["source"] != "manual":
+            continue  # never let one connector overwrite another's order
+        effects = (
+            ", refunded_amount = :refunded_amount, credit_issued = MAX(credit_issued, :credit_issued)"
+            if r.source == "stripe" else ""
+        )
+        conn.execute(
+            f"""
+            UPDATE orders SET customer = :customer, amount = :amount, email = :email,
+                   ordered_at = :ordered_at, currency = :currency, source = :source,
+                   external_id = :external_id, customer_ref = :customer_ref,
+                   updated_at = datetime('now'){effects}
+             WHERE order_id = :order_id
+            """,
+            {**r.__dict__, "amount": round(r.amount, 2)},
+        )
+        updated += 1
+    return added, updated
+
+
+def set_effect_amount(conn: sqlite3.Connection, order_id: str, column: str, value: float) -> None:
+    """Cache an amount read back from an external system of record. The caller commits."""
+    _check_column(column)
+    conn.execute(
+        f"UPDATE orders SET {column} = ?, updated_at = datetime('now') WHERE order_id = ?",
+        (round(value, 2), order_id),
+    )
+
+
+def find_by_email(conn: sqlite3.Connection, email: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM orders WHERE lower(email) = lower(?) ORDER BY ordered_at DESC, order_id DESC",
+        (email.strip(),),
+    ).fetchall()

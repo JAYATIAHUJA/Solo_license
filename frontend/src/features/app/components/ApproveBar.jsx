@@ -29,12 +29,16 @@ export function ApproveBar({ run: r, taskClass, onDone, compact = false }) {
   const held = r.status === 'pending_approval';
   const action = held ? 'Approve and run' : 'Do it now';
   const go = () => run(() => api.approve(r.id), resultText).then((res) => res && onDone?.(res.runs?.[0]?.id));
+  const reject = () => run(() => api.reject(r.id), 'Rejected. It counts against this job type, so it needs more proof before more freedom.');
 
   if (compact) {
     return (
-      <button className="btn btn-ink btn-sm" disabled={busy || !!blocked} onClick={go} title={blocked || undefined}>
-        {action}
-      </button>
+      <span className="pl-actions">
+        <button className="btn btn-ink btn-sm" disabled={busy || !!blocked} onClick={go} title={blocked || undefined}>
+          {action}
+        </button>
+        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={reject} title="The agent got this wrong">Reject</button>
+      </span>
     );
   }
 
@@ -43,10 +47,12 @@ export function ApproveBar({ run: r, taskClass, onDone, compact = false }) {
       <p>
         {held
           ? 'The agent prepared this and is waiting for your OK.'
-          : 'The agent suggests this. If you agree, do it now — each correct job helps it earn more freedom.'}
+          : 'The agent suggests this. If you agree, do it now — each double-checked job is evidence toward more freedom.'}
+        {' '}If it is wrong, reject it: that counts against the job type.
       </p>
       <div className="pl-actions">
         <button className="btn btn-ink" disabled={busy || !!blocked} onClick={go}>{action}</button>
+        <button className="btn btn-line" disabled={busy} onClick={reject}>Reject</button>
         {blocked && <span className="act-blocked">{blocked}.</span>}
       </div>
     </div>

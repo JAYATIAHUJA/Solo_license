@@ -131,7 +131,7 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
               <input
                 className="input"
                 spellCheck={false}
-                placeholder={provider.default_model || 'e.g. llama-3.3-70b'}
+                placeholder={provider.default_model || 'e.g. openai/gpt-oss-120b'}
                 value={values[provider.model_field] || ''}
                 onChange={(e) => { onChange({ [provider.model_field]: e.target.value }); setTest(null); }}
               />

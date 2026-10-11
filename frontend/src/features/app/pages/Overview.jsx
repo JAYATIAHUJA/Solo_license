@@ -6,7 +6,7 @@ import { outcome } from '../../../lib/copy.js';
 import { ApproveBar } from '../components/ApproveBar.jsx';
 import { WarningBanner } from '../components/Bits.jsx';
 import {
-  classCards, jobIs, pausingRun, problemFor, progressText, runSentence, waitingRuns,
+  classCards, jobIs, pausingRun, problemFor, progressOf, runSentence, waitingRuns, whyText,
 } from '../components/mission/derive.js';
 import { openDemo } from '../autopilot/Autopilot.jsx';
 
@@ -38,7 +38,7 @@ function HowItWorks() {
         <b>How it works</b>
         <ol>
           <li>Your agent starts by asking you before it does anything.</li>
-          <li>After a few correct jobs it earns more freedom for that kind of job.</li>
+          <li>Every double-checked job is evidence. When the evidence proves it is reliable enough to be worth it, that kind of job gets more freedom.</li>
           <li>The moment something goes wrong it is paused. You decide when it can carry on.</li>
         </ol>
       </div>
@@ -47,10 +47,22 @@ function HowItWorks() {
   );
 }
 
+/** Verified jobs since the last change of level, against what the next one needs. */
+function EvidenceBar({ card }) {
+  const p = progressOf(card);
+  if (!p.needed) return null;
+  const have = card.license.successes || 0;
+  const share = Math.min(1, have / (have + p.needed));
+  return (
+    <div className="app-evidence" role="img" aria-label={`${have} double-checked jobs on record; ${p.needed} more needed for the next level`}>
+      <i style={{ width: `${share * 100}%` }} />
+    </div>
+  );
+}
+
 export function Overview() {
   const { data, session } = useStore();
   const { runs, settings } = data;
-  const threshold = data.config.promotion_clean_runs;
   const cards = classCards(data);
   const paused = cards.filter((c) => c.paused);
   const waiting = waitingRuns(data);
@@ -97,7 +109,9 @@ export function Overview() {
                 <span className={`pl-status ${c.paused ? 'bad' : c.level >= 2 ? 'ok' : 'wait'}`}>{c.paused ? 'Paused' : c.copy.short}</span>
               </div>
               <p>{c.paused ? 'For now it only suggests what to do. You do it.' : c.copy.long}</p>
-              <p className="pl-small pl-muted">{progressText(c, threshold)}</p>
+              <EvidenceBar card={c} />
+              <p className="pl-small pl-muted">{progressOf(c).sentence}</p>
+              {whyText(data, c) && <p className="pl-small pl-muted app-why">{whyText(data, c)}</p>}
             </article>
           ))}
         </div>

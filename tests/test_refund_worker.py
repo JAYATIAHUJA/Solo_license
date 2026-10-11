@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
+from dataclasses import replace
 
 import pytest
 
@@ -24,32 +26,58 @@ def _git_log(repo) -> str:
 
 
 def test_clean_runs_execute_verify_and_promote(harness):
-    for _ in range(harness.config.promotion_clean_runs):
-        result = harness.worker.run_refund(
-            RefundRequest("ORD-1001", "Ada", 25.0, "defective")
-        )
+    # Two verified jobs short of the evidence L3 needs.
+    ladder = harness.license_service.ladder
+    state = _dial(harness)
+    needed = ladder.step(2).runs_needed(state.successes, state.failures)
+    license_repo.upsert_state(harness.conn, replace(state, successes=state.successes + needed - 2))
+    harness.conn.commit()
+
+    for order_id, amount in (("ORD-1001", 25.0), ("ORD-1003", 15.0)):
+        result = harness.worker.run_refund(RefundRequest(order_id, "x", amount, "defective"))
         assert result.status is RunStatus.CLEAN
-        assert result.actual_delta == 25.0
+        assert result.actual_delta == amount
 
     assert _dial(harness).level is LicenseLevel.L3
-    # Side effect is real and verifiable in SQLite.
-    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 75.0
+    # Side effects are real and verifiable in SQLite.
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 25.0
     assert "promote" in _git_log(harness.repo)
 
 
-def test_quiet_failure_demotes_and_leaves_db_untouched(harness):
+def test_quiet_failure_is_caught_recovered_and_still_demotes(harness):
     harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
     result = harness.worker.run_refund(
         RefundRequest("ORD-1002", "Grace", 40.0, "late")
     )
 
+    # The tool lied: the read-back caught it and the licence paused ...
     assert result.status is RunStatus.DEMOTED
     assert any(d.rule == "state_mismatch" for d in result.detections)
     assert _dial(harness).level is LicenseLevel.L0
     assert _dial(harness).quarantined is True
-    # The quiet failure really did not move the ledger.
-    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1002") == 0.0
+    assert _dial(harness).failures == 1
+    # ... and the agent recovered the customer's refund with one safe retry.
+    assert result.recovered is True
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1002") == 40.0
+    spans = [r["name"] for r in harness.conn.execute(
+        "SELECT name FROM spans WHERE run_id = ? ORDER BY id", (result.run_id,))]
+    assert spans.index("recover.reconcile") < spans.index("recover.retry") < spans.index("recover.done")
     assert "demote" in _git_log(harness.repo)
+
+
+def test_retry_uses_the_same_idempotency_key(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1003", "Alan", 15.0, "x"), idempotency_key="k-1"
+    )
+    keys = [
+        json.loads(r["attributes"]).get("idempotency_key")
+        for r in harness.conn.execute(
+            "SELECT attributes FROM spans WHERE run_id = ? AND name IN ('tool.execute_refund', 'recover.retry')",
+            (result.run_id,),
+        )
+    ]
+    assert keys == ["k-1", "k-1"]
 
 
 def test_policy_violation_above_ceiling_demotes(harness):

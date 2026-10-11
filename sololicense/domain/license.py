@@ -1,8 +1,10 @@
 """The autonomy ladder and its state machine.
 
 A *task class* (e.g. ``refund``) holds one :class:`LicenseState`. The agent may
-only do what the current level permits. Levels are *earned* by consecutive
-clean runs and *lost* immediately when a detection fires.
+only do what the current level permits. Levels are *earned* from verified
+evidence — enough successes that the failure rate is provably below the
+break-even rate of the operator's own economics (see
+:mod:`sololicense.domain.trust`) — and *lost* immediately when a detection fires.
 
     L0  suggest only                       (human does everything)
     L1  draft + human approves each run
@@ -24,6 +26,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import IntEnum
+
+from sololicense.domain.trust import TrustLadder
 
 
 class LicenseLevel(IntEnum):
@@ -63,11 +67,16 @@ class LicenseState:
 
     task_class: str
     level: LicenseLevel = LicenseLevel.L0
+    # Verified successes since the last rung change (shown as a streak).
     consecutive_clean_runs: int = 0
     quarantined: bool = False
     # Level the class held before the most recent detection demotion, so a
     # reviewer can see "it fell from L2" when deciding how far to restore.
     demoted_from: LicenseLevel | None = None
+    # Lifetime evidence. Never reset: a job type that failed before needs
+    # more successes to climb again.
+    successes: int = 0
+    failures: int = 0
 
     @property
     def effective_level(self) -> LicenseLevel:
@@ -104,31 +113,33 @@ def decide(
     return Decision.AUTO_EXECUTE_AUDITED  # L3
 
 
-def record_clean_run(
-    state: LicenseState,
-    *,
-    promotion_threshold: int,
-) -> LicenseState:
-    """Advance the track record after a verified-clean run.
+def record_clean_run(state: LicenseState, *, ladder: TrustLadder) -> LicenseState:
+    """Add one verified success and promote one rung if the evidence now
+    proves the failure rate is below the next step's break-even rate.
 
     A quarantined class accrues no credit — it must be restored by a human
-    first. Reaching ``promotion_threshold`` consecutive clean runs promotes
-    the class one rung and resets the counter.
+    first.
     """
     if state.quarantined:
         return state
 
-    tally = state.consecutive_clean_runs + 1
+    credited = replace(
+        state,
+        successes=state.successes + 1,
+        consecutive_clean_runs=state.consecutive_clean_runs + 1,
+        demoted_from=None,
+    )
+    if state.level < LicenseLevel.L3 and ladder.step(int(state.level)).earned(
+        credited.successes, credited.failures
+    ):
+        return replace(credited, level=LicenseLevel(state.level + 1), consecutive_clean_runs=0)
+    return credited
 
-    if state.level < LicenseLevel.L3 and tally >= promotion_threshold:
-        return replace(
-            state,
-            level=LicenseLevel(state.level + 1),
-            consecutive_clean_runs=0,
-            demoted_from=None,
-        )
 
-    return replace(state, consecutive_clean_runs=tally, demoted_from=None)
+def record_rejection(state: LicenseState) -> LicenseState:
+    """A person rejected what the agent proposed: one failure of evidence.
+    The class was already supervised, so the level does not change."""
+    return replace(state, failures=state.failures + 1, consecutive_clean_runs=0)
 
 
 def demote_on_detection(state: LicenseState) -> LicenseState:
@@ -142,6 +153,7 @@ def demote_on_detection(state: LicenseState) -> LicenseState:
         consecutive_clean_runs=0,
         quarantined=True,
         demoted_from=fell_from,
+        failures=state.failures + 1,
     )
 
 

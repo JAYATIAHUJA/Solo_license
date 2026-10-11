@@ -6,7 +6,8 @@ import { jobsName, shortMoney } from '../../app/components/words.js';
 const filled = (form, settings, field) => Boolean(String(form[field] || '').trim() || savedHint(settings, field));
 
 /** Step indexes in Onboarding.jsx's STEPS order. */
-const STEP = { workspace: 0, model: 1, rules: 2, signals: 3, data: 4 };
+const STEP = { workspace: 0, data: 1, rules: 2, model: 3, signals: 4 };
+const SOURCE = { sample: 'Sample shop (8 orders, 6 messages)', csv: 'Imported from your CSV', stripe: 'From Stripe (test mode)' };
 
 export function StepReview({ form, data, goTo }) {
   const { settings, providers, task_classes: taskClasses } = data;
@@ -14,9 +15,8 @@ export function StepReview({ form, data, goTo }) {
   const existing = (data.orders || []).length;
   const orderParts = [];
   if (existing) orderParts.push(`${existing} already here`);
-  else if (form.load_sample_orders) orderParts.push('Sample orders');
-  if (form.orders.length) orderParts.push(`${form.orders.length} of your own`);
-  const runs = Number(form.promotion_clean_runs) || 1;
+  if (SOURCE[form.orders_source]) orderParts.push(SOURCE[form.orders_source]);
+  const sure = Math.round(Number(form.trust_confidence) * 100);
 
   const rows = [
     ['Business', form.business_name, STEP.workspace],
@@ -24,9 +24,10 @@ export function StepReview({ form, data, goTo }) {
     ...taskClasses.map((tc) => {
       const field = CEILING_FIELD[tc.key];
       const limit = shortMoney(field ? form[field] : tc.ceiling);
-      return [jobsName(data, tc.key), `Starts at “${levelCopy(form.starting_levels[tc.key] ?? 1, limit).short}” · on its own up to ${limit}`, STEP.rules];
+      return [jobsName(data, tc.key), `Starts at “${levelCopy(form.starting_levels[tc.key] ?? 1, limit).short}” · never more than ${limit} alone`, STEP.rules];
     }),
-    ['More freedom after', `${runs} correct job${runs === 1 ? '' : 's'} in a row`, STEP.rules],
+    ['More freedom when', `the track record proves it with ${sure}% confidence`, STEP.rules],
+    ['Refund window', Number(form.refund_window_days) > 0 ? `${form.refund_window_days} days, then store credit` : 'No limit', STEP.rules],
     ['Activity recording', filled(form, settings, 'neatlogs_api_key') ? 'On (neatlogs)' : 'Off — kept in the app only', STEP.signals],
     ['Pause alerts', filled(form, settings, 'alert_webhook_url') ? 'On' : 'Off', STEP.signals],
     ['Orders', orderParts.join(' + ') || 'None', STEP.data],

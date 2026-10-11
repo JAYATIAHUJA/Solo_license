@@ -9,6 +9,7 @@ import { AppShell } from './features/app/AppShell.jsx';
 import { Overview } from './features/app/pages/Overview.jsx';
 import { AgentDesk } from './features/app/pages/AgentDesk.jsx';
 import { Orders } from './features/app/pages/Orders.jsx';
+import { Inbox } from './features/app/pages/Inbox.jsx';
 import { Runs } from './features/app/pages/Runs.jsx';
 import { Ledger } from './features/app/pages/Ledger.jsx';
 import { Settings } from './features/app/pages/Settings.jsx';
@@ -44,6 +45,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/onboarding" element={guarded(<Onboarding />)} />
         <Route path="/app" element={guarded(<AppShell />)}>
           <Route index element={<Overview />} />
+          <Route path="inbox" element={<Inbox />} />
           <Route path="agent" element={<AgentDesk />} />
           <Route path="orders" element={<Orders />} />
           <Route path="runs" element={<Runs />} />

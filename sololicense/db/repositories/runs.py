@@ -26,6 +26,8 @@ class NewRun:
     fault_mode: str
     trace_id: str | None
     notes: str | None
+    recovered: bool = False
+    ticket_id: int | None = None
 
 
 def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
@@ -35,8 +37,8 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
         INSERT INTO runs
             (task_class, order_id, requested_amount, level_at_run, decision,
              status, executed, before_refunded, after_refunded, idempotency_key,
-             actor_id, actor_role, fault_mode, trace_id, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             actor_id, actor_role, fault_mode, trace_id, notes, recovered, ticket_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run.task_class,
@@ -54,6 +56,8 @@ def insert_run(conn: sqlite3.Connection, run: NewRun) -> int:
             run.fault_mode,
             run.trace_id,
             run.notes,
+            1 if run.recovered else 0,
+            run.ticket_id,
         ),
     )
     return int(cur.lastrowid)
