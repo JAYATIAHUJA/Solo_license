@@ -31,7 +31,7 @@ def _project(path):
 @pytest.fixture
 def gate(harness, tmp_path):
     project = _project(tmp_path / "shop")
-    gate = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    gate = CodingGate(harness.conn, harness.tracer, GitLedger(repo_root=harness.repo),
                       jev_client=JevClient(), verifier=verify.check_turn,
                       checkpoint_lookup=lambda cwd, session: None)
     gate.project = project
