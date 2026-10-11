@@ -32,6 +32,7 @@ htmlcov/
 # Generated evidence artifacts (regenerate with scripts.generate_evidence)
 evidence/evidence_report.md
 evidence/evidence_report.json
+artifacts/
 
 # Local scratch / tool state
 tmp/
