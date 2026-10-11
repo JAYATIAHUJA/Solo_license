@@ -165,6 +165,30 @@ def recent_turns(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]
     return conn.execute("SELECT * FROM agent_turns ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
 
+# --- events ------------------------------------------------------------------
+
+def insert_event(conn: sqlite3.Connection, *, repo: str, action_class: str, kind: str, from_level: int,
+                 to_level: int, reason: str, actor_id: str, principal: str = "main") -> int:
+    cur = conn.execute(
+        "INSERT INTO agent_events (repo, principal, action_class, kind, from_level, to_level, reason, actor_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (repo, principal, action_class, kind, from_level, to_level, reason, actor_id),
+    )
+    return int(cur.lastrowid)
+
+
+def set_event_sha(conn: sqlite3.Connection, event_id: int, git_sha: str) -> None:
+    conn.execute("UPDATE agent_events SET git_sha = ? WHERE id = ?", (git_sha, event_id))
+
+
+def list_events(conn: sqlite3.Connection, repo: str | None = None, limit: int = 60) -> list[sqlite3.Row]:
+    if repo is None:
+        return conn.execute("SELECT * FROM agent_events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return conn.execute(
+        "SELECT * FROM agent_events WHERE repo = ? ORDER BY id DESC LIMIT ?", (repo, limit)
+    ).fetchall()
+
+
 # --- repositories ------------------------------------------------------------
 
 def ensure_repo(conn: sqlite3.Connection, repo: str, path: str) -> sqlite3.Row:
