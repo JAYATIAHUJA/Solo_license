@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="450" viewBox="0 0 760 450" role="img" aria-label="Solo License on tau-bench" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="760" height="450" rx="12" fill="#ffffff" stroke="#e6e3dc"/>
+<text x="32" y="44" font-size="20" fill="#0e0e0d" font-weight="600" text-anchor="start">τ-bench retail: wrong database writes that reach a customer</text>
+<text x="32" y="68" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">Recorded GPT-4o and Claude runs replayed through five policies · $120 per incident · 30 arrival orders</text>
+<text x="32" y="110" font-size="14" fill="#0e0e0d" font-weight="600" text-anchor="start">GPT-4o — 95 of 567 writes wrong</text>
+<text x="32" y="133" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Agent acts alone</text>
+<rect x="210" y="120" width="250" height="16" fill="#f3f1ec"/>
+<rect x="210" y="120" width="250.0" height="16" fill="#d8341f"/>
+<text x="468.0" y="133" font-size="13" fill="#d8341f" font-weight="600" text-anchor="start">95</text>
+<text x="728" y="133" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">100% automated · regret $93,937</text>
+<text x="32" y="155" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Fixed ladder (3 clean)</text>
+<rect x="210" y="142" width="250" height="16" fill="#f3f1ec"/>
+<rect x="210" y="142" width="222.7" height="16" fill="#d8341f"/>
+<text x="440.7105263157895" y="155" font-size="13" fill="#d8341f" font-weight="600" text-anchor="start">85</text>
+<text x="728" y="155" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">89% automated · regret $83,082</text>
+<text x="32" y="177" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Policy guards only</text>
+<rect x="210" y="164" width="250" height="16" fill="#f3f1ec"/>
+<rect x="210" y="164" width="207.9" height="16" fill="#d8341f"/>
+<text x="425.89473684210526" y="177" font-size="13" fill="#d8341f" font-weight="600" text-anchor="start">79</text>
+<text x="728" y="177" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">87% automated · regret $78,072</text>
+<text x="32" y="199" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Person approves all</text>
+<rect x="210" y="186" width="250" height="16" fill="#f3f1ec"/>
+<text x="218" y="199" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
+<text x="728" y="199" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">0% automated · regret $968</text>
+<text x="32" y="221" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">Solo License</text>
+<rect x="210" y="208" width="250" height="16" fill="#f3f1ec"/>
+<text x="218" y="221" font-size="13" fill="#1f7a4d" font-weight="600" text-anchor="start">0</text>
+<text x="728" y="221" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">0% automated · regret $256</text>
+<text x="32" y="262" font-size="14" fill="#0e0e0d" font-weight="600" text-anchor="start">Claude 3.5 Sonnet (new) — 165 of 1308 writes wrong</text>
+<text x="32" y="285" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Agent acts alone</text>
+<rect x="210" y="272" width="250" height="16" fill="#f3f1ec"/>
+<rect x="210" y="272" width="250.0" height="16" fill="#d8341f"/>
+<text x="468.0" y="285" font-size="13" fill="#d8341f" font-weight="600" text-anchor="start">165</text>
+<text x="728" y="285" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">100% automated · regret $162,548</text>
+<text x="32" y="307" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Fixed ladder (3 clean)</text>
+<rect x="210" y="294" width="250" height="16" fill="#f3f1ec"/>
+<rect x="210" y="294" width="231.2" height="16" fill="#d8341f"/>
+<text x="449.16666666666663" y="307" font-size="13" fill="#d8341f" font-weight="600" text-anchor="start">153</text>
+<text x="728" y="307" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">93% automated · regret $151,892</text>
+<text x="32" y="329" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Policy guards only</text>
+<rect x="210" y="316" width="250" height="16" fill="#f3f1ec"/>
+<rect x="210" y="316" width="222.7" height="16" fill="#d8341f"/>
+<text x="440.72727272727275" y="329" font-size="13" fill="#d8341f" font-weight="600" text-anchor="start">147</text>
+<text x="728" y="329" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">94% automated · regret $144,699</text>
+<text x="32" y="351" font-size="13" fill="#0e0e0d" font-weight="400" text-anchor="start">Person approves all</text>
+<rect x="210" y="338" width="250" height="16" fill="#f3f1ec"/>
+<text x="218" y="351" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
+<text x="728" y="351" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">0% automated · regret $2,288</text>
+<text x="32" y="373" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">Solo License</text>
+<rect x="210" y="360" width="250" height="16" fill="#f3f1ec"/>
+<text x="218" y="373" font-size="13" fill="#1f7a4d" font-weight="600" text-anchor="start">0</text>
+<text x="728" y="373" font-size="12" fill="#76746e" font-weight="400" text-anchor="end">0% automated · regret $434</text>
+<text x="32" y="430" font-size="13" fill="#1f7a4d" font-weight="600" text-anchor="start">Regret = most a policy ever costs above the best one, across incident costs $1–$1,000.</text>
+</svg>

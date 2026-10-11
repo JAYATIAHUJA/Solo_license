@@ -1,0 +1,563 @@
+{
+  "generated": "2026-10-11T07:34:53+00:00",
+  "source": {
+    "benchmark": "\u03c4-bench retail (Sierra Research, MIT)",
+    "repo": "https://github.com/sierra-research/tau-bench",
+    "commit": "59a200c6d575d595120f1cb70fea53cef0632f6b",
+    "sha256": {
+      "orders.json": "81595d5cb28171e01133b52714b456003a9cd733cfd013c1d9d397ac0a7484c4",
+      "gpt-4o-retail.json": "2573729600ce4ae6d7cb6f190aae91884a18239a8cebf7d25e52ccd1d92c6623",
+      "sonnet-35-new-retail.json": "49bf22a2cf6c6a0ecf6f1feda54ec378f376b6b6e4d2cc276c50db5836d7443f"
+    }
+  },
+  "settings": {
+    "arrival_orders": 30,
+    "confidence": 0.9,
+    "audit_rate": 0.1,
+    "costs": {
+      "review": 2.25,
+      "autonomous": 0.375,
+      "incident": 120.0
+    }
+  },
+  "models": {
+    "GPT-4o": {
+      "episodes": 460,
+      "tasks": 115,
+      "pass_hat_k": {
+        "1": 0.6043,
+        "2": 0.4913,
+        "4": 0.3826
+      },
+      "writes": 567,
+      "wrong_writes": 95,
+      "guards": {
+        "held": 72,
+        "held_wrong": 16
+      },
+      "job_types": [
+        {
+          "job_type": "cancel_pending_order",
+          "writes": 92,
+          "wrong": 13,
+          "error_rate": 0.1413,
+          "upper_bound": 0.1972,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_pending_order_address",
+          "writes": 63,
+          "wrong": 10,
+          "error_rate": 0.1587,
+          "upper_bound": 0.2305,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_pending_order_items",
+          "writes": 124,
+          "wrong": 25,
+          "error_rate": 0.2016,
+          "upper_bound": 0.2534,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_pending_order_payment",
+          "writes": 4,
+          "wrong": 0,
+          "error_rate": 0.0,
+          "upper_bound": 0.369,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "return_delivered_order_items",
+          "writes": 144,
+          "wrong": 17,
+          "error_rate": 0.1181,
+          "upper_bound": 0.159,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "exchange_delivered_order_items",
+          "writes": 102,
+          "wrong": 23,
+          "error_rate": 0.2255,
+          "upper_bound": 0.2846,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_user_address",
+          "writes": 38,
+          "wrong": 7,
+          "error_rate": 0.1842,
+          "upper_bound": 0.2834,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        }
+      ],
+      "policies": {
+        "full_auto": {
+          "writes": 567.0,
+          "wrong": 95.0,
+          "harmful": 95.0,
+          "caught_by_audit": 0.0,
+          "blocked": 0.0,
+          "reviews": 0.0,
+          "audits": 0.0,
+          "autonomous": 567.0,
+          "automation_rate": 1.0,
+          "harm_rate": 0.17,
+          "cost": 11612.62,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        },
+        "approve_all": {
+          "writes": 567.0,
+          "wrong": 95.0,
+          "harmful": 0.0,
+          "caught_by_audit": 0.0,
+          "blocked": 95.0,
+          "reviews": 567.0,
+          "audits": 0.0,
+          "autonomous": 0.0,
+          "automation_rate": 0.0,
+          "harm_rate": 0.0,
+          "cost": 1275.75,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        },
+        "fixed_ladder": {
+          "writes": 567.0,
+          "wrong": 95.0,
+          "harmful": 84.63,
+          "caught_by_audit": 8.07,
+          "blocked": 10.37,
+          "reviews": 63.57,
+          "audits": 51.23,
+          "autonomous": 503.43,
+          "automation_rate": 0.89,
+          "harm_rate": 0.15,
+          "cost": 10603.09,
+          "harmful_sd": 3.85,
+          "cost_sd": 440.3
+        },
+        "guards_only": {
+          "writes": 567.0,
+          "wrong": 95.0,
+          "harmful": 79.0,
+          "caught_by_audit": 0.0,
+          "blocked": 16.0,
+          "reviews": 72.0,
+          "audits": 0.0,
+          "autonomous": 495.0,
+          "automation_rate": 0.87,
+          "harm_rate": 0.14,
+          "cost": 9827.62,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        },
+        "solo_license": {
+          "writes": 567.0,
+          "wrong": 95.0,
+          "harmful": 0.0,
+          "caught_by_audit": 0.0,
+          "blocked": 95.0,
+          "reviews": 567.0,
+          "audits": 0.0,
+          "autonomous": 0.0,
+          "automation_rate": 0.0,
+          "harm_rate": 0.0,
+          "cost": 1275.75,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        }
+      },
+      "incident_sweep": {
+        "1": {
+          "full_auto": 307.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 541.29,
+          "guards_only": 426.62,
+          "solo_license": 553.83
+        },
+        "2": {
+          "full_auto": 402.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 625.19,
+          "guards_only": 505.62,
+          "solo_license": 632.5
+        },
+        "5": {
+          "full_auto": 687.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 876.89,
+          "guards_only": 742.62,
+          "solo_license": 943.7
+        },
+        "10": {
+          "full_auto": 1162.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 1296.39,
+          "guards_only": 1137.62,
+          "solo_license": 1286.8
+        },
+        "20": {
+          "full_auto": 2112.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 2135.39,
+          "guards_only": 1927.62,
+          "solo_license": 1291.59
+        },
+        "50": {
+          "full_auto": 4962.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 4652.39,
+          "guards_only": 4297.62,
+          "solo_license": 1275.75
+        },
+        "120": {
+          "full_auto": 11612.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 10525.39,
+          "guards_only": 9827.62,
+          "solo_license": 1275.75
+        },
+        "300": {
+          "full_auto": 28712.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 25627.39,
+          "guards_only": 24047.62,
+          "solo_license": 1275.75
+        },
+        "1000": {
+          "full_auto": 95212.62,
+          "approve_all": 1275.75,
+          "fixed_ladder": 84357.39,
+          "guards_only": 79347.62,
+          "solo_license": 1275.75
+        }
+      },
+      "licensed_job_types": {
+        "1": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "modify_pending_order_items",
+          "modify_pending_order_payment",
+          "return_delivered_order_items",
+          "exchange_delivered_order_items",
+          "modify_user_address"
+        ],
+        "2": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "modify_pending_order_items",
+          "modify_pending_order_payment",
+          "return_delivered_order_items",
+          "exchange_delivered_order_items",
+          "modify_user_address"
+        ],
+        "5": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "modify_pending_order_items",
+          "modify_pending_order_payment",
+          "return_delivered_order_items",
+          "exchange_delivered_order_items",
+          "modify_user_address"
+        ],
+        "10": [
+          "return_delivered_order_items"
+        ],
+        "20": [],
+        "50": [],
+        "120": [],
+        "300": [],
+        "1000": []
+      },
+      "worst_case_regret": {
+        "full_auto": 93936.87,
+        "approve_all": 968.13,
+        "fixed_ladder": 83081.64,
+        "guards_only": 78071.87,
+        "solo_license": 256.08
+      }
+    },
+    "Claude 3.5 Sonnet (new)": {
+      "episodes": 920,
+      "tasks": 115,
+      "pass_hat_k": {
+        "1": 0.6924,
+        "2": 0.5761,
+        "4": 0.4622,
+        "8": 0.3565
+      },
+      "writes": 1308,
+      "wrong_writes": 165,
+      "guards": {
+        "held": 81,
+        "held_wrong": 18
+      },
+      "job_types": [
+        {
+          "job_type": "cancel_pending_order",
+          "writes": 197,
+          "wrong": 11,
+          "error_rate": 0.0558,
+          "upper_bound": 0.0826,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_pending_order_address",
+          "writes": 152,
+          "wrong": 14,
+          "error_rate": 0.0921,
+          "upper_bound": 0.1289,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_pending_order_items",
+          "writes": 304,
+          "wrong": 50,
+          "error_rate": 0.1645,
+          "upper_bound": 0.1944,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_pending_order_payment",
+          "writes": 12,
+          "wrong": 1,
+          "error_rate": 0.0833,
+          "upper_bound": 0.2678,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "return_delivered_order_items",
+          "writes": 311,
+          "wrong": 33,
+          "error_rate": 0.1061,
+          "upper_bound": 0.1316,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "exchange_delivered_order_items",
+          "writes": 252,
+          "wrong": 51,
+          "error_rate": 0.2024,
+          "upper_bound": 0.2376,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        },
+        {
+          "job_type": "modify_user_address",
+          "writes": 80,
+          "wrong": 5,
+          "error_rate": 0.0625,
+          "upper_bound": 0.1115,
+          "break_even": 0.0156,
+          "earns_autonomy": false
+        }
+      ],
+      "policies": {
+        "full_auto": {
+          "writes": 1308.0,
+          "wrong": 165.0,
+          "harmful": 165.0,
+          "caught_by_audit": 0.0,
+          "blocked": 0.0,
+          "reviews": 0.0,
+          "audits": 0.0,
+          "autonomous": 1308.0,
+          "automation_rate": 1.0,
+          "harm_rate": 0.13,
+          "cost": 20290.5,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        },
+        "approve_all": {
+          "writes": 1308.0,
+          "wrong": 165.0,
+          "harmful": 0.0,
+          "caught_by_audit": 0.0,
+          "blocked": 165.0,
+          "reviews": 1308.0,
+          "audits": 0.0,
+          "autonomous": 0.0,
+          "automation_rate": 0.0,
+          "harm_rate": 0.0,
+          "cost": 2943.0,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        },
+        "fixed_ladder": {
+          "writes": 1308.0,
+          "wrong": 165.0,
+          "harmful": 152.57,
+          "caught_by_audit": 14.63,
+          "blocked": 12.43,
+          "reviews": 85.9,
+          "audits": 123.4,
+          "autonomous": 1222.1,
+          "automation_rate": 0.93,
+          "harm_rate": 0.12,
+          "cost": 19237.21,
+          "harmful_sd": 4.84,
+          "cost_sd": 559.64
+        },
+        "guards_only": {
+          "writes": 1308.0,
+          "wrong": 165.0,
+          "harmful": 147.0,
+          "caught_by_audit": 0.0,
+          "blocked": 18.0,
+          "reviews": 81.0,
+          "audits": 0.0,
+          "autonomous": 1227.0,
+          "automation_rate": 0.94,
+          "harm_rate": 0.11,
+          "cost": 18282.38,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        },
+        "solo_license": {
+          "writes": 1308.0,
+          "wrong": 165.0,
+          "harmful": 0.0,
+          "caught_by_audit": 0.0,
+          "blocked": 165.0,
+          "reviews": 1308.0,
+          "audits": 0.0,
+          "autonomous": 0.0,
+          "automation_rate": 0.0,
+          "harm_rate": 0.0,
+          "cost": 2943.0,
+          "harmful_sd": 0.0,
+          "cost_sd": 0.0
+        }
+      },
+      "incident_sweep": {
+        "1": {
+          "full_auto": 655.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 1089.34,
+          "guards_only": 789.38,
+          "solo_license": 1089.24
+        },
+        "2": {
+          "full_auto": 820.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 1243.24,
+          "guards_only": 936.38,
+          "solo_license": 1235.5
+        },
+        "5": {
+          "full_auto": 1315.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 1704.94,
+          "guards_only": 1377.38,
+          "solo_license": 1732.82
+        },
+        "10": {
+          "full_auto": 2140.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 2474.44,
+          "guards_only": 2112.38,
+          "solo_license": 2498.15
+        },
+        "20": {
+          "full_auto": 3790.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 4013.44,
+          "guards_only": 3582.38,
+          "solo_license": 2913.34
+        },
+        "50": {
+          "full_auto": 8740.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 8630.44,
+          "guards_only": 7992.38,
+          "solo_license": 2943.0
+        },
+        "120": {
+          "full_auto": 20290.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 19403.44,
+          "guards_only": 18282.38,
+          "solo_license": 2943.0
+        },
+        "300": {
+          "full_auto": 49990.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 47105.44,
+          "guards_only": 44742.38,
+          "solo_license": 2943.0
+        },
+        "1000": {
+          "full_auto": 165490.5,
+          "approve_all": 2943.0,
+          "fixed_ladder": 154835.44,
+          "guards_only": 147642.38,
+          "solo_license": 2943.0
+        }
+      },
+      "licensed_job_types": {
+        "1": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "modify_pending_order_items",
+          "modify_pending_order_payment",
+          "return_delivered_order_items",
+          "exchange_delivered_order_items",
+          "modify_user_address"
+        ],
+        "2": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "modify_pending_order_items",
+          "modify_pending_order_payment",
+          "return_delivered_order_items",
+          "exchange_delivered_order_items",
+          "modify_user_address"
+        ],
+        "5": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "modify_pending_order_items",
+          "modify_pending_order_payment",
+          "return_delivered_order_items",
+          "exchange_delivered_order_items",
+          "modify_user_address"
+        ],
+        "10": [
+          "cancel_pending_order",
+          "modify_pending_order_address",
+          "return_delivered_order_items",
+          "modify_user_address"
+        ],
+        "20": [
+          "cancel_pending_order"
+        ],
+        "50": [],
+        "120": [],
+        "300": [],
+        "1000": []
+      },
+      "worst_case_regret": {
+        "full_auto": 162547.5,
+        "approve_all": 2287.5,
+        "fixed_ladder": 151892.44,
+        "guards_only": 144699.38,
+        "solo_license": 433.74
+      }
+    }
+  }
+}

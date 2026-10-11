@@ -41,3 +41,6 @@ tmp/
 .entire/logs/
 data/ledger-repo/
 data/.settings.key
+
+# tau-bench data (downloaded by scripts.taubench_eval)
+data/taubench/
