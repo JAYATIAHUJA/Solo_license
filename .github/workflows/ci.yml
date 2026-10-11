@@ -27,8 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest httpx
       - name: Run pytest
-        env:
-          LLM_PROVIDER: deterministic
         run: python -m pytest -q
 
   frontend:
