@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from typing import Callable
 
 from sololicense.db.repositories import events as events_repo
 from sololicense.db.repositories import license as license_repo
@@ -27,6 +28,10 @@ from sololicense.domain.license import (
     restore,
 )
 from sololicense.services.git_ledger import GitLedger, LedgerEntry
+from sololicense.security import Actor, Role
+
+
+SYSTEM_ACTOR = Actor("system:license-service", Role.ADMIN)
 
 
 @dataclass(frozen=True)
@@ -46,10 +51,12 @@ class LicenseService:
         ledger: GitLedger,
         *,
         promotion_threshold: int,
+        on_transition: Callable[..., None] | None = None,
     ) -> None:
         self._conn = conn
         self._ledger = ledger
         self._threshold = promotion_threshold
+        self._on_transition = on_transition
 
     def get_or_create(self, task_class: str) -> LicenseState:
         """Return the task class's state, seeding a fresh L0 row if absent."""
@@ -61,7 +68,12 @@ class LicenseService:
         return state
 
     def apply_clean_run(
-        self, task_class: str, *, run_id: int | None, trace_id: str | None
+        self,
+        task_class: str,
+        *,
+        run_id: int | None,
+        trace_id: str | None,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
         """Credit a verified-clean run; promote if the threshold is reached."""
         old = self.get_or_create(task_class)
@@ -77,6 +89,7 @@ class LicenseService:
                 ),
                 run_id=run_id,
                 trace_id=trace_id,
+                actor=actor,
             )
         # No rung change: persist the updated tally without a git event.
         license_repo.upsert_state(self._conn, new)
@@ -90,12 +103,19 @@ class LicenseService:
         run_id: int | None,
         trace_id: str | None,
         reason: str,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
         """Crash the dial to L0 and quarantine on a detection."""
         old = self.get_or_create(task_class)
         new = demote_on_detection(old)
         return self._persist(
-            old, new, kind="demote", reason=reason, run_id=run_id, trace_id=trace_id
+            old,
+            new,
+            kind="demote",
+            reason=reason,
+            run_id=run_id,
+            trace_id=trace_id,
+            actor=actor,
         )
 
     def restore_license(
@@ -104,12 +124,19 @@ class LicenseService:
         target: LicenseLevel,
         *,
         reason: str,
+        actor: Actor = SYSTEM_ACTOR,
     ) -> Transition:
         """Lift quarantine to a human-chosen level after evidence review."""
         old = self.get_or_create(task_class)
         new = restore(old, target)
         return self._persist(
-            old, new, kind="restore", reason=reason, run_id=None, trace_id=None
+            old,
+            new,
+            kind="restore",
+            reason=reason,
+            run_id=None,
+            trace_id=None,
+            actor=actor,
         )
 
     def _persist(
@@ -121,6 +148,7 @@ class LicenseService:
         reason: str,
         run_id: int | None,
         trace_id: str | None,
+        actor: Actor,
     ) -> Transition:
         """Persist state + event, then commit a git ledger entry and link it."""
         license_repo.upsert_state(self._conn, new)
@@ -132,6 +160,8 @@ class LicenseService:
             to_level=int(new.level),
             reason=reason,
             run_id=run_id,
+            actor_id=actor.actor_id,
+            actor_role=actor.role.value,
         )
         self._conn.commit()
 
@@ -149,5 +179,15 @@ class LicenseService:
         if git_sha:
             events_repo.set_git_sha(self._conn, event_id, git_sha)
             self._conn.commit()
+
+        if self._on_transition is not None:
+            try:
+                self._on_transition(
+                    task_class=new.task_class, kind=kind,
+                    from_level=int(old.level), to_level=int(new.level),
+                    reason=reason, run_id=run_id, git_sha=git_sha,
+                )
+            except Exception:  # alerts are best-effort; the dial already moved
+                pass
 
         return Transition(old=old, new=new, kind=kind, git_sha=git_sha)

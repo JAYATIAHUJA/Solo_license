@@ -25,15 +25,18 @@ from sololicense.agent.planner import Plan, Planner
 from sololicense.agent.tools import execute_refund
 from sololicense.config import Config
 from sololicense.db.repositories import detections as detections_repo
+from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
-from sololicense.domain.models import RefundRequest, RunStatus
-from sololicense.faults.injector import FaultInjector
+from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
+from sololicense.domain.task_classes import get_spec
+from sololicense.faults.injector import FaultInjector, effects_for
 from sololicense.observability import detections as rules
 from sololicense.observability.detections import Detection
 from sololicense.observability.tracer import Tracer
 from sololicense.services import verification
-from sololicense.services.license_service import LicenseService, Transition
+from sololicense.security import Actor
+from sololicense.services.license_service import LicenseService, SYSTEM_ACTOR, Transition
 
 _EXECUTING = (Decision.AUTO_EXECUTE, Decision.AUTO_EXECUTE_AUDITED)
 
@@ -83,37 +86,90 @@ class RefundWorker:
         *,
         task_class: str = "refund",
         approved: bool = False,
+        idempotency_key: str | None = None,
+        actor: Actor = SYSTEM_ACTOR,
+    ) -> RunResult:
+        get_spec(task_class)  # fail fast on an unknown class
+        trace = self._tracer.start_trace(
+            task_class, order_id=request.order_id, amount=request.amount,
+            actor=actor.actor_id,
+        )
+        try:
+            return self._run_refund(
+                request,
+                task_class=task_class,
+                approved=approved,
+                idempotency_key=idempotency_key,
+                actor=actor,
+                trace=trace,
+            )
+        except Exception as error:
+            trace.span("run.error", status="error", error_type=type(error).__name__)
+            trace.close()
+            raise
+
+    def _run_refund(
+        self,
+        request: RefundRequest,
+        *,
+        task_class: str,
+        approved: bool,
+        idempotency_key: str | None,
+        actor: Actor,
+        trace,
     ) -> RunResult:
         state = self._licenses.get_or_create(task_class)
-        effects = self._faults.consume_effects(task_class)
-        trace = self._tracer.start_trace("refund")
+        column = get_spec(task_class).effect_column
+        # Peek, don't consume: an armed fault only bends a run that actually
+        # executes, so a draft or suggestion leaves it armed for the next one.
+        armed_effects = effects_for(self._faults.peek(task_class))
         trace.span(
             "license.check",
             level=state.effective_level.name,
             quarantined=state.quarantined,
-            fault=effects.mode.value,
+            fault=armed_effects.mode.value,
         )
 
         authorized = self._authorize(state, request, approved)
-        attempted = self._attempt(authorized, state, effects)
+        attempted = self._attempt(authorized, state, armed_effects)
         plan = self._planner.plan(request, authorized, state)
         trace.span("plan", source=plan.source, rationale=plan.rationale)
 
-        before = verification.read_refunded(self._conn, request.order_id)
+        before = verification.read_refunded(self._conn, request.order_id, column)
         will_execute = attempted in _EXECUTING
+        duplicate = (
+            bool(idempotency_key)
+            and will_execute
+            and runs_repo.get_executed_by_idempotency_key(
+                self._conn, idempotency_key or ""
+            )
+            is not None
+        )
+        if duplicate:
+            will_execute = False
+        effects = effects_for(FaultMode.NONE)
+        if will_execute and armed_effects.active:
+            effects = self._faults.consume_effects(task_class)
         intended_delta = request.amount if will_execute else 0.0
 
         if will_execute:
-            self._do_execute(trace, request, effects)
+            self._do_execute(trace, request, effects, task_class, column)
         else:
             trace.span("execute.skipped", reason=attempted.name)
 
-        result = verification.verify_refund(
-            self._conn,
-            order_id=request.order_id,
-            before=before,
-            intended_delta=intended_delta,
-        )
+        if will_execute and effects.skip_verification:
+            result = verification.missing_refund_verification(
+                before=before,
+                intended_delta=intended_delta,
+            )
+        else:
+            result = verification.verify_refund(
+                self._conn,
+                order_id=request.order_id,
+                before=before,
+                intended_delta=intended_delta,
+                column=column,
+            )
         trace.span(
             "verify.readback",
             before=result.before,
@@ -121,6 +177,7 @@ class RefundWorker:
             actual_delta=result.actual_delta,
             intended_delta=intended_delta,
             matched=result.matched,
+            verified=result.verified,
         )
 
         found = self._run_detections(
@@ -128,6 +185,7 @@ class RefundWorker:
             attempted=attempted,
             intended_delta=intended_delta,
             result=result,
+            duplicate=duplicate,
         )
         for d in found:
             trace.span(f"detection.{d.rule}", status="error", severity=d.severity,
@@ -136,17 +194,19 @@ class RefundWorker:
         status = self._status(found, will_execute, authorized)
         run_id = self._persist_run(
             request=request,
+            task_class=task_class,
             state_level=state.effective_level,
             authorized=authorized,
             status=status,
             executed=will_execute,
             result=result,
+            idempotency_key=idempotency_key,
+            actor=actor,
             effects=effects,
             trace=trace,
             plan=plan,
         )
         trace.flush(self._conn, run_id)
-        self._conn.commit()
 
         for d in found:
             detections_repo.insert_detection(
@@ -157,9 +217,11 @@ class RefundWorker:
                 message=d.message,
                 trace_id=trace.trace_id,
             )
-        self._conn.commit()
 
-        transition = self._update_dial(task_class, status, found, run_id, trace.trace_id)
+        transition = self._update_dial(
+            task_class, status, found, run_id, trace.trace_id, actor
+        )
+        self._conn.commit()
 
         return RunResult(
             run_id=run_id,
@@ -189,7 +251,8 @@ class RefundWorker:
                 else Decision.AUTO_EXECUTE
             )
         return decide(
-            state, request.amount, l2_ceiling=self._config.l2_auto_refund_ceiling
+            state, request.amount,
+            l2_ceiling=self._config.ceiling_for(state.task_class),
         )
 
     def _attempt(self, authorized: Decision, state, effects) -> Decision:
@@ -203,9 +266,11 @@ class RefundWorker:
             )
         return authorized
 
-    def _do_execute(self, trace, request: RefundRequest, effects) -> None:
+    def _do_execute(
+        self, trace, request: RefundRequest, effects, task_class: str, column: str
+    ) -> None:
         trace.span(
-            "tool.execute_refund",
+            f"tool.execute_{task_class}",
             order_id=request.order_id,
             amount=request.amount,
             suppress_write=effects.suppress_write,
@@ -215,6 +280,7 @@ class RefundWorker:
             order_id=request.order_id,
             amount=request.amount,
             suppress_write=effects.suppress_write,
+            column=column,
         )
         # The tool's claim is recorded but explicitly marked untrusted.
         trace.span(
@@ -223,12 +289,15 @@ class RefundWorker:
         )
 
     def _run_detections(
-        self, *, authorized, attempted, intended_delta, result
+        self, *, authorized, attempted, intended_delta, result, duplicate
     ) -> list[Detection]:
         candidates = [
             rules.detect_policy_breach(authorized=authorized, attempted=attempted),
+            rules.detect_duplicate_action(duplicate=duplicate),
             rules.detect_state_mismatch(
-                intended_delta=intended_delta, actual_delta=result.actual_delta
+                intended_delta=intended_delta,
+                actual_delta=result.actual_delta,
+                verified=result.verified,
             ),
             rules.detect_missing_verification(verified=result.verified),
         ]
@@ -244,13 +313,13 @@ class RefundWorker:
         return RunStatus.SUGGESTED
 
     def _persist_run(
-        self, *, request, state_level, authorized, status, executed, result,
-        effects, trace, plan,
+        self, *, request, task_class, state_level, authorized, status, executed,
+        result, idempotency_key, actor, effects, trace, plan,
     ) -> int:
         return insert_run(
             self._conn,
             NewRun(
-                task_class="refund",
+                task_class=task_class,
                 order_id=request.order_id,
                 requested_amount=request.amount,
                 level_at_run=int(state_level),
@@ -259,6 +328,9 @@ class RefundWorker:
                 executed=executed and status is not RunStatus.SUGGESTED,
                 before_refunded=result.before,
                 after_refunded=result.after,
+                idempotency_key=idempotency_key,
+                actor_id=actor.actor_id,
+                actor_role=actor.role.value,
                 fault_mode=effects.mode.value,
                 trace_id=trace.trace_id,
                 notes=plan.rationale,
@@ -266,16 +338,16 @@ class RefundWorker:
         )
 
     def _update_dial(
-        self, task_class, status, found, run_id, trace_id
+        self, task_class, status, found, run_id, trace_id, actor
     ) -> Transition:
         if status is RunStatus.DEMOTED:
             reason = "; ".join(d.message for d in found)
             return self._licenses.apply_detection(
-                task_class, run_id=run_id, trace_id=trace_id, reason=reason
+                task_class, run_id=run_id, trace_id=trace_id, reason=reason, actor=actor
             )
         if status is RunStatus.CLEAN:
             return self._licenses.apply_clean_run(
-                task_class, run_id=run_id, trace_id=trace_id
+                task_class, run_id=run_id, trace_id=trace_id, actor=actor
             )
         # Suggestions and pending approvals do not move the dial.
         state = self._licenses.get_or_create(task_class)

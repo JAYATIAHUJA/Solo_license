@@ -17,6 +17,8 @@ env/
 *.sqlite
 *.sqlite3
 data/*.db
+data/*.db-wal
+data/*.db-shm
 
 # OS / editor
 .DS_Store
@@ -32,3 +34,13 @@ htmlcov/
 # Generated evidence artifacts (regenerate with scripts.generate_evidence)
 artifacts/evidence_report.md
 artifacts/evidence_report.json
+
+# Local scratch / tool state
+tmp/
+.tmp_pytest*/
+.entire/logs/
+data/ledger-repo/
+data/.settings.key
+
+# tau-bench data (downloaded by scripts.taubench_eval)
+data/taubench/

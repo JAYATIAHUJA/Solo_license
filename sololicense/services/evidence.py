@@ -39,7 +39,11 @@ class EvidencePacket:
 def _neatlogs_link(config: Config, trace_id: str | None) -> str | None:
     if not trace_id or not config.neatlogs_enabled:
         return None
-    return f"https://neatlogs.com/{config.neatlogs_project}/traces/{trace_id}"
+    return config.neatlogs_trace_url.format(
+        app=config.neatlogs_app_url.rstrip("/"),
+        project=config.neatlogs_project,
+        trace_id=trace_id,
+    )
 
 
 def build_packet(

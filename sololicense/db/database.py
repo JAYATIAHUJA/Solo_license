@@ -34,7 +34,33 @@ def connect(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Connect
 def apply_schema(conn: sqlite3.Connection) -> None:
     """Create every table/index if absent. Safe to call on every startup."""
     conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    _migrate_runs(conn)
     conn.commit()
+
+
+def _migrate_runs(conn: sqlite3.Connection) -> None:
+    order_columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
+    if "credit_issued" not in order_columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN credit_issued REAL NOT NULL DEFAULT 0")
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}
+    if "idempotency_key" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN idempotency_key TEXT")
+    if "actor_id" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN actor_id TEXT NOT NULL DEFAULT 'system:license-service'")
+    if "actor_role" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN actor_role TEXT NOT NULL DEFAULT 'admin'")
+    event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(license_events)")}
+    if "actor_id" not in event_columns:
+        conn.execute("ALTER TABLE license_events ADD COLUMN actor_id TEXT NOT NULL DEFAULT 'system:license-service'")
+    if "actor_role" not in event_columns:
+        conn.execute("ALTER TABLE license_events ADD COLUMN actor_role TEXT NOT NULL DEFAULT 'admin'")
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_runs_idempotency_executed
+            ON runs (idempotency_key)
+            WHERE idempotency_key IS NOT NULL AND executed = 1
+        """
+    )
 
 
 def init_db(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Connection:

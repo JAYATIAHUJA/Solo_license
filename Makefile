@@ -3,7 +3,7 @@
 
 PYTHON ?= python
 
-.PHONY: install seed run test evidence cfo clean
+.PHONY: install seed run-api web test evidence benchmark taubench charts cfo clean
 
 install:            ## Install runtime dependencies
 	$(PYTHON) -m pip install -r requirements.txt
@@ -11,14 +11,26 @@ install:            ## Install runtime dependencies
 seed:               ## Rebuild the database to the demo-ready state
 	$(PYTHON) -m sololicense.db.seed
 
-run: seed           ## Seed, then launch the live UI
-	$(PYTHON) -m streamlit run app/streamlit_app.py
+run-api: seed       ## Seed, then launch the API on :8000
+	$(PYTHON) -m uvicorn app.api:app --port 8000
+
+web:                ## Launch the React app on :5174 (proxies /api to :8000)
+	npm --prefix frontend run dev
 
 test:               ## Run the test suite
 	$(PYTHON) -m pytest
 
 evidence:           ## Generate the before/after evidence artifact
 	$(PYTHON) -m scripts.generate_evidence
+
+benchmark:          ## 50-run before/after benchmark -> artifacts/benchmark.md
+	$(PYTHON) -m scripts.benchmark
+
+taubench:           ## Score the policies on tau-bench retail -> artifacts/taubench.md
+	$(PYTHON) -m scripts.taubench_eval
+
+charts:             ## Redraw README charts from the latest benchmark
+	$(PYTHON) -m scripts.readme_charts
 
 cfo:                ## Print the cfo.ai financial model
 	$(PYTHON) -m cfo.model

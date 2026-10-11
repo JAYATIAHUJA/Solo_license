@@ -32,9 +32,11 @@ class VerificationResult:
         return abs(self.actual_delta - self.intended_delta) <= 1e-9
 
 
-def read_refunded(conn: sqlite3.Connection, order_id: str) -> float:
-    """Snapshot the authoritative refunded amount for an order."""
-    return orders_repo.get_refunded_amount(conn, order_id)
+def read_refunded(
+    conn: sqlite3.Connection, order_id: str, column: str = "refunded_amount"
+) -> float:
+    """Snapshot the authoritative side-effect amount for an order."""
+    return orders_repo.get_effect_amount(conn, order_id, column)
 
 
 def verify_refund(
@@ -43,12 +45,25 @@ def verify_refund(
     order_id: str,
     before: float,
     intended_delta: float,
+    column: str = "refunded_amount",
 ) -> VerificationResult:
     """Read the side effect back and compare it to what was intended."""
-    after = read_refunded(conn, order_id)
+    after = read_refunded(conn, order_id, column)
     return VerificationResult(
         before=before,
         after=after,
         intended_delta=intended_delta,
         verified=True,
+    )
+
+
+def missing_refund_verification(
+    *, before: float, intended_delta: float
+) -> VerificationResult:
+    """Represent an execution whose read-back did not run or complete."""
+    return VerificationResult(
+        before=before,
+        after=before,
+        intended_delta=intended_delta,
+        verified=False,
     )

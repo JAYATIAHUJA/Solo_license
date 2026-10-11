@@ -1,0 +1,95 @@
+/* Sign-in keeps the brand's paper-and-ink look (the app inside is plain).
+   These rules are scoped to .axo so onboarding can evolve independently. */
+.axo-logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }
+
+.axo { display: grid; grid-template-columns: minmax(320px, 0.8fr) 1.2fr; min-height: 100vh; }
+.axo-aside { position: relative; border-right: 1px solid var(--ink); }
+.axo-shader { position: absolute !important; inset: 0; }
+.axo-aside-card { position: sticky; top: 24px; margin: 24px; padding: 28px; background: var(--paper); border: 1px solid var(--ink); display: grid; gap: 32px; z-index: 1; }
+.axo-steps { list-style: none; margin: 0; padding: 0; display: grid; }
+.axo-steps li button { width: 100%; display: flex; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--hair); font-size: 17px; text-align: left; opacity: 1; }
+.axo-steps li button:disabled { opacity: 0.4; cursor: default; }
+.axo-step-box { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--ink); font: 500 11px var(--font-mono); }
+.axo-steps li.is-current .axo-step-box { background: var(--ink); color: var(--paper); }
+.axo-steps li.is-current button { font-family: var(--font-serif); font-size: 24px; font-style: italic; }
+.axo-aside-note { font-size: 23px; line-height: 1.2; margin: 0; min-height: 3.6em; }
+
+.axo-main { display: flex; flex-direction: column; padding: clamp(24px, 5vw, 72px); max-width: 900px; width: 100%; }
+.axo-progress { height: 4px; border: 1px solid var(--ink); margin-bottom: 48px; }
+.axo-progress i { display: block; height: 100%; background: var(--ink); }
+.axo-panel { display: grid; gap: 28px; align-content: start; flex: 1; }
+.axo-title { font-size: clamp(40px, 5vw, 72px); line-height: 0.98; margin: 0; letter-spacing: -0.02em; }
+.axo-sub { margin: -8px 0 0; font-size: 16px; color: var(--ink-2); max-width: 56ch; line-height: 1.55; }
+.axo-big-input { height: 64px; font-size: 24px; }
+.axo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.axo-nav { display: flex; justify-content: space-between; padding-top: 32px; margin-top: 40px; border-top: 1px solid var(--ink); }
+.axo-error { display: flex; gap: 8px; align-items: center; color: var(--signal); }
+
+.axo-check { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border: 1px solid var(--ink); cursor: pointer; background: var(--sheet); }
+.axo-check input { position: absolute; opacity: 0; pointer-events: none; }
+.axo-check-box { width: 24px; height: 24px; border: 1px solid var(--ink); display: grid; place-items: center; flex: none; }
+.axo-check input:focus-visible + .axo-check-box { outline: 2px solid var(--ink); outline-offset: 2px; }
+.axo-check b { display: block; font-weight: 500; }
+.axo-check small { color: var(--muted); }
+.axo-order-form { display: grid; grid-template-columns: 1fr 1.2fr 0.8fr auto; gap: 10px; align-items: end; }
+.axo-orders { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--ink); }
+.axo-orders li { display: grid; grid-template-columns: 1fr 1.4fr 1fr auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--hair); }
+.axo-review { margin: 0; border-top: 1px solid var(--ink); }
+.axo-review div { display: grid; grid-template-columns: 160px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--hair); }
+.axo-review dt { color: var(--muted); }
+.axo-review dd { margin: 0; font-size: 17px; min-width: 0; overflow-wrap: anywhere; }
+.axo-hint { font-size: 24px; color: var(--ink); }
+
+.axo-loading { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 14px; }
+.axo-section { display: grid; gap: 14px; padding-top: 20px; border-top: 1px solid var(--ink); min-width: 0; }
+.axo-section-title { margin: 0; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; font: 400 30px/1.05 var(--font-serif); letter-spacing: -0.01em; }
+.axo-section-sub { margin: -6px 0 0; font-size: 14px; color: var(--ink-2); max-width: 60ch; line-height: 1.5; }
+.axo-narrow { max-width: 320px; }
+.axo-note { display: flex; gap: 8px; align-items: center; margin: 0; padding: 14px 16px; border: 1px solid var(--ink); background: var(--sheet); }
+.axo-panel, .axo-main { min-width: 0; }
+
+@media (max-width: 900px) {
+  .axo { grid-template-columns: 1fr; }
+  .axo-aside { border-right: 0; border-bottom: 1px solid var(--ink); }
+  .axo-aside-card { position: relative; top: 0; margin: 16px; padding: 20px; gap: 16px; }
+  .axo-steps { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .axo-step-label { display: none; }
+  .axo-steps li button { flex-direction: column; font-size: 12px !important; gap: 6px; border: 0; }
+  .axo-steps li.is-current button { font-family: var(--font-sans); font-style: normal; }
+  .axo-aside-note { display: none; }
+  .axo-row, .axo-order-form { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .axo-main { padding: 24px 16px; }
+  .axo-progress { margin-bottom: 28px; }
+  .axo-review div { grid-template-columns: 1fr auto; gap: 4px 12px; }
+  .axo-review dt { grid-column: 1 / -1; }
+  .axo-orders li { grid-template-columns: 1fr 1fr auto; }
+  .axo-orders li span:first-of-type { grid-column: 1 / -1; grid-row: 2; }
+  .axo-nav { gap: 8px; }
+  .axo-narrow { max-width: none; }
+}
+
+.ax .axo-main { gap: 22px; justify-content: center; }
+.ax .axo-title { margin-top: 4px; }
+.ax-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; font-size: 15px; }
+.ax-points li { display: flex; gap: 10px; align-items: center; }
+
+.ax-card { display: grid; gap: 18px; padding: 24px; border: 1px solid var(--ink); background: var(--sheet); box-shadow: 6px 6px 0 var(--ink); max-width: 560px; }
+.ax-card-head, .ax-token summary { display: flex; gap: 14px; align-items: flex-start; }
+.ax-card-head b, .ax-token summary b { display: block; font-weight: 500; font-size: 18px; }
+.ax-card-head small, .ax-token summary small { color: var(--muted); }
+.ax-token { box-shadow: none; }
+.ax-token summary { cursor: pointer; list-style: none; }
+.ax-token summary::-webkit-details-marker { display: none; }
+.ax-token-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.ax-note { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.ax-note code { font-family: var(--font-mono); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .ax .axo-aside-card { gap: 12px; }
+  .ax-points { display: none; }
+  .ax-token-form { grid-template-columns: 1fr; }
+  .ax-card { box-shadow: 4px 4px 0 var(--ink); padding: 18px; }
+}

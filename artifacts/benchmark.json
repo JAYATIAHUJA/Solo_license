@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-10-10T22:26:40.422352+00:00",
+  "runs": 50,
+  "seed": 42,
+  "fault_rate": 0.2,
+  "faults_injected": 14,
+  "executed": 50,
+  "before": {
+    "claimed_success": 50,
+    "false_success": 10,
+    "verified_success_rate": 0.8,
+    "demotions": 0
+  },
+  "after": {
+    "caught": 10,
+    "false_success_leaked": 0,
+    "verified_success_rate": 1.0,
+    "license_events": {
+      "demote": 10,
+      "promote": 6,
+      "restore": 12
+    }
+  },
+  "latency_ms": {
+    "mean": 83.4,
+    "p95": 279.0
+  },
+  "neatlogs": true,
+  "sample_traces": [
+    "4f4aafe188fd90e4f1b5fadb5e45c9d6",
+    "cca22fb0c2be074a4c0a667a4af4ee02",
+    "baf2973d0d28156045feb7fb4737b0e1",
+    "aeae16471a599753800a23ebc11c1414",
+    "685c936401425f2026f41f55a3795650"
+  ]
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sololicense.domain.license import Decision
 from sololicense.observability.detections import (
+    detect_duplicate_action,
     detect_missing_verification,
     detect_policy_breach,
     detect_state_mismatch,
@@ -26,6 +27,15 @@ def test_missing_verification_fires_when_not_verified():
 
 def test_missing_verification_silent_when_verified():
     assert detect_missing_verification(verified=True) is None
+
+
+def test_duplicate_action_fires_for_previously_executed_key():
+    hit = detect_duplicate_action(duplicate=True)
+    assert hit is not None and hit.rule == "duplicate_action"
+
+
+def test_duplicate_action_silent_for_new_key():
+    assert detect_duplicate_action(duplicate=False) is None
 
 
 def test_policy_breach_fires_when_executing_beyond_authorization():

@@ -14,6 +14,7 @@ from sololicense.config import Config, load_config
 from sololicense.db.database import init_db
 from sololicense.db.repositories import license as license_repo
 from sololicense.domain.license import LicenseLevel, LicenseState
+from sololicense.domain.task_classes import TASK_CLASSES
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,11 @@ SEED_ORDERS: tuple[SeedOrder, ...] = (
     SeedOrder("ORD-1005", "Linus Torvalds", 45.00),
 )
 
-_DYNAMIC_TABLES = ("detections", "spans", "license_events", "runs", "armed_faults")
+_DYNAMIC_TABLES = ("detections", "spans", "license_events", "runs", "armed_faults", "intakes")
+
+# Demo starting rungs: refunds have already earned L2; store credit is newer
+# and starts at L1, so the two ladders visibly move independently.
+DEMO_LEVELS = {"refund": LicenseLevel.L2, "store_credit": LicenseLevel.L1}
 
 
 def seed(conn: sqlite3.Connection, config: Config) -> None:
@@ -48,9 +53,9 @@ def seed(conn: sqlite3.Connection, config: Config) -> None:
         [(o.order_id, o.customer, o.amount) for o in SEED_ORDERS],
     )
 
-    license_repo.upsert_state(
-        conn, LicenseState(task_class="refund", level=LicenseLevel.L2)
-    )
+    for key in TASK_CLASSES:
+        level = DEMO_LEVELS.get(key, LicenseLevel.L0)
+        license_repo.upsert_state(conn, LicenseState(task_class=key, level=level))
     conn.commit()
 
 
@@ -61,8 +66,9 @@ def main() -> None:
     seed(conn, config)
     conn.close()
     print(
-        f"Seeded {len(SEED_ORDERS)} orders; refund dial at L2 "
-        f"(ceiling ${config.l2_auto_refund_ceiling:.0f}) in {config.db_path}."
+        f"Seeded {len(SEED_ORDERS)} orders; dials "
+        + ", ".join(f"{k}={DEMO_LEVELS.get(k, LicenseLevel.L0).name}" for k in TASK_CLASSES)
+        + f" in {config.db_path}."
     )
 
 

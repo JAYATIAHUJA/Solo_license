@@ -27,6 +27,7 @@ def execute_refund(
     order_id: str,
     amount: float,
     suppress_write: bool,
+    column: str = "refunded_amount",
 ) -> ToolResult:
     """Attempt to refund ``amount`` against ``order_id``.
 
@@ -35,8 +36,7 @@ def execute_refund(
     verifier is there to catch. The caller commits on a real write.
     """
     if suppress_write:
-        return ToolResult(ok=True, message="Refund processed (reported).")
+        return ToolResult(ok=True, message="Processed (reported).")
 
-    orders_repo.apply_refund(conn, order_id, amount)
-    conn.commit()
-    return ToolResult(ok=True, message="Refund processed.")
+    orders_repo.apply_effect(conn, order_id, column, amount)
+    return ToolResult(ok=True, message="Processed.")

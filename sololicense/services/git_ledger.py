@@ -1,7 +1,10 @@
 """Git-backed license ledger.
 
 Every autonomy change (promote / demote / restore) appends one line to
-``ledger/license_ledger.jsonl`` and commits *only that file*. The commit is the
+``ledger/license_ledger.jsonl`` inside the configured ledger repository
+(``SOLO_LEDGER_REPO``: ``.`` commits into this project so Entire can explain
+the history; the default is a separate local repo) and commits *only that
+file*. The commit is the
 Entire-compatible checkpoint: its history is the graph of how a task class
 earned and lost its license, and each message explains the change.
 
@@ -13,13 +16,16 @@ written and the caller simply gets ``None`` for the sha — the app keeps workin
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LEDGER_RELPATH = Path("ledger") / "license_ledger.jsonl"
+_GIT_TIMEOUT_SECONDS = 20
 
 
 @dataclass(frozen=True)
@@ -68,14 +74,41 @@ class GitLedger:
         self._append(entry)
         return self._commit(entry)
 
-    def _run_git(self, args: list[str]) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", *args],
-            cwd=self._repo_root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    def _run_git(
+        self, args: list[str], env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                ["git", *args],
+                cwd=self._repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+                timeout=_GIT_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            # A stuck git (lock, hook, network credential prompt) must never
+            # freeze the agent: the ledger line is already written.
+            return subprocess.CompletedProcess(["git", *args], 124, "", "timeout")
+
+    def _ensure_repo(self) -> None:
+        self._repo_root.mkdir(parents=True, exist_ok=True)
+        # Check for .git here, not `rev-parse`: a ledger repo nested inside the
+        # project must get its own repository, never commit into the parent.
+        if not (self._repo_root / ".git").exists():
+            self._run_git(["init", "-q"])
+
+    def _identity_args(self) -> list[str]:
+        """Commit as the repository's configured identity (the operator); only
+        a fresh ledger repo with no identity gets a service fallback. Never
+        rewrites the repository's own git config."""
+        args: list[str] = []
+        if not self._run_git(["config", "user.name"]).stdout.strip():
+            args += ["-c", "user.name=Solo License"]
+        if not self._run_git(["config", "user.email"]).stdout.strip():
+            args += ["-c", "user.email=solo-license@example.invalid"]
+        return args
 
     def _append(self, entry: LedgerEntry) -> None:
         self._ledger_file.parent.mkdir(parents=True, exist_ok=True)
@@ -95,12 +128,30 @@ class GitLedger:
             fh.write(line + "\n")
 
     def _commit(self, entry: LedgerEntry) -> str | None:
+        """Commit only the ledger file through a private index.
+
+        The ledger may live in the same repository people are developing in.
+        Using a throwaway index means a license change can never sweep up (or
+        be swept into) someone's staged work, and skipping repository hooks
+        keeps developer tooling from blocking or rewriting this machine-made
+        record. The developer's real index is then synced for this one path."""
+        self._ensure_repo()
         rel = _LEDGER_RELPATH.as_posix()
-        add = self._run_git(["add", "--", rel])
-        if add.returncode != 0:
-            return None
-        commit = self._run_git(["commit", "-m", _commit_message(entry), "--", rel])
-        if commit.returncode != 0:
-            return None
+        with tempfile.TemporaryDirectory() as scratch:
+            env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index")}
+            has_head = self._run_git(["rev-parse", "--verify", "-q", "HEAD"]).returncode == 0
+            if has_head and self._run_git(["read-tree", "HEAD"], env).returncode != 0:
+                return None
+            if self._run_git(["add", "--", rel], env).returncode != 0:
+                return None
+            commit = self._run_git(
+                [*self._identity_args(), "-c", f"core.hooksPath={scratch}",
+                 "commit", "-q", "-m", _commit_message(entry)],
+                env,
+            )
+            if commit.returncode != 0:
+                return None
+        # Keep `git status` clean for the ledger path; best effort only.
+        self._run_git(["reset", "-q", "--", rel])
         sha = self._run_git(["rev-parse", "--short", "HEAD"])
         return sha.stdout.strip() or None

@@ -26,6 +26,7 @@ class FaultEffects:
     mode: FaultMode
     suppress_write: bool      # tool claims success but SQLite is untouched
     force_auto_execute: bool  # attempt auto-exec regardless of the license
+    skip_verification: bool   # execute but do not read SQLite back
 
     @property
     def active(self) -> bool:
@@ -38,6 +39,7 @@ def effects_for(mode: FaultMode) -> FaultEffects:
         mode=mode,
         suppress_write=mode is FaultMode.QUIET_FAILURE,
         force_auto_execute=mode is FaultMode.POLICY_VIOLATION,
+        skip_verification=mode is FaultMode.SKIP_VERIFICATION,
     )
 
 

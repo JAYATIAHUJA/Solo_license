@@ -45,6 +45,9 @@ def harness(tmp_path) -> Harness:
         db_path=tmp_path / "test.db",
         llm_provider="deterministic",
         neatlogs_api_key="",
+        demo_mode=False,
+        alert_webhook_url="",
+        ledger_repo=repo,
     )
     conn = init_db(config.db_path)
     seed(conn, config)

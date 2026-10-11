@@ -34,21 +34,105 @@ class Config:
     anthropic_model: str
     openai_api_key: str
     openai_model: str
+    gemini_api_key: str
+    gemini_model: str
+    groq_api_key: str
+    groq_model: str
+    zcode_api_key: str
+    zcode_model: str
+    compat_api_key: str
+    compat_model: str
+    compat_base_url: str
     promotion_clean_runs: int
     l2_auto_refund_ceiling: float
+    ledger_repo: Path
+    settings_encryption_key: str
+    llm_timeout_seconds: float
+    llm_max_retries: int
+    l2_auto_credit_ceiling: float = 75.0
+    alert_webhook_url: str = ""
+    demo_mode: bool = False
+    neatlogs_endpoint: str = "https://ingest.neatlogs.com"
+    neatlogs_app_url: str = "https://app.neatlogs.com"
+    neatlogs_trace_url: str = "{app}/traces/{trace_id}"
+
+    @property
+    def llm_api_key(self) -> str:
+        spec = PROVIDERS.get(self.llm_provider)
+        return getattr(self, spec.key_field) if spec and spec.key_field else ""
+
+    @property
+    def llm_model(self) -> str:
+        spec = PROVIDERS.get(self.llm_provider)
+        return getattr(self, spec.model_field) if spec and spec.model_field else "deterministic"
+
+    @property
+    def llm_base_url(self) -> str | None:
+        """Endpoint for OpenAI-compatible providers, if one is required."""
+        spec = PROVIDERS.get(self.llm_provider)
+        if spec is None:
+            return None
+        if spec.base_url:
+            return spec.base_url
+        return self.compat_base_url if spec.needs_base_url else None
 
     @property
     def llm_enabled(self) -> bool:
         """True when a real model can be called for planning."""
-        if self.llm_provider == "anthropic":
-            return bool(self.anthropic_api_key)
-        if self.llm_provider == "openai":
-            return bool(self.openai_api_key)
-        return False
+        spec = PROVIDERS.get(self.llm_provider)
+        if spec is None or spec.key_field is None:
+            return False
+        if spec.needs_base_url and not self.compat_base_url:
+            return False
+        return bool(self.llm_api_key)
+
+    def ceiling_for(self, task_class: str) -> float:
+        """L2 auto-execute ceiling for a task class (one setting per class)."""
+        if task_class == "store_credit":
+            return self.l2_auto_credit_ceiling
+        return self.l2_auto_refund_ceiling
 
     @property
     def neatlogs_enabled(self) -> bool:
         return bool(self.neatlogs_api_key)
+
+
+@dataclass(frozen=True)
+class ProviderSpec:
+    """One LLM provider: which config fields hold its key and model."""
+
+    label: str
+    key_field: str | None
+    model_field: str | None
+    default_model: str = ""
+    base_url: str | None = None
+    needs_base_url: bool = False
+
+
+# The single registry of model providers. The API serves it to the UI so the
+# onboarding form never hard-codes a provider list of its own.
+PROVIDERS: dict[str, ProviderSpec] = {
+    "deterministic": ProviderSpec("Built-in rules (no key)", None, None),
+    "gemini": ProviderSpec("Google Gemini", "gemini_api_key", "gemini_model", "gemini-2.5-flash"),
+    "anthropic": ProviderSpec("Anthropic Claude", "anthropic_api_key", "anthropic_model", "claude-sonnet-5-5"),
+    "openai": ProviderSpec("OpenAI", "openai_api_key", "openai_model", "gpt-4o"),
+    "groq": ProviderSpec(
+        "Groq", "groq_api_key", "groq_model", "llama-3.3-70b-versatile",
+        base_url="https://api.groq.com/openai/v1",
+    ),
+    "zcode_glm": ProviderSpec(
+        "ZCode GLM", "zcode_api_key", "zcode_model", "glm-5.3",
+        base_url="https://api.z.ai/api/coding/paas/v4",
+    ),
+    "openai_compatible": ProviderSpec(
+        "Other OpenAI-compatible provider", "compat_api_key", "compat_model", "",
+        needs_base_url=True,
+    ),
+}
+
+
+def _truthy(value: str) -> bool:
+    return value.strip().lower() in ("1", "true", "yes", "on")
 
 
 def load_config() -> Config:
@@ -59,9 +143,54 @@ def load_config() -> Config:
         neatlogs_project=_get("NEATLOGS_PROJECT", "solo-license"),
         llm_provider=_get("LLM_PROVIDER", "deterministic").lower(),
         anthropic_api_key=_get("ANTHROPIC_API_KEY", ""),
-        anthropic_model=_get("ANTHROPIC_MODEL", "claude-opus-4-8"),
+        anthropic_model=_get("ANTHROPIC_MODEL", PROVIDERS["anthropic"].default_model),
         openai_api_key=_get("OPENAI_API_KEY", ""),
-        openai_model=_get("OPENAI_MODEL", "gpt-4o"),
+        openai_model=_get("OPENAI_MODEL", PROVIDERS["openai"].default_model),
+        gemini_api_key=_get("GEMINI_API_KEY", _get("GOOGLE_API_KEY", "")),
+        gemini_model=_get("GEMINI_MODEL", PROVIDERS["gemini"].default_model),
+        groq_api_key=_get("GROQ_API_KEY", ""),
+        groq_model=_get("GROQ_MODEL", PROVIDERS["groq"].default_model),
+        zcode_api_key=_get("ZCODE_API_KEY", ""),
+        zcode_model=_get("ZCODE_MODEL", PROVIDERS["zcode_glm"].default_model),
+        compat_api_key=_get("OPENAI_COMPATIBLE_API_KEY", ""),
+        compat_model=_get("OPENAI_COMPATIBLE_MODEL", ""),
+        compat_base_url=_get("OPENAI_COMPATIBLE_BASE_URL", ""),
         promotion_clean_runs=int(_get("PROMOTION_CLEAN_RUNS", "3")),
         l2_auto_refund_ceiling=float(_get("L2_AUTO_REFUND_CEILING", "50")),
+        ledger_repo=Path(_get("SOLO_LEDGER_REPO", "data/ledger-repo")),
+        settings_encryption_key=_get("SOLO_SETTINGS_ENCRYPTION_KEY", ""),
+        llm_timeout_seconds=max(1.0, float(_get("LLM_TIMEOUT_SECONDS", "15"))),
+        llm_max_retries=max(0, int(_get("LLM_MAX_RETRIES", "2"))),
+        l2_auto_credit_ceiling=float(_get("L2_AUTO_CREDIT_CEILING", "75")),
+        alert_webhook_url=_get("SOLO_ALERT_WEBHOOK_URL", ""),
+        demo_mode=_truthy(_get("SOLO_DEMO_MODE", "0")),
+        neatlogs_endpoint=_get("NEATLOGS_ENDPOINT", "https://ingest.neatlogs.com"),
+        neatlogs_app_url=_get("NEATLOGS_APP_URL", "https://app.neatlogs.com"),
+        neatlogs_trace_url=_get("NEATLOGS_TRACE_URL", "{app}/traces/{trace_id}"),
     )
+
+
+_STR_KEYS = (
+    "llm_provider", "anthropic_api_key", "anthropic_model",
+    "openai_api_key", "openai_model", "gemini_api_key", "gemini_model",
+    "groq_api_key", "groq_model", "zcode_api_key", "zcode_model",
+    "compat_api_key", "compat_model", "compat_base_url",
+    "neatlogs_api_key", "neatlogs_project", "alert_webhook_url",
+)
+
+
+def with_overrides(config: Config, stored: dict[str, str]) -> Config:
+    """Overlay operator settings (from the settings table) on env defaults."""
+    from dataclasses import replace
+
+    changes: dict[str, object] = {}
+    for key in _STR_KEYS:
+        if stored.get(key, "").strip():
+            changes[key] = stored[key].strip()
+    if stored.get("promotion_clean_runs", "").strip():
+        changes["promotion_clean_runs"] = max(1, int(stored["promotion_clean_runs"]))
+    if stored.get("l2_auto_refund_ceiling", "").strip():
+        changes["l2_auto_refund_ceiling"] = max(0.0, float(stored["l2_auto_refund_ceiling"]))
+    if stored.get("l2_auto_credit_ceiling", "").strip():
+        changes["l2_auto_credit_ceiling"] = max(0.0, float(stored["l2_auto_credit_ceiling"]))
+    return replace(config, **changes)

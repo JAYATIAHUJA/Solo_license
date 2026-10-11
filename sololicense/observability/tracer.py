@@ -29,13 +29,12 @@ class Trace:
     trace_id: str
     client: NeatlogsClient
     spans: list[Span] = field(default_factory=list)
+    remote_workflow: object | None = None
 
     def span(self, name: str, status: str = "ok", **attributes) -> None:
         """Record a step. Forwarded to neatlogs immediately; mirrored on flush."""
         self.spans.append(Span(name=name, attributes=attributes, status=status))
-        self.client.log_event(
-            name, {"trace_id": self.trace_id, "status": status, **attributes}
-        )
+        self.client.record_span(self.remote_workflow, name, status, attributes)
 
     def flush(self, conn: sqlite3.Connection, run_id: int | None) -> None:
         """Persist every collected span to the local mirror. Caller commits."""
@@ -48,6 +47,12 @@ class Trace:
                 attributes=s.attributes,
                 status=s.status,
             )
+        self.close()
+
+    def close(self) -> None:
+        """End the remote workflow exactly once, after local persistence."""
+        self.client.finish_workflow(self.remote_workflow)
+        self.remote_workflow = None
 
 
 class Tracer:
@@ -56,7 +61,11 @@ class Tracer:
     def __init__(self, client: NeatlogsClient) -> None:
         self._client = client
 
-    def start_trace(self, name: str) -> Trace:
-        trace = Trace(trace_id=uuid.uuid4().hex, client=self._client)
-        trace.span("trace.start", kind=name)
+    def start_trace(self, name: str, **attributes) -> Trace:
+        local_id = uuid.uuid4().hex
+        remote = self._client.start_workflow(local_id, {"task_class": name, **attributes})
+        # Prefer neatlogs' own trace id so the evidence packet deep-links to it.
+        trace_id = (remote.trace_id if remote is not None else None) or local_id
+        trace = Trace(trace_id=trace_id, client=self._client, remote_workflow=remote)
+        trace.span("trace.start", kind=name, **attributes)
         return trace

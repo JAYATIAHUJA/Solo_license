@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import subprocess
 
+import pytest
+
 from sololicense.db.repositories import license as license_repo
 from sololicense.db.repositories import orders as orders_repo
 from sololicense.domain.license import LicenseLevel
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
+from sololicense.security import Actor, Role
 
 
 def _dial(harness):
@@ -83,3 +86,109 @@ def test_restore_lifts_quarantine_to_chosen_level(harness):
     assert _dial(harness).level is LicenseLevel.L2
     assert _dial(harness).quarantined is False
     assert "restore" in _git_log(harness.repo)
+
+
+def test_store_credit_class_verifies_its_own_column(harness):
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 10.0, "late delivery"),
+        task_class="store_credit",
+        approved=True,
+    )
+
+    row = harness.conn.execute(
+        "SELECT task_class FROM runs WHERE id = ?", (result.run_id,)
+    ).fetchone()
+    assert row["task_class"] == "store_credit"
+    assert result.status is RunStatus.CLEAN
+    assert orders_repo.get_effect_amount(harness.conn, "ORD-1001", "credit_issued") == 10.0
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 0.0
+
+
+def test_store_credit_ladder_is_independent_of_refund(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+    caught = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "x"))
+    assert caught.status is RunStatus.DEMOTED
+
+    credit = harness.license_service.get_or_create("store_credit")
+    assert credit.quarantined is False
+
+
+def test_unknown_task_class_is_rejected(harness):
+    with pytest.raises(ValueError, match="Unknown task class"):
+        harness.worker.run_refund(
+            RefundRequest("ORD-1001", "Ada", 25.0, "x"), task_class="vip_refund"
+        )
+
+
+def test_fault_stays_armed_through_a_run_that_does_not_execute(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+
+    held = harness.worker.run_refund(RefundRequest("ORD-1004", "Kat", 120.0, "over ceiling"))
+    assert held.status is RunStatus.PENDING_APPROVAL
+    assert harness.fault_injector.peek("refund") is FaultMode.QUIET_FAILURE
+
+    caught = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "defective"))
+    assert caught.status is RunStatus.DEMOTED
+    assert harness.fault_injector.peek("refund") is FaultMode.NONE
+
+
+def test_skip_verification_demotes_with_missing_verification_only(harness):
+    harness.fault_injector.arm("refund", FaultMode.SKIP_VERIFICATION)
+
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective")
+    )
+
+    assert result.status is RunStatus.DEMOTED
+    assert [d.rule for d in result.detections] == ["missing_verification"]
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 25.0
+    assert _dial(harness).level is LicenseLevel.L0
+
+
+def test_fault_mode_is_recorded_only_when_consumed(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+
+    held = harness.worker.run_refund(RefundRequest("ORD-1004", "Kat", 120.0, "over ceiling"))
+    held_row = harness.conn.execute(
+        "SELECT fault_mode FROM runs WHERE id = ?", (held.run_id,)
+    ).fetchone()
+    assert held_row["fault_mode"] == FaultMode.NONE.value
+
+    consumed = harness.worker.run_refund(RefundRequest("ORD-1001", "Ada", 25.0, "defective"))
+    consumed_row = harness.conn.execute(
+        "SELECT fault_mode FROM runs WHERE id = ?", (consumed.run_id,)
+    ).fetchone()
+    assert consumed_row["fault_mode"] == FaultMode.QUIET_FAILURE.value
+
+
+def test_duplicate_idempotency_key_demotes_without_double_refund(harness):
+    first = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective"),
+        idempotency_key="msg-ord-1001-25",
+    )
+    assert first.status is RunStatus.CLEAN
+
+    retry = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada", 25.0, "defective"),
+        idempotency_key="msg-ord-1001-25",
+    )
+
+    assert retry.status is RunStatus.DEMOTED
+    assert [d.rule for d in retry.detections] == ["duplicate_action"]
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1001") == 25.0
+
+
+def test_run_and_demotion_event_record_the_initiating_actor(harness):
+    harness.fault_injector.arm("refund", FaultMode.QUIET_FAILURE)
+
+    result = harness.worker.run_refund(
+        RefundRequest("ORD-1001", "Ada Lovelace", 25.0, "refund"),
+        actor=Actor("ops-17", Role.OPERATOR),
+    )
+
+    run = harness.conn.execute("SELECT * FROM runs WHERE id = ?", (result.run_id,)).fetchone()
+    event = harness.conn.execute("SELECT * FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    assert run["actor_id"] == "ops-17"
+    assert run["actor_role"] == "operator"
+    assert event["actor_id"] == "ops-17"
+    assert event["actor_role"] == "operator"

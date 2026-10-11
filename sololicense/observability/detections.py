@@ -33,10 +33,12 @@ class Detection:
 
 
 def detect_state_mismatch(
-    *, intended_delta: float, actual_delta: float
+    *, intended_delta: float, actual_delta: float, verified: bool = True
 ) -> Detection | None:
     """Fire when the verified change in ``refunded_amount`` does not equal the
     refund the agent intended to make (the signature of a quiet failure)."""
+    if not verified:
+        return None
     if abs(intended_delta - actual_delta) > 1e-9:
         return Detection(
             rule="state_mismatch",
@@ -56,6 +58,17 @@ def detect_missing_verification(*, verified: bool) -> Detection | None:
             rule="missing_verification",
             severity=CRITICAL,
             message="Execution reported complete without verifying SQLite state.",
+        )
+    return None
+
+
+def detect_duplicate_action(*, duplicate: bool) -> Detection | None:
+    """Fire when a retry tries to execute an already-executed action key."""
+    if duplicate:
+        return Detection(
+            rule="duplicate_action",
+            severity=CRITICAL,
+            message="Idempotency key already executed; duplicate action blocked.",
         )
     return None
 

@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS orders (
     order_id         TEXT PRIMARY KEY,
     customer         TEXT NOT NULL,
     amount           REAL NOT NULL,            -- original order total
-    refunded_amount  REAL NOT NULL DEFAULT 0,  -- verified side effect
+    refunded_amount  REAL NOT NULL DEFAULT 0,  -- verified side effect (refund)
+    credit_issued    REAL NOT NULL DEFAULT 0,  -- verified side effect (store_credit)
     status           TEXT NOT NULL DEFAULT 'paid',
     updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -39,6 +40,9 @@ CREATE TABLE IF NOT EXISTS runs (
     executed         INTEGER NOT NULL DEFAULT 0,
     before_refunded  REAL NOT NULL,            -- orders.refunded_amount before
     after_refunded   REAL NOT NULL,            -- orders.refunded_amount after
+    idempotency_key  TEXT,
+    actor_id         TEXT NOT NULL DEFAULT 'system:license-service',
+    actor_role       TEXT NOT NULL DEFAULT 'admin',
     fault_mode       TEXT NOT NULL DEFAULT 'none',
     trace_id         TEXT,
     notes            TEXT,
@@ -46,6 +50,8 @@ CREATE TABLE IF NOT EXISTS runs (
     FOREIGN KEY (order_id) REFERENCES orders (order_id)
 );
 CREATE INDEX IF NOT EXISTS idx_runs_created ON runs (created_at DESC);
+-- idx_runs_idempotency_executed is created in database._migrate_runs, after
+-- older databases have gained the idempotency_key column.
 
 -- Detections surfaced as incidents. Each row is one rule firing on one run.
 CREATE TABLE IF NOT EXISTS detections (
@@ -71,6 +77,8 @@ CREATE TABLE IF NOT EXISTS license_events (
     to_level    INTEGER NOT NULL,
     reason      TEXT NOT NULL,
     run_id      INTEGER,
+    actor_id    TEXT NOT NULL DEFAULT 'system:license-service',
+    actor_role  TEXT NOT NULL DEFAULT 'admin',
     git_sha     TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (run_id) REFERENCES runs (id)
@@ -97,4 +105,24 @@ CREATE TABLE IF NOT EXISTS armed_faults (
     task_class  TEXT PRIMARY KEY,
     mode        TEXT NOT NULL DEFAULT 'none',
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Operator-editable settings (onboarding + the Settings screen). Values here
+-- override environment defaults at startup; secrets are never echoed to the UI.
+CREATE TABLE IF NOT EXISTS settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Free-text customer requests handled by the intake agent.
+CREATE TABLE IF NOT EXISTS intakes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message     TEXT NOT NULL,
+    order_id    TEXT,
+    amount      REAL,
+    reason      TEXT,
+    source      TEXT NOT NULL DEFAULT 'deterministic',
+    run_id      INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
