@@ -70,7 +70,17 @@ def forget_patterns(conn: sqlite3.Connection, repo: str, action_class: str) -> N
 
 # --- decisions -------------------------------------------------------------
 
+DECISION_COLUMNS = frozenset({
+    "session_id", "agent", "turn_id", "repo", "tool_name", "action_class", "pattern", "command",
+    "decision", "decided_by", "level", "source", "reason", "outcome", "trace_id",
+})
+
+
 def insert_decision(conn: sqlite3.Connection, **fields) -> int:
+    """Column names come only from this fixed list; values are always bound."""
+    unknown = set(fields) - DECISION_COLUMNS
+    if unknown:
+        raise ValueError(f"unknown agent_decisions columns: {sorted(unknown)}")
     keys = ", ".join(fields)
     marks = ", ".join("?" for _ in fields)
     cur = conn.execute(f"INSERT INTO agent_decisions ({keys}) VALUES ({marks})", tuple(fields.values()))

@@ -62,7 +62,12 @@ def _shim(repo: Path) -> Path:
 
 
 def _command(repo: Path, agent: str, event: str) -> str:
-    return f'"{sys.executable}" "{repo / ".solo-license" / "hook.py"}" {agent} {event} # {MARK}'
+    """``"<python>" "<repo>/.solo-license/hook.py" <agent> <event>``, both
+    paths quoted (they may contain spaces). The trailing comment marks the
+    entry as ours so a re-install replaces it."""
+    python = str(sys.executable)
+    hook = str(repo / ".solo-license" / "hook.py")
+    return '"' + python + '" "' + hook + '" ' + agent + " " + event + " # " + MARK
 
 
 # --- per agent ------------------------------------------------------------------
