@@ -3,9 +3,10 @@
   "checkpoint_id": "01M4N244Z8CF6RJGEXPN1APPQ5",
   "strategy": "manual-commit",
   "branch": "feat/demo-polish",
-  "checkpoints_count": 3,
+  "checkpoints_count": 13,
   "files_touched": [
-    "README.md"
+    "README.md",
+    "tests/test_api_product.py"
   ],
   "sessions": [
     {
@@ -14,6 +15,10 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {

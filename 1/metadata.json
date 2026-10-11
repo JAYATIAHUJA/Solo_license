@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4N244Z8CF6RJGEXPN1APPQ5",
+  "session_id": "c622b60e-f5b0-47a8-a2f4-2e10ee851f97",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-11T08:44:02.1985902Z",
+  "branch": "feat/demo-polish",
+  "checkpoints_count": 10,
+  "save_step_count": 1,
+  "files_touched": [
+    "tests/test_api_product.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "04c6a44dd56f",
+  "session_metrics": {
+    "turn_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-11T08:44:02.1372837Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 72,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 72,
+    "total_lines_changed": 72,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
