@@ -216,7 +216,7 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 | A real end-to-end agent task | Ticket agent [`loop.py`](sololicense/agent/loop.py) + worker [`worker.py`](sololicense/agent/worker.py); try **Inbox → Handle new messages** |
 | The agent improved (before/after with numbers) | [`artifacts/benchmark.md`](artifacts/benchmark.md): customers left waiting 4 → 0, paired neatlogs traces |
 | neatlogs traces | Paired trace ids in `artifacts/benchmark.md`; [one message's 19 spans](docs/assets/screens/trace.png); each evidence page deep-links to its trace |
-| Entire checkpoints / trails | [`artifacts/entire.md`](artifacts/entire.md): checkpoint on `87ab58d`, Trails on every PR, ledger commits: `git log -- ledger/license_ledger.jsonl` |
+| Entire checkpoints / trails / graph | [`artifacts/entire.md`](artifacts/entire.md): checkpoint on `87ab58d`, Trails on every PR, `entire graph impact` of the recovery path, ledger commits: `git log -- ledger/license_ledger.jsonl` |
 | cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](docs/assets/screens/cfo-scorecard.png) + [`cfo/`](cfo) |
 | A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
 | Scores on a standard dataset | [`artifacts/taubench.md`](artifacts/taubench.md) — τ-bench retail, two frontier models |
