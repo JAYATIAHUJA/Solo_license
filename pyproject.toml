@@ -9,9 +9,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "cryptography>=43.0.0",
     "neatlogs>=1.4.26; python_version < '3.14'",
-    "anthropic>=0.39.0",
-    "openai>=1.40.0",
-    "google-genai>=1.0",
 ]
 
 [project.scripts]

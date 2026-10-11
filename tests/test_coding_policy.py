@@ -22,7 +22,7 @@ def gate(harness, tmp_path):
     (project / "app.py").write_text("x = 1\n")
     subprocess.run(["git", "add", "."], cwd=project, check=True)
     subprocess.run(["git", "commit", "-qm", "init"], cwd=project, check=True)
-    g = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    g = CodingGate(harness.conn, harness.tracer, GitLedger(repo_root=harness.repo),
                    jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     g.project = project
     return g
@@ -124,7 +124,7 @@ def test_policy_api_saves_records_and_freezes(gate, harness, tmp_path, monkeypat
     from sololicense.security import Actor, Role
 
     conn = init_db(tmp_path / "policy.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     agent_repo.ensure_repo(conn, "shop-api", str(gate.project))
     conn.commit()
