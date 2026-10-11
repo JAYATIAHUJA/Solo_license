@@ -7,6 +7,7 @@ import { LandingPage } from './features/landing/LandingPage.jsx';
 import { Onboarding } from './features/onboarding/Onboarding.jsx';
 import { AppShell } from './features/app/AppShell.jsx';
 import { Overview } from './features/app/pages/Overview.jsx';
+import { Coding } from './features/app/pages/Coding.jsx';
 import { AgentDesk } from './features/app/pages/AgentDesk.jsx';
 import { Orders } from './features/app/pages/Orders.jsx';
 import { Inbox } from './features/app/pages/Inbox.jsx';
@@ -44,7 +45,8 @@ createRoot(document.getElementById('root')).render(
         <Route path="/access" element={<Access />} />
         <Route path="/onboarding" element={guarded(<Onboarding />)} />
         <Route path="/app" element={guarded(<AppShell />)}>
-          <Route index element={<Overview />} />
+          <Route index element={<Coding />} />
+          <Route path="payments" element={<Overview />} />
           <Route path="inbox" element={<Inbox />} />
           <Route path="agent" element={<AgentDesk />} />
           <Route path="orders" element={<Orders />} />

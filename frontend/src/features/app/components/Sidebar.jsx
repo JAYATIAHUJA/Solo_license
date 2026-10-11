@@ -5,14 +5,19 @@ import { Logo } from '../../../components/brand/Logo.jsx';
 import { classCards, waitingRuns } from './mission/derive.js';
 
 const NAV = [
-  { to: '/app', end: true, label: 'Home' },
+  { to: '/app', end: true, label: 'Coding agent' },
+  { to: '/app/ledger', label: 'Permission history' },
+  { to: '/app/settings', label: 'Settings' },
+];
+
+// The same engine, first built for refunds: kept as a second agent.
+const PAYMENTS_NAV = [
+  { to: '/app/payments', label: 'Overview' },
   { to: '/app/inbox', label: 'Inbox', badge: 'inbox' },
   { to: '/app/agent', label: 'Try the agent' },
   { to: '/app/runs', label: 'Activity', badge: 'waiting' },
   { to: '/app/reports', label: 'Reports' },
   { to: '/app/orders', label: 'Orders' },
-  { to: '/app/ledger', label: 'History' },
-  { to: '/app/settings', label: 'Settings' },
 ];
 
 export function Sidebar({ onClose }) {
@@ -38,7 +43,9 @@ export function Sidebar({ onClose }) {
       {data.settings.business_name && <p className="app-side-biz">{data.settings.business_name}</p>}
 
       <nav className="app-nav" aria-label="Main">
-        {NAV.map((item) => (
+        {[...NAV, { label: 'Payments agent', heading: true }, ...PAYMENTS_NAV].map((item) => item.heading ? (
+          <p key={item.label} className="app-side-label app-nav-heading">{item.label}</p>
+        ) : (
           <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}>
             <span>{item.label}</span>
             {item.badge && badges[item.badge] > 0 && (
@@ -49,9 +56,9 @@ export function Sidebar({ onClose }) {
       </nav>
 
       <div className="app-side-status" aria-label="What the agent may do">
-        <p className="app-side-label">Your agent</p>
+        <p className="app-side-label">Payments agent levels</p>
         {cards.map((c) => (
-          <Link key={c.key} to="/app" className={`app-side-job ${c.paused ? 'is-paused' : ''}`}>
+          <Link key={c.key} to="/app/payments" className={`app-side-job ${c.paused ? 'is-paused' : ''}`}>
             <b>{c.name}</b>
             <span>{c.paused ? 'Paused' : c.copy.short}</span>
           </Link>

@@ -129,6 +129,11 @@ def close_turn(conn: sqlite3.Connection, turn_id: int, **fields) -> None:
                  (*fields.values(), turn_id))
 
 
+def note_block(conn: sqlite3.Connection, turn_id: int, reason: str) -> None:
+    """Remember why a turn was sent back; it stays open to be checked again."""
+    conn.execute("UPDATE agent_turns SET reason = ?, scope_score = scope_score WHERE id = ?", (reason, turn_id))
+
+
 def set_checkpoint(conn: sqlite3.Connection, turn_id: int, checkpoint_id: str) -> None:
     conn.execute("UPDATE agent_turns SET entire_checkpoint = ? WHERE id = ?", (checkpoint_id, turn_id))
 
