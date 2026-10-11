@@ -37,7 +37,7 @@ def _license(gate, key):
 @pytest.fixture
 def gate(harness, tmp_path):
     project = _git_init(tmp_path / "shop-api")
-    gate = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    gate = CodingGate(harness.conn, harness.tracer, GitLedger(repo_root=harness.repo),
                       jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     gate.project = project
     return gate
@@ -126,7 +126,7 @@ def test_flag_api_drops_the_level_and_the_next_prompt_carries_the_message(gate, 
     from sololicense.security import Actor, Role
 
     conn = init_db(tmp_path / "flags.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
