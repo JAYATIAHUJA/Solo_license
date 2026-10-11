@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4N733BMZY4RXQEN87REDEQN",
+  "session_id": "25d9d86b-b43f-47c0-87f8-e1a91b577b1c",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-11T10:10:48.1862399Z",
+  "branch": "chore/repo-structure",
+  "checkpoints_count": 3,
+  "save_step_count": 1,
+  "files_touched": [
+    ".env.example",
+    "frontend/src/features/app/components/IntegrationFields.jsx",
+    "frontend/src/features/onboarding/steps/StepOrders.jsx",
+    "frontend/src/features/onboarding/steps/StepRules.jsx",
+    "scripts/taubench_eval.py",
+    "sololicense/agent/loop.py",
+    "sololicense/agent/policy.py",
+    "sololicense/bench/taubench.py",
+    "sololicense/connectors/__init__.py",
+    "sololicense/connectors/base.py",
+    "sololicense/connectors/csv_import.py",
+    "sololicense/connectors/local.py",
+    "sololicense/connectors/stripe.py",
+    "sololicense/db/repositories/tickets.py",
+    "sololicense/db/seed.py",
+    "sololicense/domain/trust.py",
+    "tests/test_agent_loop.py",
+    "tests/test_connectors.py",
+    "tests/test_trust.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "4fb723f49af1",
+  "session_metrics": {
+    "turn_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-11T10:10:48.1813667Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 4088,
+    "human_modified": 402,
+    "human_removed": 0,
+    "total_committed": 4088,
+    "total_lines_changed": 9181,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 369,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260
+      }
+    }
+  ]
+}

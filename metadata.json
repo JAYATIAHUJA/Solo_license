@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4N733BMZY4RXQEN87REDEQN",
+  "strategy": "manual-commit",
+  "branch": "chore/repo-structure",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".env.example",
+    "frontend/src/features/app/components/IntegrationFields.jsx",
+    "frontend/src/features/onboarding/steps/StepOrders.jsx",
+    "frontend/src/features/onboarding/steps/StepRules.jsx",
+    "scripts/taubench_eval.py",
+    "sololicense/agent/loop.py",
+    "sololicense/agent/policy.py",
+    "sololicense/bench/taubench.py",
+    "sololicense/connectors/__init__.py",
+    "sololicense/connectors/base.py",
+    "sololicense/connectors/csv_import.py",
+    "sololicense/connectors/local.py",
+    "sololicense/connectors/stripe.py",
+    "sololicense/db/repositories/tickets.py",
+    "sololicense/db/seed.py",
+    "sololicense/domain/trust.py",
+    "tests/test_agent_loop.py",
+    "tests/test_connectors.py",
+    "tests/test_trust.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
