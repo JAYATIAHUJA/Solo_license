@@ -1,0 +1,9 @@
+{
+  "name": "solo-license",
+  "version": "0.1.0",
+  "description": "Earned autonomy for Claude Code: each kind of action (run tests, install, push...) earns auto-approval per repo from verified results, loses it the moment something breaks, and over-editing is sent back.",
+  "author": { "name": "JAYATIAHUJA" },
+  "homepage": "https://github.com/JAYATIAHUJA/Solo_license",
+  "license": "MIT",
+  "keywords": ["permissions", "hooks", "trust", "safety", "autonomy"]
+}

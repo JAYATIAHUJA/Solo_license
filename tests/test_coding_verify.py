@@ -93,3 +93,18 @@ def test_detects_npm_and_pytest_commands(tmp_path):
     assert verify.detect_test_command(str(tmp_path)) is None
     (tmp_path / "pytest.ini").write_text("[pytest]\n")
     assert verify.detect_test_command(str(tmp_path)).endswith("pytest -q -x")
+
+
+def test_tooling_files_and_old_untracked_files_are_not_the_agents_changes(gate):
+    import os
+    import time
+
+    (gate.project / ".claude").mkdir()
+    (gate.project / ".claude" / "settings.local.json").write_text("{}")
+    old = gate.project / "notes.txt"
+    old.write_text("draft\n")
+    past = time.time() - 3600
+    os.utime(old, (past, past))
+    gate.user_prompt(_ev(gate, prompt="explain cart.py"))
+    assert gate.stop(_ev(gate)) == {}
+    assert agent_repo.current_turn(gate.conn, "s")["files_changed"] == 0

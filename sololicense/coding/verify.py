@@ -20,6 +20,7 @@ import re
 import sqlite3
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sololicense.coding import jev
@@ -43,8 +44,14 @@ def _run(cwd: str, args: list[str], timeout: float = 15.0) -> subprocess.Complet
         return None
 
 
-def changed_files(cwd: str, base: str | None) -> list[FileChange]:
-    """Files changed since ``base`` (tracked) plus new untracked files."""
+# Tooling state, not the agent's work.
+_IGNORED = (".claude/", ".entire/", "ledger/", "node_modules/", ".git/")
+
+
+def changed_files(cwd: str, base: str | None, since: float | None = None) -> list[FileChange]:
+    """Files changed since ``base`` (tracked) plus untracked files written
+    after ``since`` (a timestamp), so files that were already lying around
+    before the turn are not counted as the agent's."""
     changes: list[FileChange] = []
     numstat = _run(cwd, ["git", "diff", "--numstat", base or "HEAD"])
     for line in (numstat.stdout if numstat and numstat.returncode == 0 else "").splitlines():
@@ -54,11 +61,13 @@ def changed_files(cwd: str, base: str | None) -> list[FileChange]:
     untracked = _run(cwd, ["git", "ls-files", "--others", "--exclude-standard"])
     for path in (untracked.stdout if untracked and untracked.returncode == 0 else "").splitlines():
         try:
+            if since is not None and (Path(cwd) / path).stat().st_mtime < since:
+                continue
             lines = sum(1 for _ in (Path(cwd) / path).open(encoding="utf-8", errors="ignore"))
         except OSError:
             lines = 0
         changes.append(FileChange(path, lines))
-    return [c for c in changes if c.path and not c.path.startswith("ledger/")]
+    return [c for c in changes if c.path and not c.path.startswith(_IGNORED)]
 
 
 def diff_text(cwd: str, base: str | None, limit: int = 12000) -> str:
@@ -140,7 +149,8 @@ def run_tests(root: str, command: str) -> tuple[bool, str]:
 def check_turn(gate, turn: sqlite3.Row, decisions: list[sqlite3.Row]) -> tuple[bool, str, dict]:
     """The verifier the gate calls at ``Stop``: (ok, reason, details)."""
     root, request = turn["cwd"], turn["prompt"] or ""
-    changes = changed_files(root, turn["base_ref"])
+    started = datetime.strptime(turn["created_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+    changes = changed_files(root, turn["base_ref"], since=started - 1)
     lines = sum(c.lines for c in changes)
     details: dict = {"lines_changed": lines, "files_changed": len(changes), "tests": "none"}
     if not changes:

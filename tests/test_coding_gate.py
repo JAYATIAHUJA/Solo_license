@@ -161,3 +161,40 @@ def test_hook_endpoint_round_trip(gate, harness, tmp_path, monkeypatch):
     answer = client.post("/api/hooks/permission", json=_bash(gate, "ls")).json()
     assert "systemMessage" in answer
     assert client.post("/api/hooks/nope", json={}).status_code == 404
+
+
+def test_install_merges_with_existing_hooks_and_is_idempotent(tmp_path):
+    import json
+
+    from sololicense.coding.install import install
+
+    settings = tmp_path / ".claude" / "settings.local.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "entire x"}]}]}}))
+    install(tmp_path)
+    install(tmp_path, "http://localhost:9000")
+    hooks = json.loads(settings.read_text())["hooks"]
+    assert len(hooks["Stop"]) == 2 and hooks["Stop"][0]["hooks"][0]["command"] == "entire x"
+    assert hooks["PermissionRequest"][0]["hooks"][0]["url"] == "http://localhost:9000/api/hooks/permission"
+
+
+def test_coding_dashboard_lists_licenses_with_progress(gate, harness, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sololicense.api import app as app_module
+    from sololicense.db.database import init_db
+
+    conn = init_db(tmp_path / "dash.db", check_same_thread=False)
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient())
+
+    class Ctx:
+        coding_gate = threaded
+
+    Ctx.conn = conn
+    monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
+    client = TestClient(app_module.app)
+    client.post("/api/hooks/permission", json=_bash(gate, "npm test"))
+    body = client.get("/api/coding?repo=shop-api").json()
+    row = next(l for l in body["licenses"] if l["action_class"] == "test-run")
+    assert row["level"] == 0 and row["runs_needed"] >= 3
+    assert body["counts"]["ask"] == 1
