@@ -3,9 +3,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 
 const COMMANDS = [
-  '/plugin marketplace add JAYATIAHUJA/Solo_license',
-  '/plugin install solo-license@solo-license',
-  'python -m sololicense.coding.install path/to/repo',
+  'uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent auto',
+  'uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve',
+  '/plugin install solo-license --marketplace JAYATIAHUJA/Solo_license',
 ];
 
 /** The install line, in the hero's "ask anything" bar: the commands cycle,

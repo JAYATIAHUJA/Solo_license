@@ -30,7 +30,7 @@ export function Detections() {
   const [open, setOpen] = useState(0);
   return (
     <section className="lp-section" id="detections">
-      <SectionHead index="006" label="Detections" />
+      <SectionHead index="007" label="Detections" />
       <div className="lp-split">
         <h2 className="lp-h2 serif">Three ways to <em className="italic">lose</em> the keys.</h2>
         <p className="lp-copy">Each check runs once per turn, not once per edit. Any one of them firing demotes the action class that did it to L0, and the agent is told exactly what to fix.</p>
