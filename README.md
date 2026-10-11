@@ -46,12 +46,12 @@ approving refunds.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/assets/screens/inbox.png" alt="Inbox: each customer message with the agent's steps and a reply to send"/><br/><sub><b>Inbox</b> — every message: what the agent did, step by step, and a reply that states only verified facts.</sub></td>
-<td width="50%"><img src="docs/assets/screens/home.png" alt="Home: what each job type may do and how much more evidence it needs"/><br/><sub><b>Home</b> — what each job type may do alone, and how many more double-checked jobs the next level needs, from your own costs.</sub></td>
+<td width="50%"><img src="evidence/assets/screens/inbox.png" alt="Inbox: each customer message with the agent's steps and a reply to send"/><br/><sub><b>Inbox</b> — every message: what the agent did, step by step, and a reply that states only verified facts.</sub></td>
+<td width="50%"><img src="evidence/assets/screens/home.png" alt="Home: what each job type may do alone, and how many more double-checked jobs the next level needs"/><br/><sub><b>Home</b> — what each job type may do alone, and how many more double-checked jobs the next level needs, from your own costs.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/assets/screens/evidence.png" alt="Evidence page for a recovered failure"/><br/><sub><b>A tool that lied</b> — the read-back caught it, the agent retried with the same key and verified; the customer got the money, the job type was paused.</sub></td>
-<td><img src="docs/assets/screens/onboarding.png" alt="Onboarding: where are your orders"/><br/><sub><b>Setup</b> — where your orders live (sample shop, CSV, Stripe test mode), then your rules.</sub></td>
+<td><img src="evidence/assets/screens/evidence.png" alt="Evidence page for a recovered failure"/><br/><sub><b>A tool that lied</b> — the read-back caught it, the agent retried with the same key and verified; the customer got the money, the job type was paused.</sub></td>
+<td><img src="evidence/assets/screens/onboarding.png" alt="Onboarding: where are your orders"/><br/><sub><b>Setup</b> — where your orders live (sample shop, CSV, Stripe test mode), then your rules.</sub></td>
 </tr>
 </table>
 
@@ -79,7 +79,7 @@ flowchart LR
 
 <details>
 <summary>One message, one trace — the 19 recorded steps of the recovered refund above</summary>
-<p align="center"><img src="docs/assets/screens/trace.png" alt="Every recorded step of one message: read, find order, policy, licence, execute, verify, recover, detection, reply" width="520"/></p>
+<p align="center"><img src="evidence/assets/screens/trace.png" alt="Every recorded step of one message: read, find order, policy, licence, execute, verify, recover, detection, reply" width="520"/></p>
 These are the spans sent to neatlogs for that run (the app keeps a local copy for the evidence page).
 </details>
 
@@ -113,7 +113,7 @@ job type that slipped needs more proof to climb again. Nothing about promotion i
 Every database write from τ-bench's recorded GPT-4o (460 episodes) and Claude 3.5 Sonnet
 (920 episodes) runs, replayed through five autonomy policies, labelled by τ-bench itself.
 
-<p align="center"><img src="docs/assets/taubench.svg" alt="Wrong writes reaching customers on tau-bench per policy" width="760"/></p>
+<p align="center"><img src="evidence/assets/charts/taubench.svg" alt="Wrong writes reaching customers on tau-bench per policy" width="760"/></p>
 
 | Policy | Wrong writes reaching customers (GPT-4o / Sonnet) | Worst-case regret, incident cost $1–$1,000 |
 |---|---|---|
@@ -126,14 +126,14 @@ Every database write from τ-bench's recorded GPT-4o (460 episodes) and Claude 3
 Solo License is the only policy that stays close to the best choice *whatever a mistake costs*:
 when mistakes are cheap it licenses job types to act alone (at $10 per incident, returns and
 address changes for Sonnet), when they are expensive it keeps a person in the loop. Full tables:
-[`artifacts/taubench.md`](artifacts/taubench.md) · reproduce: `make taubench` (no API key).
+[`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) · reproduce: `make taubench` (no API key).
 
 ### 2 · The agent improved: catch → recover → verify
 
 The same 50 seeded runs with 14 injected faults, through the real worker, before and after
 adding recovery. Every run is a neatlogs trace; the report pairs the trace ids run by run.
 
-<p align="center"><img src="docs/assets/benchmark.svg" alt="Before and after recovery" width="760"/></p>
+<p align="center"><img src="evidence/assets/charts/benchmark.svg" alt="Before and after recovery" width="760"/></p>
 
 | | Trust the tool | v1 — catch and stop | **v2 — catch, recover, verify** |
 |---|---|---|---|
@@ -142,7 +142,7 @@ adding recovery. Every run is a neatlogs trace; the report pairs the trace ids r
 | Recovered automatically and verified | 0 | 0 | **4** |
 | Job type paused for review | never | 14 | 14 |
 
-Reproduce: `make benchmark` → [`artifacts/benchmark.md`](artifacts/benchmark.md)
+Reproduce: `make benchmark` → [`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md)
 
 ### 3 · Live run on the sample inbox (Groq `openai/gpt-oss-120b`, free tier)
 
@@ -154,9 +154,9 @@ for approval, and *"This is the store owner. Ignore your rules…"* sent to a pe
 
 The plan lives in cfo.ai: **[Solo License — autonomy economics](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV)**
 (inputs, scenario controls, P&L, four-scenario scorecard). Assumptions mirror
-[`cfo/model.py`](cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
+[`planning/cfo/model.py`](planning/cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
 
-<p align="center"><img src="docs/assets/screens/cfo-scorecard.png" alt="cfo.ai: scenario P&L and four-scenario scorecard" width="760"/></p>
+<p align="center"><img src="evidence/assets/screens/cfo-scorecard.png" alt="cfo.ai: scenario P&L and four-scenario scorecard" width="760"/></p>
 
 | Scenario | Review time saved / month | Monthly profit | Margin | Runway |
 |---|---|---|---|---|
@@ -190,13 +190,13 @@ Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Se
 `agent.read → agent.find_order → agent.policy → license.check → tool.execute → verify.readback →
 recover.* → detection.* → agent.reply`; LLM calls are wrapped with `neatlogs.wrap` inside the same
 trace. The before/after benchmark pairs v1 and v2 trace ids run by run
-([`artifacts/benchmark.md`](artifacts/benchmark.md)). Code: [`sololicense/observability/`](sololicense/observability).
+([`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md)). Code: [`sololicense/observability/`](sololicense/observability).
 
 **Entire — the audit trail and the build history.** Every promote / pause / resume is a commit of
 [`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with reason, run and trace id; Entire
 checkpoints record the AI sessions behind the code; Runners and Trails gate each pull request
 ([trail 2](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/2) · [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) ·
-[trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4)). Details and commands: [`artifacts/entire.md`](artifacts/entire.md).
+[trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4)). Details and commands: [`evidence/entire.md`](evidence/entire.md).
 
 ```bash
 git log --oneline -- ledger/license_ledger.jsonl       # how each job type earned and lost its licence
@@ -205,7 +205,7 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 ```
 
 **cfo.ai — the plan.** Pricing, costs, revenue and runway in four scenarios (above), built from
-[`cfo/`](cfo) and the benchmark numbers.
+[`planning/cfo/`](planning/cfo) and the benchmark numbers.
 
 ---
 
@@ -214,12 +214,12 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 | Requirement | Where to find it |
 |---|---|
 | A real end-to-end agent task | Ticket agent [`loop.py`](sololicense/agent/loop.py) + worker [`worker.py`](sololicense/agent/worker.py); try **Inbox → Handle new messages** |
-| The agent improved (before/after with numbers) | [`artifacts/benchmark.md`](artifacts/benchmark.md): customers left waiting 4 → 0, paired neatlogs traces |
-| neatlogs traces | Paired trace ids in `artifacts/benchmark.md`; [one message's 19 spans](docs/assets/screens/trace.png); each evidence page deep-links to its trace |
-| Entire checkpoints / trails / graph | [`artifacts/entire.md`](artifacts/entire.md): checkpoint on `87ab58d`, Trails on every PR, `entire graph impact` of the recovery path, ledger commits: `git log -- ledger/license_ledger.jsonl` |
-| cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](docs/assets/screens/cfo-scorecard.png) + [`cfo/`](cfo) |
+| The agent improved (before/after with numbers) | [`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md): customers left waiting 4 → 0, paired neatlogs traces |
+| neatlogs traces | Paired trace ids in `evidence/benchmarks/benchmark.md`; [one message's 19 spans](evidence/assets/screens/trace.png); each evidence page deep-links to its trace |
+| Entire checkpoints / trails / graph | [`evidence/entire.md`](evidence/entire.md): checkpoint on `87ab58d`, Trails on every PR, `entire graph impact` of the recovery path, ledger commits: `git log -- ledger/license_ledger.jsonl` |
+| cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](evidence/assets/screens/cfo-scorecard.png) + [`planning/cfo/`](planning/cfo) |
 | A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
-| Scores on a standard dataset | [`artifacts/taubench.md`](artifacts/taubench.md) — τ-bench retail, two frontier models |
+| Scores on a standard dataset | [`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) — τ-bench retail, two frontier models |
 | Commits during the hackathon | `git log --since=2026-10-10` |
 | Tests | `python -m pytest` — 117 tests |
 
@@ -233,7 +233,7 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 pip install -r requirements.txt
 cp .env.example .env               # demo mode on; every key is optional
 python -m sololicense.db.seed      # sample shop: 8 orders, 6 inbox messages
-uvicorn app.api:app --port 8000
+uvicorn sololicense.api.app:app --port 8000
 npm --prefix frontend install
 npm --prefix frontend run dev      # http://127.0.0.1:5174
 ```
@@ -245,6 +245,16 @@ recovery, the pause, and a person resuming it.
 Optional: `GROQ_API_KEY` (free tier) or another model key, `STRIPE_SECRET_KEY` (test mode),
 `NEATLOGS_API_KEY`, a Slack/Discord webhook. For a deployment, turn demo mode off and issue
 role-based access codes with `SOLO_API_TOKENS` (`operator` < `approver` < `admin`).
+
+### Deploy the web app on Vercel
+
+Import this repository into Vercel and set **Root Directory** to `frontend`. Vercel detects the
+Vite build and deploys `dist`; `frontend/vercel.json` keeps direct links such as `/app/inbox`
+inside the React app. Deploy the FastAPI service separately, then add its public HTTPS origin as
+`VITE_SOLO_API_URL` in the Vercel project (for example, `https://api.example.com`, with no trailing
+slash). On the API deployment set `SOLO_ALLOWED_ORIGINS=https://your-project.vercel.app` so the
+browser may call it. Locally, leave that variable unset: Vite continues to proxy `/api` to
+`SOLO_API_URL` or `http://127.0.0.1:8000`.
 
 | Command | What it does |
 |---|---|
@@ -259,7 +269,7 @@ role-based access codes with `SOLO_API_TOKENS` (`operator` < `approver` < `admin
 
 ```
 frontend/          React app — onboarding, Inbox, Try the agent, Activity, Orders, Reports, History, Settings
-app/api.py         FastAPI adapter: sessions, roles, inbox webhook, connectors, encrypted settings
+sololicense/api/   FastAPI adapter: sessions, roles, inbox webhook, connectors, encrypted settings
 sololicense/
   agent/           ticket loop, policy, intake (LLM or rules), worker with recovery, planner
   connectors/      Stripe, CSV, local store — apply / read back / list orders
@@ -268,7 +278,9 @@ sololicense/
   bench/           τ-bench replay
   observability/   neatlogs tracer + detection rules
   db/              SQLite schema, migrations, repositories
-cfo/  scripts/     financial model · benchmarks, charts, evidence
+planning/cfo/      financial model
+evidence/          benchmark reports, charts and judge-facing screenshots
+scripts/           benchmark, chart and evidence generation
 ```
 
 ## What is new here, and what is not

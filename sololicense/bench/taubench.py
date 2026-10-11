@@ -201,7 +201,7 @@ def pass_hat_k(episodes: Iterable[Episode], k: int) -> float:
 
 @dataclass(frozen=True)
 class Costs:
-    """Per-write costs, in dollars. Defaults mirror cfo/model.py (L1 vs L2 minutes)."""
+    """Per-write costs, in dollars. Defaults mirror planning/cfo/model.py (L1 vs L2 minutes)."""
 
     review: float = 2.25       # 3 min of a $45/h person approving one write
     autonomous: float = 0.375  # 0.5 min of monitoring per unattended write

@@ -57,7 +57,7 @@ entire graph search --repo . --query "recover a failed refund" --profile full
 
 Top result: `RefundWorker._recover` (`sololicense/agent/worker.py:351`), then its caller
 `RefundWorker._run_refund`; suggested check:
-`python -m pytest tests/test_agent_loop.py -k test_quiet_failure_is_recovered_and_the_customer_still_gets_a_true_reply`
+`python -m pytest tests/integration/test_agent_loop.py -k test_quiet_failure_is_recovered_and_the_customer_still_gets_a_true_reply`
 (2 more covering tests: `test_worker_recovers_a_lost_stripe_refund`,
 `test_quiet_failure_is_caught_recovered_and_still_demotes`).
 
@@ -75,7 +75,7 @@ Callees (2; what it depends on):
 - sololicense.services.verify
 - RefundWorker._read (sololicense/agent/worker.py:322)
 Type consumers: -> RefundRequest (sololicense/domain/models.py:35) [PARAM_TYPE, USES_TYPE]
-Co-change coupling: app/api.py (6 recent commits), db/schema.sql (4), db/database.py (4), …
+Co-change coupling: sololicense/api/app.py (6 recent commits before the restructure), db/schema.sql (4), db/database.py (4), …
 ```
 
 The blast radius is small and every caller goes through `run_refund`, which is why recovery could

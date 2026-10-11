@@ -5,7 +5,7 @@ trades supervision cost for autonomy, and over-promotion trades it back as
 incident risk. Everything below is a pure function over explicit assumptions
 so a cfo.ai plan — or a judge — can see exactly where every number comes from.
 
-Run ``python -m cfo.model`` to print the model (and, if a seeded database
+Run ``python -m planning.cfo.model`` to print the model (and, if a seeded database
 exists, the measured level distribution from real runs)."""
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 _Generated 2026-10-11T07:34:53+00:00 · τ-bench commit `59a200c6d5` · 30 random arrival orders · confidence 0.9 · audit rate 10%_
 
-Every database write from τ-bench's recorded GPT-4o and Claude 3.5 Sonnet runs, replayed through five autonomy policies. A write is *wrong* when the benchmark's expected database says it should not have happened. Costs: $2.25 per human review, $0.375 per unattended write, $120 per wrong change reaching a customer (cfo/model.py).
+Every database write from τ-bench's recorded GPT-4o and Claude 3.5 Sonnet runs, replayed through five autonomy policies. A write is *wrong* when the benchmark's expected database says it should not have happened. Costs: $2.25 per human review, $0.375 per unattended write, $120 per wrong change reaching a customer (planning/cfo/model.py).
 
 Reproduce: `python -m scripts.taubench_eval`
 

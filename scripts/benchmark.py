@@ -51,7 +51,7 @@ from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.domain.task_classes import TASK_CLASSES
 from sololicense.security import Actor, Role
 
-_ARTIFACTS = Path(__file__).resolve().parents[1] / "artifacts"
+_ARTIFACTS = Path(__file__).resolve().parents[1] / "evidence" / "benchmarks"
 _BENCH_ACTOR = Actor("benchmark:script", Role.ADMIN)
 _FAULTS = (FaultMode.QUIET_FAILURE, FaultMode.POLICY_VIOLATION)
 
@@ -247,7 +247,7 @@ def main() -> None:
     v1 = run_benchmark(args.runs, args.seed, args.fault_rate, recovery=False, **common)
     report = run_benchmark(args.runs, args.seed, args.fault_rate, recovery=True, **common)
     report["v1"] = v1
-    _ARTIFACTS.mkdir(exist_ok=True)
+    _ARTIFACTS.mkdir(parents=True, exist_ok=True)
     (_ARTIFACTS / "benchmark.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (_ARTIFACTS / "benchmark.md").write_text(_markdown(report, v1) + "\n", encoding="utf-8")
     print(f"Wrote {_ARTIFACTS / 'benchmark.md'}")

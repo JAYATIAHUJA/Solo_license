@@ -4,7 +4,7 @@ Downloads the pinned τ-bench retail data (once, into data/taubench/), replays
 every database write that GPT-4o and Claude 3.5 Sonnet made in the recorded
 trajectories, and compares five autonomy policies. No API key, fully seeded.
 
-    python -m scripts.taubench_eval            # -> artifacts/taubench.{json,md}
+    python -m scripts.taubench_eval            # -> evidence/benchmarks/taubench.{json,md}
     python -m scripts.taubench_eval --orders 50
 
 See sololicense/bench/taubench.py for the method and its assumptions.
@@ -23,7 +23,7 @@ from sololicense.bench import taubench as tb
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "taubench"
-ARTIFACTS = ROOT / "artifacts"
+ARTIFACTS = ROOT / "evidence" / "benchmarks"
 LABELS = {
     "full_auto": "Agent acts alone",
     "approve_all": "Person approves every write",
@@ -127,7 +127,7 @@ def main() -> None:
             for policy in tb.POLICIES
         }
 
-    ARTIFACTS.mkdir(exist_ok=True)
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
     (ARTIFACTS / "taubench.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (ARTIFACTS / "taubench.md").write_text(render(report), encoding="utf-8")
     print(f"Wrote {ARTIFACTS / 'taubench.md'}")
@@ -146,7 +146,7 @@ def render(report: dict) -> str:
         "replayed through five autonomy policies. A write is *wrong* when the benchmark's "
         "expected database says it should not have happened. Costs: "
         f"${s['costs']['review']:.2f} per human review, ${s['costs']['autonomous']:.3f} per unattended write, "
-        f"${s['costs']['incident']:.0f} per wrong change reaching a customer (cfo/model.py).",
+        f"${s['costs']['incident']:.0f} per wrong change reaching a customer (planning/cfo/model.py).",
         "",
         "Reproduce: `python -m scripts.taubench_eval`",
         "",

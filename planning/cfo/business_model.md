@@ -4,7 +4,7 @@
 autonomy is the lever. Solo License makes autonomy *earned*, so you capture the
 savings of high autonomy without paying the incident bill of over-trust.
 
-All figures are produced by `cfo/model.py` (`python -m cfo.model`) from stated
+All figures are produced by `planning/cfo/model.py` (`python -m planning.cfo.model`) from stated
 assumptions, and the level mix is recomputed from real runs when a seeded
 database is present (`measured_level_distribution`).
 

@@ -2,7 +2,7 @@ from dataclasses import replace
 
 from fastapi.testclient import TestClient
 
-from app import api as api_module
+from sololicense.api import app as api_module
 from sololicense.bootstrap import build_app
 
 
