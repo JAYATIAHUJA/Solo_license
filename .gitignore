@@ -12,13 +12,11 @@ env/
 # Environment / secrets
 .env
 
-# Runtime database (regenerated from seed; never commit demo state)
+# Runtime database and downloaded data (regenerated locally; never commit)
 *.db
 *.sqlite
 *.sqlite3
-data/*.db
-data/*.db-wal
-data/*.db-shm
+/data/
 
 # OS / editor
 .DS_Store
@@ -32,13 +30,15 @@ Thumbs.db
 htmlcov/
 
 # Generated evidence artifacts (regenerate with scripts.generate_evidence)
-artifacts/evidence_report.md
-artifacts/evidence_report.json
+evidence/evidence_report.md
+evidence/evidence_report.json
 
 # Local scratch / tool state
 tmp/
 .tmp_pytest*/
 .entire/logs/
+frontend/node_modules/
+frontend/dist/
 data/ledger-repo/
 data/.settings.key
 

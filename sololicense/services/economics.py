@@ -4,7 +4,7 @@ the runs actually in the database rather than from a static spreadsheet.
 The thesis: **the license level is a margin driver.** Each rung trades human
 supervision cost for autonomy; incidents trade it back. Assumptions (wage,
 volume, minutes per review, incident cost) are operator settings with the
-same defaults as :mod:`cfo.model`; the incident rate is *measured* from the
+same defaults as :mod:`planning.cfo.model`; the incident rate is *measured* from the
 detections this workspace has recorded.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from cfo import model as cfo
+from planning.cfo import model as cfo
 from sololicense.domain.trust import TrustLadder
 
 SETTING_DEFAULTS: dict[str, float] = {

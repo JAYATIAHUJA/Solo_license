@@ -4,7 +4,8 @@
     {
       "name": "api",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "uvicorn", "app.api:app", "--port", "8001"],
+      "runtimeArgs": ["-m", "uvicorn", "sololicense.api.app:app", "--port", "8001"],
+      "env": { "SOLO_DEMO_MODE": "1" },
       "port": 8001
     },
     {

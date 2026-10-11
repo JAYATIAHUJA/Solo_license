@@ -23,7 +23,7 @@ from sololicense.bootstrap import build_app
 from sololicense.db.seed import seed
 from sololicense.domain.models import FaultMode, RefundRequest
 
-_ARTIFACTS = Path(__file__).resolve().parents[1] / "artifacts"
+_ARTIFACTS = Path(__file__).resolve().parents[1] / "evidence"
 _CLEAN_ORDER = RefundRequest("ORD-1001", "Ada Lovelace", 25.00, "defective item")
 _FAULT_ORDERS = {
     FaultMode.QUIET_FAILURE: RefundRequest(
@@ -123,7 +123,7 @@ def main() -> None:
     app.fault_injector.arm("refund", fault)
     after = _run_snapshot(app.worker.run_refund(_FAULT_ORDERS[fault]))
 
-    _ARTIFACTS.mkdir(exist_ok=True)
+    _ARTIFACTS.mkdir(parents=True, exist_ok=True)
     report = {"fault": fault.value, "before": before, "after": after}
     (_ARTIFACTS / "evidence_report.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"
@@ -132,7 +132,7 @@ def main() -> None:
     (_ARTIFACTS / "evidence_report.md").write_text(md, encoding="utf-8")
 
     print(md)
-    print(f"Wrote artifacts/evidence_report.md and .json")
+    print(f"Wrote evidence/evidence_report.md and .json")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
  *  Every request carries the session's bearer token; the token lives only in
  *  sessionStorage (never in source, never in VITE_* variables). */
 import { clearSession, getToken } from './session.js';
+import { apiUrl } from './api-base.js';
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -17,7 +18,7 @@ export async function request(path, { method = 'GET', body, auth = true } = {}) 
   if (token) headers.Authorization = `Bearer ${token}`;
   let response;
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -37,7 +38,7 @@ export async function request(path, { method = 'GET', body, auth = true } = {}) 
 /** GET a text body (CSV exports) with the session token. */
 export async function requestText(path) {
   const token = getToken();
-  const response = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const response = await fetch(apiUrl(path), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) throw new ApiError(`Download failed (${response.status}).`, response.status);
   return response.text();
 }

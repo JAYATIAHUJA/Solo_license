@@ -1,9 +1,9 @@
 """Render the README charts as static SVGs from real project data.
 
-* ``docs/assets/benchmark.svg`` — the before/after benchmark
-  (``artifacts/benchmark.json``, produced by ``python -m scripts.benchmark``).
-* ``docs/assets/supervision.svg`` — monthly supervision cost per autonomy
-  level, from the stated assumptions in :mod:`cfo.model`.
+* ``evidence/assets/charts/benchmark.svg`` — the before/after benchmark
+  (``evidence/benchmarks/benchmark.json``, produced by ``python -m scripts.benchmark``).
+* ``evidence/assets/charts/supervision.svg`` — monthly supervision cost per autonomy
+  level, from the stated assumptions in :mod:`planning.cfo.model`.
 
 Plain SVG with a white card background so it reads the same in GitHub's light
 and dark themes. Re-run after a new benchmark:  python -m scripts.readme_charts
@@ -15,10 +15,10 @@ import json
 from html import escape
 from pathlib import Path
 
-from cfo import model as cfo
+from planning.cfo import model as cfo
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "docs" / "assets"
+OUT = ROOT / "evidence" / "assets" / "charts"
 INK, MUTED, LINE, RED, GREEN, BG = "#0e0e0d", "#76746e", "#e6e3dc", "#d8341f", "#1f7a4d", "#ffffff"
 FONT = "Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif"
 
@@ -78,7 +78,7 @@ def supervision_chart() -> str:
     top = max(p.monthly_supervision_cost for p in points)
     body = [
         _text(32, 44, "Human review cost per month, by autonomy level", 20, weight=600),
-        _text(32, 68, f"{cfo.REFUNDS_PER_MONTH:,} actions/month · ${cfo.LOADED_HUMAN_COST_PER_HOUR:.0f}/h loaded cost · stated assumptions (cfo/model.py)", 13, MUTED),
+        _text(32, 68, f"{cfo.REFUNDS_PER_MONTH:,} actions/month · ${cfo.LOADED_HUMAN_COST_PER_HOUR:.0f}/h loaded cost · stated assumptions (planning/cfo/model.py)", 13, MUTED),
     ]
     x0, bar_max, y = 260, 290, 100
     for p in points:
@@ -137,10 +137,10 @@ def taubench_chart(report: dict) -> str:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    report = json.loads((ROOT / "artifacts" / "benchmark.json").read_text(encoding="utf-8"))
+    report = json.loads((ROOT / "evidence" / "benchmarks" / "benchmark.json").read_text(encoding="utf-8"))
     (OUT / "benchmark.svg").write_text(benchmark_chart(report), encoding="utf-8")
     (OUT / "supervision.svg").write_text(supervision_chart(), encoding="utf-8")
-    tau = ROOT / "artifacts" / "taubench.json"
+    tau = ROOT / "evidence" / "benchmarks" / "taubench.json"
     if tau.exists():
         (OUT / "taubench.svg").write_text(
             taubench_chart(json.loads(tau.read_text(encoding="utf-8"))), encoding="utf-8"
