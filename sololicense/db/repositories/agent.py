@@ -189,6 +189,33 @@ def list_events(conn: sqlite3.Connection, repo: str | None = None, limit: int = 
     ).fetchall()
 
 
+# --- remediations --------------------------------------------------------------
+
+def queue_remediation(conn: sqlite3.Connection, *, session_id: str, turn_id: int | None, kind: str, text: str,
+                      delivered: bool = False) -> int:
+    cur = conn.execute(
+        "INSERT INTO agent_remediations (session_id, turn_id, kind, text, delivered_at) "
+        "VALUES (?, ?, ?, ?, CASE WHEN ? THEN datetime('now') END)",
+        (session_id, turn_id, kind, text, int(delivered)),
+    )
+    return int(cur.lastrowid)
+
+
+def take_remediations(conn: sqlite3.Connection, session_id: str) -> list[sqlite3.Row]:
+    """The session's queued remediations, oldest first, marked delivered."""
+    rows = conn.execute(
+        "SELECT * FROM agent_remediations WHERE session_id = ? AND delivered_at IS NULL ORDER BY id", (session_id,)
+    ).fetchall()
+    if rows:
+        conn.executemany("UPDATE agent_remediations SET delivered_at = datetime('now') WHERE id = ?",
+                         [(r["id"],) for r in rows])
+    return rows
+
+
+def recent_remediations(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM agent_remediations ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
 # --- repositories ------------------------------------------------------------
 
 def ensure_repo(conn: sqlite3.Connection, repo: str, path: str) -> sqlite3.Row:

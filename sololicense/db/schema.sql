@@ -363,3 +363,16 @@ CREATE TABLE IF NOT EXISTS agent_events (
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_agent_events_repo ON agent_events (repo, id DESC);
+
+-- What the agent was told to undo. Sent with the hook answer (delivered_at
+-- set) or queued for the session's next prompt (delivered_at NULL until then).
+CREATE TABLE IF NOT EXISTS agent_remediations (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id    TEXT NOT NULL,
+    turn_id       INTEGER,
+    kind          TEXT NOT NULL,                 -- tool-failed | turn-failed | denied | flagged
+    text          TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    delivered_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_remediations_session ON agent_remediations (session_id, delivered_at);

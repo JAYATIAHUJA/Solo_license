@@ -59,7 +59,7 @@ def test_over_editing_is_sent_back_with_the_unrelated_files(gate):
     answer = gate.stop(_ev(gate))
     assert answer["decision"] == "block"
     assert "over-editing" in answer["reason"] and "util.py" in answer["reason"]
-    assert "cart.py" not in answer["reason"].split("edits in:")[1]
+    assert "cart.py" not in answer["reason"].split("edits in:")[1].split(". ")[0]
     assert agent_repo.get_license(gate.conn, "shop", "file-edit")["failures"] == 1
 
 

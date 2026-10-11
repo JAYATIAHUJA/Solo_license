@@ -477,6 +477,7 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "decisions": decisions,
         "turns": turns,
         "events": [dict(r) for r in agent_repo.list_events(context.conn, repo, 60)],
+        "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30)],
         "counts": counts,
         "savings": savings,
         "agents": [dict(r) for r in agent_repo.agents_seen(context.conn)],
