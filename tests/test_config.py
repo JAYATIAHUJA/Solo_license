@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from dataclasses import replace
+
 from sololicense.config import load_config
 from sololicense.domain.models import RunStatus
 
@@ -15,6 +17,29 @@ def test_load_config_reads_ledger_repo(monkeypatch, tmp_path):
 
 def test_approved_status_is_a_run_status_value():
     assert RunStatus.APPROVED.value == "approved"
+
+
+def test_groq_and_zcode_provider_settings_enable_the_configured_model():
+    base = load_config()
+    groq = replace(
+        base,
+        llm_provider="groq",
+        groq_api_key="groq-test-key",
+        groq_model="groq-test-model",
+    )
+    zcode = replace(
+        base,
+        llm_provider="zcode_glm",
+        zcode_api_key="zcode-test-key",
+        zcode_model="glm-test-model",
+    )
+
+    assert groq.llm_enabled is True
+    assert groq.llm_api_key == "groq-test-key"
+    assert groq.llm_model == "groq-test-model"
+    assert zcode.llm_enabled is True
+    assert zcode.llm_api_key == "zcode-test-key"
+    assert zcode.llm_model == "glm-test-model"
 
 
 def test_legacy_database_without_new_columns_migrates(tmp_path):

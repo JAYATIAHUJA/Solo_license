@@ -56,6 +56,8 @@ const ABOUT = {
   gemini: 'Has a free tier. Get a key at aistudio.google.com.',
   anthropic: 'Get a key at console.anthropic.com.',
   openai: 'Get a key at platform.openai.com.',
+  groq: 'Fast hosted models. Get a key at console.groq.com; the service address is set automatically.',
+  zcode_glm: 'GLM models through a ZCode Coding Plan. Get a Coding Plan key at zcode.z.ai; the service address is set automatically.',
 };
 
 /** Provider picker + key + model (+ address) + a plain connection test.
