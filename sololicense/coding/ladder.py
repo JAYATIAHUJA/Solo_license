@@ -40,9 +40,11 @@ class CodingLadder:
         )
 
     def next_level(self, action_class: str, level: int, successes: int, failures: int,
-                   successes_at_level: int) -> int | None:
-        """The level to promote to now, or ``None``."""
-        if level >= ACTION_CLASSES[action_class].max_level:
+                   successes_at_level: int, ceiling: int | None = None) -> int | None:
+        """The level to promote to now, or ``None``. ``ceiling`` is the
+        policy's limit for this class in this repo (never above the built-in one)."""
+        top = ACTION_CLASSES[action_class].max_level if ceiling is None else min(ceiling, ACTION_CLASSES[action_class].max_level)
+        if level >= top:
             return None
         if successes_at_level < MIN_SUCCESSES.get(level, 0):
             return None
@@ -51,14 +53,15 @@ class CodingLadder:
         return level + 1
 
     def progress(self, action_class: str, level: int, successes: int, failures: int,
-                 successes_at_level: int) -> dict:
+                 successes_at_level: int, ceiling: int | None = None) -> dict:
         """What the dashboard shows: how far the next level is."""
         spec = ACTION_CLASSES[action_class]
-        if level >= spec.max_level:
+        top = spec.max_level if ceiling is None else min(ceiling, spec.max_level)
+        if level >= top:
             return {"next_level": None, "runs_needed": 0,
-                    "ceiling": spec.max_level, "always_asks": spec.max_level == 0}
+                    "ceiling": top, "always_asks": top == 0, "capped_by_policy": top < spec.max_level}
         economic = self.ladder(action_class).step(level).runs_needed(successes, failures)
         floor = max(0, MIN_SUCCESSES.get(level, 0) - successes_at_level)
         needed = None if economic is None else max(economic, floor)
         return {"next_level": level + 1, "runs_needed": needed,
-                "ceiling": spec.max_level, "always_asks": False}
+                "ceiling": top, "always_asks": False, "capped_by_policy": top < spec.max_level}

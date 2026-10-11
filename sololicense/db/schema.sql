@@ -332,3 +332,11 @@ CREATE TABLE IF NOT EXISTS agent_repos (
     last_tests    TEXT,                         -- passed | failed at the last turn check
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- This machine's coding policy, per repository or for all ("*"). It can only
+-- tighten the built-in rules and the repository's .solo-license/policy.toml.
+CREATE TABLE IF NOT EXISTS agent_policies (
+    repo        TEXT PRIMARY KEY,
+    body        TEXT NOT NULL,                  -- JSON: classes / deny / freeze
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);

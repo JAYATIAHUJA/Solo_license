@@ -1470,7 +1470,8 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         if spec is None:
             continue
         progress = gate.ladder.progress(spec.key, row["level"], row["successes"], row["failures"],
-                                        row["successes_at_level"]) if gate else {}
+                                        row["successes_at_level"],
+                                        ceiling=gate.ceiling(row["repo"], spec.key)) if gate else {}
         licenses.append({
             "repo": row["repo"], "action_class": spec.key, "label": spec.label, "level": row["level"],
             "max_level": spec.max_level, "successes": row["successes"], "failures": row["failures"],
@@ -1481,8 +1482,14 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
     turns = [dict(r) for r in agent_repo.recent_turns(context.conn, 30) if repo is None or r["repo"] == repo]
     counts = {k: sum(1 for d in decisions if d["decision"] == k) for k in ("allow", "ask", "deny")}
     savings = coding_savings(context, repo)
+    from sololicense.coding import policy as policy_mod
+
+    repos = [dict(r) for r in context.conn.execute("SELECT repo, path, test_command FROM agent_repos")]
+    for r in repos:
+        rules = policy_mod.effective(context.conn, r["repo"], r["path"])
+        r["frozen"], r["policy"], r["policy_source"] = rules.freeze, rules.digest, rules.source
     return {
-        "repos": [dict(r) for r in context.conn.execute("SELECT repo, path, test_command FROM agent_repos")],
+        "repos": repos,
         "licenses": licenses,
         "decisions": decisions,
         "turns": turns,
@@ -1662,3 +1669,113 @@ def coding_install(agent: str = Query(default="auto", max_length=40, pattern=r"^
         "claude_plugin": ["/plugin marketplace add JAYATIAHUJA/Solo_license",
                           "/plugin install solo-license@solo-license"],
     }
+
+
+
+# --- coding policy: who decides how far an agent may go ----------------------------
+
+class CodingPolicyPayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200, pattern=r"^[^/\\]+$")   # a repo name, or "*" for all
+    classes: dict[str, int] = Field(default_factory=dict)
+    deny_commands: list[str] = Field(default_factory=list, max_length=50)
+    deny_paths: list[str] = Field(default_factory=list, max_length=50)
+    freeze: bool = False
+
+
+class FreezePayload(BaseModel):
+    repo: str = Field(default="*", min_length=1, max_length=200, pattern=r"^[^/\\]+$")
+    enabled: bool
+
+
+def coding_policy_payload(context: AppContext, repo: str) -> dict:
+    from sololicense.coding import policy as policy_mod
+
+    row = context.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
+    path = row["path"] if row else None
+    file_policy = policy_mod.from_file(path) if path else None
+    all_repos = policy_mod.local(context.conn, policy_mod.ALL_REPOS)
+    this_repo = policy_mod.local(context.conn, repo) if repo != policy_mod.ALL_REPOS else None
+    effective = policy_mod.merge(file_policy, all_repos, this_repo)
+    return {
+        "repo": repo,
+        "path": path,
+        "file": file_policy.to_json() if file_policy else None,
+        "file_path": policy_mod.POLICY_FILE.as_posix(),
+        "local_all": all_repos.to_json() if all_repos else None,
+        "local": this_repo.to_json() if this_repo else None,
+        "effective": {**effective.to_json(), "digest": effective.digest},
+        "built_in": {k: c.max_level for k, c in ACTION_CLASSES.items()},
+        "starter": policy_mod.STARTER,
+    }
+
+
+@app.get("/api/coding/policy")
+def get_coding_policy(
+    request: Request,
+    repo: str = Query(default="*", max_length=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    with _lock:
+        context = get_context()
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        return coding_policy_payload(context, repo)
+
+
+def _policy_summary(before: dict | None, after) -> str:
+    parts = []
+    if after.freeze:
+        parts.append("freeze on")
+    elif before and before.get("freeze"):
+        parts.append("freeze off")
+    if after.ceilings:
+        parts.append("ceilings " + ", ".join(f"{k}<=L{v}" for k, v in sorted(after.ceilings.items())))
+    if after.deny_commands:
+        parts.append(f"{len(after.deny_commands)} denied command(s)")
+    if after.deny_paths:
+        parts.append(f"{len(after.deny_paths)} denied path(s)")
+    return "; ".join(parts) or "no extra rules"
+
+
+@app.put("/api/coding/policy")
+def put_coding_policy(payload: CodingPolicyPayload, actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """This machine's policy for one repo (or all). It can only tighten."""
+    from sololicense.coding import policy as policy_mod
+
+    with _lock:
+        context = get_context()
+        before = policy_mod.local(context.conn, payload.repo)
+        try:
+            saved = policy_mod.save_local(context.conn, payload.repo, {
+                "classes": {k: {"max": v} for k, v in payload.classes.items()},
+                "deny": {"commands": payload.deny_commands, "paths": payload.deny_paths},
+                "freeze": {"enabled": payload.freeze},
+            })
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if context.coding_gate is not None:
+            context.coding_gate.record_policy(payload.repo, _policy_summary(before.to_json() if before else None, saved),
+                                              actor.actor_id)
+        context.conn.commit()
+        return coding_policy_payload(context, payload.repo)
+
+
+@app.post("/api/coding/freeze")
+def freeze_coding(payload: FreezePayload, actor: Actor = Depends(require_role(Role.APPROVER))) -> dict:
+    """The kill switch: every action asks, for one repo or all of them."""
+    from sololicense.coding import policy as policy_mod
+
+    with _lock:
+        context = get_context()
+        current = policy_mod.local(context.conn, payload.repo) or policy_mod.Policy()
+        raw = {"classes": {k: {"max": v} for k, v in current.ceilings.items()},
+               "deny": {"commands": list(current.deny_commands), "paths": list(current.deny_paths)},
+               "freeze": {"enabled": payload.enabled}}
+        policy_mod.save_local(context.conn, payload.repo, raw)
+        if context.coding_gate is not None:
+            where = "all repositories" if payload.repo == policy_mod.ALL_REPOS else payload.repo
+            context.coding_gate.record_policy(
+                payload.repo, f"{'freeze on' if payload.enabled else 'freeze off'} for {where}", actor.actor_id)
+        context.conn.commit()
+        return coding_payload(context)

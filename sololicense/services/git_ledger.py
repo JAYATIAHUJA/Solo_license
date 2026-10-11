@@ -46,10 +46,13 @@ def _commit_message(entry: LedgerEntry) -> str:
         "demote": "demote",
         "restore": "restore",
     }.get(entry.kind, entry.kind)
-    title = (
-        f"license({entry.task_class}): {verb} L{entry.from_level}"
-        f" -> L{entry.to_level}"
-    )
+    if entry.kind == "policy":
+        title = f"policy({entry.task_class}): {entry.reason.splitlines()[0][:72]}"
+    else:
+        title = (
+            f"license({entry.task_class}): {verb} L{entry.from_level}"
+            f" -> L{entry.to_level}"
+        )
     body = [title, "", entry.reason]
     if entry.run_id is not None:
         body.append(f"run: {entry.run_id}")
