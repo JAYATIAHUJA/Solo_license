@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from sololicense.domain.models import RefundRequest
 from sololicense.observability import neatlogs_client
 from sololicense.observability.neatlogs_client import init_neatlogs
 
@@ -39,7 +38,7 @@ class _TraceContext:
         self._call["exit"] = exc_type
 
 
-def test_client_initializes_one_refund_workflow_and_child_span(monkeypatch, harness):
+def test_client_initializes_one_workflow_and_child_span(monkeypatch, harness):
     calls: list[dict] = []
     init_calls: list[dict] = []
 
@@ -68,7 +67,7 @@ def test_client_initializes_one_refund_workflow_and_child_span(monkeypatch, harn
         "capture_logs": True,
     }]
     assert [(call["name"], call["kind"]) for call in calls] == [
-        ("refund.run", "WORKFLOW"),
+        ("agent.run", "WORKFLOW"),
         ("verify.readback", "GUARDRAIL"),
     ]
     assert calls[0]["span"].attributes["sololicense.trace_id"] == "trace-local-1"
@@ -78,41 +77,25 @@ def test_client_initializes_one_refund_workflow_and_child_span(monkeypatch, harn
     }
 
 
-class _TraceSpy:
-    def __init__(self) -> None:
-        self.trace_id = "trace-spy"
-        self.spans: list[tuple[str, str, dict]] = []
-        self.closed = False
+def test_flushing_a_trace_closes_the_remote_workflow_once(harness):
+    from sololicense.observability.tracer import Tracer
 
-    def span(self, name: str, status: str = "ok", **attributes: object) -> None:
-        self.spans.append((name, status, attributes))
+    closed: list[object] = []
 
-    def close(self) -> None:
-        self.closed = True
+    class _Client:
+        def start_workflow(self, trace_id, attributes=None, *, session_id=None):
+            return SimpleNamespace(trace_id="remote-1")
 
+        def record_span(self, workflow, name, status, attributes, *, incident=None):
+            pass
 
-class _TracerSpy:
-    def __init__(self) -> None:
-        self.trace = _TraceSpy()
+        def finish_workflow(self, workflow):
+            if workflow is not None:
+                closed.append(workflow)
 
-    def start_trace(self, name: str, **_attributes: object) -> _TraceSpy:
-        assert name == "refund"
-        return self.trace
+    trace = Tracer(_Client()).start_trace("permission", repo="shop-api")
+    trace.flush(harness.conn, None)
+    trace.close()
 
-
-def test_refund_failure_closes_the_remote_workflow(monkeypatch, harness):
-    tracer = _TracerSpy()
-    monkeypatch.setattr(harness.worker, "_tracer", tracer)
-
-    def fail_plan(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("planner unavailable")
-
-    monkeypatch.setattr(harness.worker._planner, "plan", fail_plan)
-
-    with pytest.raises(RuntimeError, match="planner unavailable"):
-        harness.worker.run_refund(RefundRequest("ORD-1001", "Asha", 10.0, "refund"))
-
-    assert tracer.trace.closed is True
-    assert tracer.trace.spans[-1] == (
-        "run.error", "error", {"error_type": "RuntimeError"}
-    )
+    assert trace.trace_id == "remote-1"
+    assert len(closed) == 1

@@ -26,7 +26,7 @@ def _git_init(path):
 @pytest.fixture
 def gate(harness, tmp_path):
     project = _git_init(tmp_path / "shop-api")
-    gate = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    gate = CodingGate(harness.conn, harness.tracer, GitLedger(repo_root=harness.repo),
                       jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     gate.project = project
     return gate
@@ -235,7 +235,7 @@ def client(harness, tmp_path, monkeypatch):
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "loops.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:

@@ -37,6 +37,7 @@ class LedgerEntry:
     reason: str
     run_id: int | None
     trace_id: str | None
+    entire_checkpoint: str | None = None
 
 
 def _commit_message(entry: LedgerEntry) -> str:
@@ -60,6 +61,8 @@ def _commit_message(entry: LedgerEntry) -> str:
         body.append(f"run: {entry.run_id}")
     if entry.trace_id:
         body.append(f"trace: {entry.trace_id}")
+    if entry.entire_checkpoint:
+        body.append(f"agent checkpoint: entire checkpoint explain {entry.entire_checkpoint[:12]}")
     return "\n".join(body)
 
 

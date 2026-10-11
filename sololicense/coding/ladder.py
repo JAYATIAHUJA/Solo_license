@@ -1,6 +1,6 @@
 """When a coding agent has earned the next level for an action class.
 
-Two conditions, both required (the same rule the refund agent uses):
+Two conditions, both required:
 
 * a **floor** of verified successes at the current level, so nothing is ever
   promoted on one lucky run; and

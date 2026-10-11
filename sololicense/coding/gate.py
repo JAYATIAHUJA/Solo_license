@@ -47,6 +47,11 @@ INTERRUPT_AFTER_DENIALS = 3
 FLAGGABLE_OUTCOMES = ("ran", "verified", "observed", "failed")
 
 
+def _who(repo: str, agent: str = "", principal: str = "main") -> dict:
+    """Attributes every span of a coding trace carries."""
+    return {"repo": repo, "principal": principal, **({"agent": agent} if agent else {})}
+
+
 def turn_reason(conn: sqlite3.Connection, turn_id: int) -> str | None:
     row = agent_repo.get_turn(conn, turn_id)
     return row["reason"] if row else None
@@ -94,7 +99,8 @@ class CodingGate:
         repo, root = repo_of(cwd)
         agent_repo.ensure_repo(self.conn, repo, root)
         agent = str(event.get("_agent") or "claude-code")
-        trace = self.tracer.start_trace("coding.turn", repo=repo, session=session[:12], agent=agent)
+        trace = self.tracer.start_trace("coding.turn", defaults=_who(repo, agent), session_id=session or None,
+                                        session=session[:12])
         turn_id = agent_repo.open_turn(
             self.conn, session_id=session, repo=repo, cwd=root,
             prompt=str(event.get("prompt", ""))[:8000], base_ref=snapshot(root), trace_id=trace.trace_id,
@@ -109,7 +115,8 @@ class CodingGate:
             queued = agent_repo.take_remediations(self.conn, session)
             if queued:
                 text = "\n\n".join(r["text"] for r in queued)
-                trace.span("remediation.delivered", turn=turn_id, count=len(queued), text=text[:300])
+                trace.span("remediation.delivered", turn=turn_id, count=len(queued), text=text[:300],
+                           kinds=",".join(r["kind"] for r in queued))
                 answer = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}
         self.conn.commit()
         return answer
@@ -172,18 +179,18 @@ class CodingGate:
         if decision == "deny" and by == "policy":
             # As serious as a hard deny: recorded, and the class goes back to asking.
             trace.span("detection.policy_violation", status="error", severity="critical",
-                       message=reason, action_class=spec.key, command=command, policy=rules.digest)
-            self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace)
+                       message=reason, reason=reason, action_class=spec.key, command=command, policy=rules.digest)
+            self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace, turn=turn)
         elif decision == "deny" and by == "loop-guard":
             # A halt, not evidence: the class keeps its level.
-            trace.span("detection.loop", status="error", severity="warning", message=reason,
-                       action_class=spec.key, command=command, repeats=repeats)
+            trace.span("detection.loop", status="error", severity="critical", message=reason, reason=reason,
+                       kind="loop-stop", action_class=spec.key, command=command, repeats=repeats, interrupt=True)
             self.conn.commit()
             return self._permission_response(decision, reason, interrupt=True)
         elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
-                       message=reason, action_class=spec.key, command=command)
-            self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace)
+                       message=reason, reason=reason, action_class=spec.key, command=command)
+            self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace, turn=turn)
         interrupt = False
         if decision == "deny":
             denials = sum(1 for d in agent_repo.decisions_for_turn(self.conn, turn["id"]) if d["decision"] == "deny")
@@ -194,7 +201,7 @@ class CodingGate:
                                              text=text, delivered=True)
                 reason = text.removeprefix("Solo License: ")
                 trace.span("remediation.sent", status="error", kind="denied", decision_id=decision_id,
-                           attempts=denials)
+                           attempts=denials, action_class=spec.key, reason=reason, interrupt=True)
         self.conn.commit()
         return self._permission_response(decision, reason, interrupt=interrupt)
 
@@ -206,7 +213,8 @@ class CodingGate:
         if row is None:  # never went through the gate (already allowed by settings)
             self.conn.commit()
             return self._with_loop_note({}, loop_note, halt, failed)
-        trace = self._trace(agent_repo.current_turn(self.conn, session))
+        turn = agent_repo.current_turn(self.conn, session)
+        trace = self._trace(turn)
         repo, key = row["repo"], row["action_class"]
         # Trust only grows from a person's yes or from the gate's own earned
         # "allow". An action the *agent's* settings let through (its hook fires
@@ -222,9 +230,11 @@ class CodingGate:
             # A failure always counts, whoever let the action run.
             agent_repo.set_outcome(self.conn, row["id"], "failed")
             trace.span("tool.failed", status="error", decision_id=row["id"], action_class=key, error=error)
-            was = self._fail(repo, key, f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}",
-                             trace)
-            answer = self._remedy_failed_tool(row, tool_input, demoted=was > 0, trace=trace)
+            why = f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}"
+            was = self._fail(repo, key, why, trace, turn=turn)
+            checkpoint = self._checkpoint_for(turn) if was > 0 else None
+            answer = self._remedy_failed_tool(row, tool_input, demoted=was > 0, trace=trace, reason=why,
+                                              level=was, checkpoint=checkpoint)
         elif unattended:
             agent_repo.set_outcome(self.conn, row["id"], "observed")
             trace.span("tool.observed", decision_id=row["id"], action_class=key,
@@ -262,7 +272,9 @@ class CodingGate:
         if halt:
             loops.halt(self.conn, session, text)
         self._trace(turn).span("detection.loop", status="error", severity="critical" if halt else "warning",
-                               kind=kind, command=command, repeats=seen.count, failures=seen.failures)
+                               kind=kind, command=command, repeats=seen.count, failures=seen.failures,
+                               action_class=classify_tool(tool, tool_input).action_class,
+                               reason=text.removeprefix("Solo License: "), interrupt=halt)
         return text, halt
 
     @staticmethod
@@ -276,18 +288,21 @@ class CodingGate:
             answer.update({"continue": False, "stopReason": note})
         return answer
 
-    def _remedy_failed_tool(self, row: sqlite3.Row, tool_input: dict, *, demoted: bool, trace: Trace) -> dict:
+    def _remedy_failed_tool(self, row: sqlite3.Row, tool_input: dict, *, demoted: bool, trace: Trace,
+                            reason: str, level: int, checkpoint: str | None) -> dict:
         """Tell the agent, next to the failed tool's result, what to undo. Claude
         Code's PostToolUseFailure takes only ``additionalContext`` (it cannot block)."""
         path = edited_path(tool_input)
         fix = remediation.compose("tool-failed", action_class=row["action_class"], command=row["command"],
-                                  files=(path,) if path else (), demoted=demoted)
+                                  files=(path,) if path else (), demoted=demoted, checkpoint=checkpoint)
         delivered = row["agent"] in agents.TAKES_CONTEXT
         if delivered:
             agent_repo.queue_remediation(self.conn, session_id=row["session_id"], turn_id=row["turn_id"],
                                          kind="tool-failed", text=fix.text, delivered=True)
         trace.span("remediation.sent", status="error", kind="tool-failed", decision_id=row["id"],
-                   action_class=row["action_class"], revert=list(fix.revert_commands), delivered=delivered)
+                   action_class=row["action_class"], revert=list(fix.revert_commands), delivered=delivered,
+                   reason=reason, from_level=level, to_level=0 if demoted else level,
+                   entire_checkpoint=checkpoint or "")
         return {
             "hookSpecificOutput": {"hookEventName": "PostToolUseFailure", "additionalContext": fix.text},
             "systemMessage": f"Solo License: {row['action_class']} "
@@ -315,15 +330,13 @@ class CodingGate:
                 agent_repo.set_outcome(self.conn, d["id"], "verified")
                 self._succeed(d["repo"], d["action_class"], trace)
         else:
-            checkpoint = self.checkpoint_lookup(turn["cwd"], session)
+            checkpoint_id = self._checkpoint_for(turn, fresh=True)
             evidence = reason
-            if checkpoint and checkpoint.get("checkpoint_id"):
-                checkpoint_id = checkpoint["checkpoint_id"]
+            if checkpoint_id:
                 details["entire_checkpoint"] = checkpoint_id
-                agent_repo.set_checkpoint(self.conn, turn["id"], checkpoint_id)
                 evidence = f"{reason}\nEntire: {entire.explain_command(checkpoint_id)}"
             for key in sorted({d["action_class"] for d in changed} | set(details.get("blame", ()))):
-                if self._fail(turn["repo"], key, evidence, trace) > 0:
+                if self._fail(turn["repo"], key, evidence, trace, checkpoint=checkpoint_id) > 0:
                     demoted.append(key)
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "failed")
@@ -334,7 +347,8 @@ class CodingGate:
                                       base_ref=turn["base_ref"], checkpoint=checkpoint_id, classes=demoted)
             trace.span("turn.blocked", status="error", turn=turn["id"], reason=reason, **measured)
             trace.span("remediation.sent", status="error", kind="turn-failed", turn=turn["id"],
-                       revert=list(fix.revert_commands))
+                       revert=list(fix.revert_commands), reason=reason, classes=demoted,
+                       entire_checkpoint=checkpoint_id or "")
             agent_repo.note_block(self.conn, turn["id"], reason)
             agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn["id"], kind="turn-failed",
                                          text=fix.text, delivered=True)
@@ -345,7 +359,8 @@ class CodingGate:
             # Guidance, not evidence: sent back once, no level changes.
             text = remediation.compose("edit-thrash", files=thrash).text
             trace.span("detection.edit_thrash", status="error", severity="warning", turn=turn["id"],
-                       files=[p for p, _ in thrash])
+                       files=[p for p, _ in thrash], kind="edit-thrash", action_class="file-edit",
+                       reason=text.removeprefix("Solo License: "))
             agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn["id"], kind="edit-thrash",
                                          text=text, delivered=True)
             self.conn.commit()
@@ -377,12 +392,15 @@ class CodingGate:
                          f"{lic['successes']} verified, {lic['failures']} failed: the failure rate is below "
                          f"break-even for {ACTION_CLASSES[key].label.lower()} in {repo}.", trace)
 
-    def _fail(self, repo: str, key: str, reason: str, trace: Trace) -> int:
-        """Evidence against a class: back to L0. Returns the level it had."""
+    def _fail(self, repo: str, key: str, reason: str, trace: Trace, *, turn: sqlite3.Row | None = None,
+              checkpoint: str | None = None) -> int:
+        """Evidence against a class: back to L0. Returns the level it had. A
+        demotion is linked to the turn's Entire checkpoint (looked up only then)."""
         agent_repo.add_evidence(self.conn, repo, key, ok=False)
         lic = agent_repo.get_license(self.conn, repo, key)
         if lic["level"] > 0:
-            self._change(repo, key, "demote", lic["level"], 0, reason, trace)
+            self._change(repo, key, "demote", lic["level"], 0, reason, trace,
+                         checkpoint=checkpoint or self._checkpoint_for(turn))
         agent_repo.forget_patterns(self.conn, repo, key)
         return int(lic["level"])
 
@@ -391,7 +409,7 @@ class CodingGate:
         ceiling under the policy). Recorded like every other change."""
         level = max(0, min(level, self.ceiling(repo, key)))
         lic = agent_repo.get_license(self.conn, repo, key)
-        trace = self.tracer.start_trace("coding.restore", repo=repo, action_class=key)
+        trace = self.tracer.start_trace("coding.restore", defaults=_who(repo), action_class=key)
         self._change(repo, key, "restore", lic["level"], level, f"{actor_id}: {reason}", trace, actor_id=actor_id)
         trace.flush(self.conn, None)
         self.conn.commit()
@@ -428,44 +446,57 @@ class CodingGate:
         else:
             raise ValueError("Flag a decision or a turn.")
 
-        trace = self.tracer.start_trace("coding.flag", repo=repo)
+        agent = (decision["agent"] if decision_id is not None else None) or (turn["agent"] if turn else "")
+        checkpoint = turn["entire_checkpoint"] if turn else None
+        trace = self.tracer.start_trace("coding.flag", defaults=_who(repo, agent), session_id=session or None)
         for key in classes:
             lic = agent_repo.get_license(self.conn, repo, key)
-            self._change(repo, key, "flag", lic["level"], 0, f"{actor_id}: {reason}", trace, actor_id=actor_id)
+            self._change(repo, key, "flag", lic["level"], 0, f"{actor_id}: {reason}", trace, actor_id=actor_id,
+                         checkpoint=checkpoint)
             agent_repo.forget_patterns(self.conn, repo, key)
         fix = remediation.compose("flagged", reason=reason, action_class=action_class, command=command,
                                   files=files, classes=classes, base_ref=turn["base_ref"] if turn else None,
-                                  checkpoint=turn["entire_checkpoint"] if turn else None)
+                                  checkpoint=checkpoint)
         remediation_id = agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn_id,
                                                       kind="flagged", text=fix.text)
+        trace.span("remediation.queued", kind="flagged", remediation=remediation_id,
+                   action_class=action_class or ",".join(classes), reason=reason, revert=list(fix.revert_commands))
         flag_id = agent_repo.insert_flag(self.conn, decision_id=decision_id, turn_id=turn_id, actor_id=actor_id,
                                          reason=reason, remediation_id=remediation_id)
         trace.span("turn.flagged", status="error", flag=flag_id, decision_id=decision_id or 0, turn=turn_id or 0,
-                   classes=classes, actor_id=actor_id, reason=reason)
+                   classes=classes, actor_id=actor_id, reason=reason, action_class=action_class or ",".join(classes),
+                   entire_checkpoint=checkpoint or "", turn_trace_id=(turn["trace_id"] if turn else None) or "")
         trace.flush(self.conn, None)
         self.conn.commit()
         return {"flag_id": flag_id, "repo": repo, "classes": classes, "session_id": session, "text": fix.text}
 
     def record_policy(self, repo: str, summary: str, actor_id: str) -> str | None:
-        """A policy change on this machine: an event and a ledger commit."""
+        """A policy change on this machine: an event, a trace and a ledger commit."""
+        trace = self.tracer.start_trace("coding.policy", defaults=_who(repo))
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class="policy", kind="policy",
-                                           from_level=0, to_level=0, reason=summary, actor_id=actor_id)
-        sha = self.ledger.record(LedgerEntry(f"policy@{repo}", "policy", 0, 0, summary, None, None))
+                                           from_level=0, to_level=0, reason=summary, actor_id=actor_id,
+                                           trace_id=trace.trace_id)
+        sha = self.ledger.record(LedgerEntry(f"policy@{repo}", "policy", 0, 0, summary, None, trace.trace_id))
         if sha:
             agent_repo.set_event_sha(self.conn, event_id, sha)
+        trace.span("license.policy", action_class="policy", reason=summary, actor_id=actor_id, git_sha=sha or "")
+        trace.flush(self.conn, None)
         return sha
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
-                actor_id: str = GATE_ACTOR) -> None:
+                actor_id: str = GATE_ACTOR, checkpoint: str | None = None) -> None:
         lost = kind in ("demote", "flag")
         agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if lost else None)
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class=key, kind=kind,
-                                           from_level=old, to_level=new, reason=reason, actor_id=actor_id)
-        sha = self.ledger.record(LedgerEntry(f"{key}@{repo}", kind, old, new, reason, None, trace.trace_id))
+                                           from_level=old, to_level=new, reason=reason, actor_id=actor_id,
+                                           trace_id=trace.trace_id, entire_checkpoint=checkpoint)
+        sha = self.ledger.record(LedgerEntry(f"{key}@{repo}", kind, old, new, reason, None, trace.trace_id,
+                                             entire_checkpoint=checkpoint))
         if sha:
             agent_repo.set_event_sha(self.conn, event_id, sha)
         trace.span(f"license.{kind}", status="error" if lost else "ok", action_class=key,
-                   repo=repo, from_level=old, to_level=new, reason=reason, git_sha=sha or "")
+                   repo=repo, from_level=old, to_level=new, reason=reason, git_sha=sha or "",
+                   actor_id=actor_id, entire_checkpoint=checkpoint or "")
 
     # --- helpers -----------------------------------------------------------
 
@@ -534,7 +565,26 @@ class CodingGate:
     def _trace(self, turn: sqlite3.Row | None) -> Trace:
         if turn is not None and turn["id"] in self._traces:
             return self._traces[turn["id"]]
-        trace = self.tracer.start_trace("coding.turn", resumed=True)
-        if turn is not None:
-            self._traces[turn["id"]] = trace
+        if turn is None:
+            return self.tracer.start_trace("coding.turn", resumed=True)
+        trace = self.tracer.start_trace("coding.turn", defaults=_who(turn["repo"], turn["agent"]),
+                                        session_id=turn["session_id"] or None, resumed=True)
+        self._traces[turn["id"]] = trace
         return trace
+
+    def _checkpoint_for(self, turn: sqlite3.Row | None, *, fresh: bool = False) -> str | None:
+        """The agent's last Entire checkpoint for this turn, looked up once and
+        kept on the turn (``fresh`` looks again, keeping the old one if none)."""
+        if turn is None:
+            return None
+        row = agent_repo.get_turn(self.conn, turn["id"])
+        if row is None:
+            return None
+        if row["entire_checkpoint"] and not fresh:
+            return row["entire_checkpoint"]
+        found = self.checkpoint_lookup(row["cwd"], row["session_id"])
+        checkpoint_id = str((found or {}).get("checkpoint_id") or "")
+        if checkpoint_id:
+            agent_repo.set_checkpoint(self.conn, row["id"], checkpoint_id)
+            return checkpoint_id
+        return row["entire_checkpoint"] or None
