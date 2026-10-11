@@ -49,7 +49,12 @@ class PolicyVersion:
 
 @dataclass(frozen=True)
 class EvaluationProgress:
-    """A policy-scoped summary of whether a task class has earned promotion."""
+    """A policy-scoped summary of whether a task class meets the policy floor.
+
+    ``eligible`` covers only the owner's policy minimums. Promotion also needs
+    the economic bound from :mod:`sololicense.domain.trust`, which no policy
+    edit can lower.
+    """
 
     sample_size: int
     clean_runs: int
@@ -57,6 +62,7 @@ class EvaluationProgress:
     required_samples: int
     required_pass_rate: float
     eligible: bool
+    policy_version: int | None = None
 
 
 @dataclass(frozen=True)
@@ -89,7 +95,9 @@ def validate_rule(rule: PolicyRule) -> None:
         raise ValueError("pass rate must be between 0 and 1")
 
 
-def evaluate_runs(outcomes: Sequence[bool], rule: PolicyRule) -> EvaluationProgress:
+def evaluate_runs(
+    outcomes: Sequence[bool], rule: PolicyRule, *, policy_version: int | None = None
+) -> EvaluationProgress:
     """Evaluate only the most recent outcomes allowed by ``rule``.
 
     ``outcomes`` is newest first, matching the database query used by the
@@ -111,4 +119,5 @@ def evaluate_runs(outcomes: Sequence[bool], rule: PolicyRule) -> EvaluationProgr
         required_samples=rule.minimum_samples,
         required_pass_rate=rule.minimum_verified_pass_rate,
         eligible=eligible,
+        policy_version=policy_version,
     )

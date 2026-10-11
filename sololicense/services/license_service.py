@@ -92,9 +92,10 @@ class LicenseService:
         """Credit a verified-clean run; optionally use policy-scoped evidence.
 
         Older callers retain the workspace threshold behavior. Worker calls
-        provide an evaluation snapshot computed after the run was recorded,
-        so only outcomes collected under this exact policy version can earn a
-        promotion.
+        provide an evaluation snapshot computed after the run was recorded.
+        A promotion then needs both: the policy version's minimums (a floor
+        the owner sets) and the economic bound on the verified failure rate
+        (a ceiling no policy edit can lower).
         """
         old = self.get_or_create(task_class)
         if evaluation is None:
@@ -116,17 +117,25 @@ class LicenseService:
                 consecutive_clean_runs=evaluation.clean_runs,
                 demoted_from=None,
             )
-            if evaluation.eligible and old.level < LicenseLevel.L3:
+            step = self._ladder.step(int(old.level)) if old.level < LicenseLevel.L3 else None
+            if (
+                step is not None
+                and evaluation.eligible
+                and step.earned(new.successes, new.failures)
+            ):
                 new = replace(
                     new,
                     level=LicenseLevel(old.level + 1),
                     consecutive_clean_runs=0,
                     demoted_from=None,
                 )
+            version = f"v{evaluation.policy_version}" if evaluation.policy_version else "version"
+            target = step.target_rate if step is not None else 0.0
             promotion_reason = (
-                f"Policy evaluation met {evaluation.required_samples} clean-run "
-                f"sample and {evaluation.required_pass_rate:.0%} verified pass-rate "
-                "requirements; earned {level} ({label})."
+                f"policy {version} minimums met ({evaluation.required_samples} clean runs, "
+                f"{evaluation.required_pass_rate:.0%} verified); failure rate below "
+                f"{target:.2%} with {self._ladder.confidence:.0%} confidence; "
+                "earned {level} ({label})."
             )
         if new.level > old.level:
             return self._persist(
