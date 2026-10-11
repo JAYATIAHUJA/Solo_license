@@ -98,6 +98,44 @@ def test_a_turn_sent_back_in_each_agents_words():
     assert agents.render("windsurf", "post_cascade_response", block).body is None
 
 
+FAILED = {"hookSpecificOutput": {"hookEventName": "PostToolUseFailure", "additionalContext": "undo it"},
+          "systemMessage": "Solo License: install-dep is back to asking."}
+
+
+def test_remediation_after_a_failed_tool_in_each_agents_words():
+    claude = agents.render("claude-code", "PostToolUseFailure", FAILED).body
+    assert claude["hookSpecificOutput"] == {"hookEventName": "PostToolUseFailure", "additionalContext": "undo it"}
+    assert "decision" not in claude
+    codex = agents.render("codex", "PostToolUse", FAILED).body
+    assert codex["hookSpecificOutput"] == {"hookEventName": "PostToolUse", "additionalContext": "undo it"}
+    # Cursor's afterShellExecution / afterFileEdit document no output fields.
+    assert agents.render("cursor", "afterShellExecution", FAILED).body is None
+    assert agents.render("gemini", "AfterTool", FAILED).body is None
+
+
+def test_a_post_tool_block_reaches_claude_with_its_reason():
+    answer = {"decision": "block", "reason": "stop", "hookSpecificOutput": {"hookEventName": "PostToolUse",
+                                                                            "additionalContext": "stop"}}
+    body = agents.render("claude-code", "PostToolUse", answer).body
+    assert body["decision"] == "block" and body["reason"] == "stop"
+    assert body["hookSpecificOutput"]["additionalContext"] == "stop"
+
+
+def test_queued_context_reaches_the_prompt_of_agents_that_take_it():
+    queued = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": "revert"}}
+    assert agents.render("codex", "UserPromptSubmit", queued).body == queued
+    assert agents.render("cursor", "beforeSubmitPrompt", queued).body is None
+    assert agents.TAKES_CONTEXT == {"claude-code", "codex"}
+
+
+def test_interrupt_is_sent_only_where_it_is_documented():
+    deny = {"hookSpecificOutput": {"hookEventName": "PermissionRequest",
+                                   "decision": {"behavior": "deny", "message": "stop", "interrupt": True}}}
+    assert agents.render("claude-code", "PermissionRequest", deny).body["hookSpecificOutput"]["decision"]["interrupt"]
+    # Codex: "Don't return interrupt for PermissionRequest; reserved, fails closed today."
+    assert "interrupt" not in agents.render("codex", "PermissionRequest", deny).body["hookSpecificOutput"]["decision"]
+
+
 def test_aliases_and_unsupported_agents():
     assert agents.resolve("glm").key == "claude-code"
     assert agents.resolve("groq").key == "opencode"

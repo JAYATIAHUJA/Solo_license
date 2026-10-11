@@ -26,6 +26,11 @@ from dataclasses import dataclass, field
 # The gate's own events (the routes under /api/hooks/<event>).
 PROMPT, PERMISSION, POST, POST_FAIL, STOP = "user-prompt", "permission", "post-tool", "post-tool-failure", "stop"
 
+# Agents whose prompt and post-tool hooks document ``hookSpecificOutput.additionalContext``
+# (code.claude.com/docs/en/hooks, developers.openai.com/codex/hooks). Cursor's
+# afterShellExecution / afterFileEdit / beforeSubmitPrompt document no such field.
+TAKES_CONTEXT = frozenset({"claude-code", "codex"})
+
 
 @dataclass(frozen=True)
 class Native:
@@ -239,6 +244,10 @@ def _gate_decision(gate_event: str, answer: dict) -> tuple[str, str]:
         return (behavior if behavior in ("allow", "deny") else "defer"), reason
     if gate_event == STOP and answer.get("decision") == "block":
         return "continue", answer.get("reason", "")
+    if gate_event in (PROMPT, POST, POST_FAIL):
+        context = (answer.get("hookSpecificOutput") or {}).get("additionalContext")
+        if context:
+            return "context", context
     return "done", ""
 
 
@@ -250,13 +259,32 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
         return Native()
     verdict, reason = _gate_decision(gate_event, answer)
     if gate_event == PERMISSION:
-        return _render_permission(spec.key, native_event, verdict, reason)
+        interrupt = bool(((answer or {}).get("hookSpecificOutput") or {}).get("decision", {}).get("interrupt"))
+        return _render_permission(spec.key, native_event, verdict, reason, interrupt)
     if verdict == "continue":
         return _render_send_back(spec.key, reason)
+    if verdict == "context":
+        return _render_context(spec.key, native_event, answer, reason)
     return Native()
 
 
-def _render_permission(agent: str, native_event: str, verdict: str, reason: str) -> Native:
+def _render_context(agent: str, native_event: str, answer: dict, context: str) -> Native:
+    """Text for the model next to a tool result or a prompt. The event name is
+    the agent's own: a Codex PostToolUse that failed is still a PostToolUse."""
+    if agent not in TAKES_CONTEXT:
+        return Native()  # recorded and shown in the dashboard; the turn check still applies
+    body: dict = {"hookSpecificOutput": {"hookEventName": native_event, "additionalContext": context}}
+    # Claude Code adds a PostToolUse block's reason next to the tool result; on
+    # Codex a block replaces the result, so Codex gets the context alone.
+    if agent == "claude-code" and native_event == "PostToolUse" and answer.get("decision") == "block":
+        body.update(decision="block", reason=answer.get("reason", context))
+    for key in ("systemMessage", "continue", "stopReason"):
+        if key in answer:
+            body[key] = answer[key]
+    return Native(body)
+
+
+def _render_permission(agent: str, native_event: str, verdict: str, reason: str, interrupt: bool = False) -> Native:
     if verdict == "defer":
         return Native()  # the agent's own settings decide
     allow = verdict == "allow"
@@ -264,6 +292,8 @@ def _render_permission(agent: str, native_event: str, verdict: str, reason: str)
         body = {"hookEventName": "PermissionRequest", "decision": {"behavior": verdict}}
         if not allow:
             body["decision"]["message"] = reason
+            if interrupt:
+                body["decision"]["interrupt"] = True
         return Native({"hookSpecificOutput": body, "systemMessage": reason})
     if agent == "codex":
         decision = {"behavior": verdict, **({} if allow else {"message": reason})}
