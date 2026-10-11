@@ -210,8 +210,21 @@ def test_a_person_resumes_a_paused_class_within_its_ceiling(gate):
 
     assert gate.restore("shop-api", "install-dep", 2, actor_id="human:jayati", reason="flaky registry") == 2
     assert gate.restore("shop-api", "git-remote", 2, actor_id="human:jayati", reason="x") == 1  # capped
-    event = gate.conn.execute("SELECT * FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    event = gate.conn.execute("SELECT * FROM agent_events ORDER BY id DESC LIMIT 1").fetchone()
     assert event["kind"] == "restore" and event["actor_id"] == "human:jayati"
+
+
+def test_every_license_change_is_an_agent_event_with_its_commit(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    for _ in range(3):
+        _approve_and_run(gate, "npm test")
+    event = gate.conn.execute("SELECT * FROM agent_events ORDER BY id DESC LIMIT 1").fetchone()
+    assert (event["repo"], event["principal"], event["action_class"], event["kind"]) == \
+        ("shop-api", "main", "test-run", "promote")
+    assert (event["from_level"], event["to_level"]) == (0, 1)
+    assert event["actor_id"] == "system:coding-gate" and event["git_sha"]
+    assert gate.conn.execute(
+        "SELECT COUNT(*) FROM license_events WHERE task_class LIKE '%@%'").fetchone()[0] == 0
 
 
 def test_a_tool_that_ran_after_the_prompt_is_recorded_as_the_persons_approval(gate):
@@ -286,3 +299,24 @@ def test_the_claude_route_cannot_be_used_to_pose_as_another_agent(gate, harness,
                 json={"conversation_id": "k", "command": "npm test", "cwd": str(gate.project), "_prompt_only": True})
     row = conn.execute("SELECT agent, decided_by FROM agent_decisions ORDER BY id DESC LIMIT 1").fetchone()
     assert row["agent"] == "cursor" and row["decided_by"] == "agent-settings"
+
+
+def test_the_coding_dashboard_lists_license_events(gate, harness, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sololicense.api import app as app_module
+    from sololicense.db.database import init_db
+
+    conn = init_db(tmp_path / "events.db", check_same_thread=False)
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+                          jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+    agent_repo.ensure_repo(conn, "shop-api", str(gate.project))
+    threaded.restore("shop-api", "test-run", 1, actor_id="human:jayati", reason="reviewed")
+
+    class Ctx:
+        coding_gate = threaded
+
+    Ctx.conn = conn
+    monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
+    events = TestClient(app_module.app).get("/api/coding?repo=shop-api").json()["events"]
+    assert [(e["action_class"], e["kind"], e["to_level"]) for e in events] == [("test-run", "restore", 1)]

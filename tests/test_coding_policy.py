@@ -143,7 +143,7 @@ def test_policy_api_saves_records_and_freezes(gate, harness, tmp_path, monkeypat
         assert client.put("/api/coding/policy", json={"repo": "shop-api", "classes": {"nope": 1}}).status_code == 422
         frozen = client.post("/api/coding/freeze", json={"repo": "*", "enabled": True}).json()
         assert all(r["frozen"] for r in frozen["repos"])
-        events = [r["reason"] for r in conn.execute("SELECT reason FROM license_events WHERE kind = 'policy'")]
+        events = [r["reason"] for r in conn.execute("SELECT reason FROM agent_events WHERE kind = 'policy'")]
         assert any("freeze on" in e for e in events) and any("install-dep<=L1" in e for e in events)
         log = subprocess.run(["git", "log", "--format=%s"], cwd=harness.repo, capture_output=True, text=True).stdout
         assert "policy(policy@*): freeze on for all repositories" in log
