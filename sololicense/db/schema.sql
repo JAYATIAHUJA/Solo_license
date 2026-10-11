@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     sender      TEXT,                            -- customer email, if known
     subject     TEXT,
     body        TEXT NOT NULL,
-    status      TEXT NOT NULL DEFAULT 'new',     -- new | done | waiting | needs_human
+    status      TEXT NOT NULL DEFAULT 'new',     -- new | done | waiting | declined | needs_info | needs_human | answered
     outcome     TEXT,                            -- one-line result for the inbox
     reply       TEXT,                            -- reply drafted for the customer
     steps       TEXT NOT NULL DEFAULT '[]',      -- JSON: the agent's steps

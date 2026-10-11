@@ -16,6 +16,7 @@ export const TICKET_STATUS = {
   declined: { label: 'Declined by policy', tone: 'muted' },
   needs_info: { label: 'Asked the customer', tone: 'wait' },
   needs_human: { label: 'Needs a person', tone: 'bad' },
+  answered: { label: 'Customer replied', tone: 'muted' },
 };
 
 const STEP_NAMES = {
@@ -53,7 +54,7 @@ function Ticket({ ticket }) {
       <header className="ib-head">
         <div>
           <b>{ticket.subject || 'Customer message'}</b>
-          <span className="pl-muted pl-small"> · {ticket.sender || 'no email'} · {SOURCE[ticket.source] || ticket.source}{when ? ` · ${when.toLocaleString()}` : ''}</span>
+          <span className="pl-muted pl-small"> · {ticket.sender || 'no email'} · {SOURCE[ticket.source] || ticket.source}{when ? ` · ${when.toLocaleString()}` : ''}{ticket.follows_ticket_id ? ` · reply to #${ticket.follows_ticket_id}` : ''}</span>
         </div>
         <span className={`pl-status ${status.tone}`}>{status.label}</span>
       </header>
