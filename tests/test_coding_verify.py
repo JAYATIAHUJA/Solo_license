@@ -160,3 +160,39 @@ def test_a_regression_after_passing_tests_is_blamed(gate):
     gate.user_prompt(_ev(gate, prompt="fix the bug in cart.py"))
     (gate.project / "cart.py").write_text(PRICE.replace("i['price']", "i['price'] * i['qty']"))
     assert gate.stop(_ev(gate))["decision"] == "block"
+
+
+def test_a_regression_is_still_blamed_when_tests_need_untracked_dependencies(gate):
+    """The baseline worktree borrows node_modules/.venv; without them every
+    baseline run would fail and hide real regressions (trail #25 finding)."""
+    deps = gate.project / "node_modules"
+    deps.mkdir()
+    (deps / "helper.py").write_text("OK = True\n")
+    (gate.project / ".gitignore").write_text("node_modules/\n")
+    (gate.project / "check_dep.py").write_text(
+        "import sys; sys.path.insert(0, 'node_modules'); import helper\n"
+        "sys.exit('BROKEN' in open('cart.py').read())\n"
+    )
+    subprocess.run(["git", "add", "."], cwd=gate.project, check=True)
+    subprocess.run(["git", "commit", "-qm", "check with a dependency"], cwd=gate.project, check=True)
+    agent_repo.ensure_repo(gate.conn, "shop", str(gate.project))
+    agent_repo.set_test_command(gate.conn, "shop", f'"{sys.executable}" check_dep.py')
+
+    gate.user_prompt(_ev(gate, prompt="refactor the cart module"))
+    (gate.project / "cart.py").write_text(PRICE + "\nBROKEN = True\n")
+    answer = gate.stop(_ev(gate))
+    assert answer["decision"] == "block" and "tests fail" in answer["reason"]
+    # The borrowed dependencies are untouched by the cleanup.
+    assert (deps / "helper.py").read_text() == "OK = True\n"
+
+
+def test_unknown_baseline_counts_as_the_agents_failure(gate, monkeypatch):
+    monkeypatch.setattr(verify, "tests_passed_before", lambda root, base, command: None)
+    (gate.project / "check_broken.py").write_text("import sys; sys.exit('BROKEN' in open('cart.py').read())\n")
+    subprocess.run(["git", "add", "."], cwd=gate.project, check=True)
+    subprocess.run(["git", "commit", "-qm", "check"], cwd=gate.project, check=True)
+    agent_repo.ensure_repo(gate.conn, "shop", str(gate.project))
+    agent_repo.set_test_command(gate.conn, "shop", f'"{sys.executable}" check_broken.py')
+    gate.user_prompt(_ev(gate, prompt="refactor the cart module"))
+    (gate.project / "cart.py").write_text(PRICE + "\nBROKEN = True\n")
+    assert gate.stop(_ev(gate))["decision"] == "block"

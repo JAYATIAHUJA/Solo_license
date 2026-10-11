@@ -16,6 +16,7 @@ The result decides whether the turn's changes count as verified evidence.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import subprocess
@@ -146,23 +147,70 @@ def run_tests(root: str, command: str) -> tuple[bool, str]:
     return result.returncode == 0, tail
 
 
+# Installed dependencies are untracked, so a fresh worktree lacks them; the
+# baseline borrows the checkout's own copy instead of failing for want of it.
+DEPENDENCY_DIRS = ("node_modules", ".venv", "venv", "env", "vendor", ".tox")
+
+
+def _link_dir(target: Path, link: Path) -> bool:
+    """Link ``link`` to an existing directory: a symlink, or on Windows a
+    junction (no admin rights needed)."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return True
+    except OSError:
+        pass
+    if os.name == "nt":
+        try:
+            import _winapi
+
+            _winapi.CreateJunction(str(target), str(link))
+            return True
+        except OSError:
+            return False
+    return False
+
+
+def _unlink_dir(link: Path) -> None:
+    """Remove only the link, never what it points at."""
+    try:
+        if link.is_symlink():
+            link.unlink()
+        else:
+            os.rmdir(link)  # a junction: removes the link itself
+    except OSError:
+        pass
+
+
 def tests_passed_before(root: str, base_ref: str | None, command: str) -> bool | None:
-    """Run the tests on the pre-turn snapshot in a throwaway worktree.
-    ``None`` when the snapshot cannot be checked out."""
+    """Run the tests on the pre-turn snapshot in a throwaway worktree that
+    shares the checkout's installed dependencies. ``None`` (unknown) when the
+    snapshot or its dependencies cannot be set up; the caller then treats a
+    failure as the agent's, never the other way round."""
     import tempfile
 
     if not base_ref:
         return None
     with tempfile.TemporaryDirectory(prefix="solo-baseline-") as scratch:
-        tree = str(Path(scratch) / "tree")
-        added = _run(root, ["git", "worktree", "add", "--detach", tree, base_ref], timeout=60)
+        tree = Path(scratch) / "tree"
+        added = _run(root, ["git", "worktree", "add", "--detach", str(tree), base_ref], timeout=60)
         if added is None or added.returncode != 0:
             return None
+        links: list[Path] = []
         try:
-            passed, _ = run_tests(tree, command)
+            for name in DEPENDENCY_DIRS:
+                source, link = Path(root) / name, tree / name
+                if source.is_dir() and not link.exists():
+                    if not _link_dir(source, link):
+                        return None
+                    links.append(link)
+            passed, _ = run_tests(str(tree), command)
             return passed
         finally:
-            _run(root, ["git", "worktree", "remove", "--force", tree], timeout=60)
+            # Links first: removing the worktree must never reach into them.
+            for link in links:
+                _unlink_dir(link)
+            _run(root, ["git", "worktree", "remove", "--force", str(tree)], timeout=60)
 
 
 def check_turn(gate, turn: sqlite3.Row, decisions: list[sqlite3.Row]) -> tuple[bool, str, dict]:
