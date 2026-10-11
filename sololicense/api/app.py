@@ -532,7 +532,10 @@ def _licenses(context: AppContext) -> dict[str, LicenseState]:
 def _observability(context: AppContext) -> dict:
     cfg = context.config
     ledger = context.conn.execute(
-        "SELECT COUNT(*) AS n, SUM(git_sha IS NOT NULL) AS committed FROM license_events"
+        """SELECT (SELECT COUNT(*) FROM license_events WHERE task_class NOT LIKE '%@%')
+                  + (SELECT COUNT(*) FROM agent_events) AS n,
+                  (SELECT COUNT(git_sha) FROM license_events WHERE task_class NOT LIKE '%@%')
+                  + (SELECT COUNT(git_sha) FROM agent_events) AS committed"""
     ).fetchone()
     return {
         "neatlogs": {
@@ -580,11 +583,11 @@ def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -
         order = dict(row)
         order["remaining"] = orders_repo.remaining_balance(row)
         orders.append(order)
-    events = [
-        dict(e) for e in context.conn.execute(
-            "SELECT * FROM license_events ORDER BY id DESC LIMIT 60"
-        ).fetchall()
-    ]
+    events = [dict(e) for e in context.conn.execute(
+        "SELECT * FROM license_events WHERE task_class NOT LIKE '%@%' ORDER BY id DESC LIMIT 60")]
+    events += [{**dict(e), "id": f"agent-{e['id']}", "task_class": f"{e['action_class']}@{e['repo']}"}
+               for e in agent_repo.list_events(context.conn, limit=60)]
+    events = sorted(events, key=lambda e: e["created_at"], reverse=True)[:60]
     armed = {key: context.fault_injector.peek(key).value for key in TASK_CLASSES}
     active_policy = context.policy_service.active()
     return {
@@ -1493,6 +1496,7 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "licenses": licenses,
         "decisions": decisions,
         "turns": turns,
+        "events": [dict(r) for r in agent_repo.list_events(context.conn, repo, 60)],
         "counts": counts,
         "savings": savings,
         "agents": [dict(r) for r in agent_repo.agents_seen(context.conn)],

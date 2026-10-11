@@ -299,3 +299,24 @@ def test_the_claude_route_cannot_be_used_to_pose_as_another_agent(gate, harness,
                 json={"conversation_id": "k", "command": "npm test", "cwd": str(gate.project), "_prompt_only": True})
     row = conn.execute("SELECT agent, decided_by FROM agent_decisions ORDER BY id DESC LIMIT 1").fetchone()
     assert row["agent"] == "cursor" and row["decided_by"] == "agent-settings"
+
+
+def test_the_coding_dashboard_lists_license_events(gate, harness, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sololicense.api import app as app_module
+    from sololicense.db.database import init_db
+
+    conn = init_db(tmp_path / "events.db", check_same_thread=False)
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+                          jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+    agent_repo.ensure_repo(conn, "shop-api", str(gate.project))
+    threaded.restore("shop-api", "test-run", 1, actor_id="human:jayati", reason="reviewed")
+
+    class Ctx:
+        coding_gate = threaded
+
+    Ctx.conn = conn
+    monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
+    events = TestClient(app_module.app).get("/api/coding?repo=shop-api").json()["events"]
+    assert [(e["action_class"], e["kind"], e["to_level"]) for e in events] == [("test-run", "restore", 1)]
