@@ -45,3 +45,39 @@ Runners and Trails are enabled on the repository. Each pull request gets an **En
 | #8 Score autonomy policies on τ-bench retail | [trail 2](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/2) |
 | #9 Ticket agent with recovery, Stripe/CSV connectors, inbox and earned trust | [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) |
 | #10 Evidence pack: before/after recovery with paired neatlogs traces | [trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4) |
+
+## 4 · Entire Graph: what the recovery path touches
+
+`entire graph` (plugin v0.4.0) indexes the repository and answers structural questions before a
+change. Searching in plain words finds the recovery path first, with its covering tests:
+
+```bash
+entire graph search --repo . --query "recover a failed refund" --profile full
+```
+
+Top result: `RefundWorker._recover` (`sololicense/agent/worker.py:351`), then its caller
+`RefundWorker._run_refund`; suggested check:
+`python -m pytest tests/test_agent_loop.py -k test_quiet_failure_is_recovered_and_the_customer_still_gets_a_true_reply`
+(2 more covering tests: `test_worker_recovers_a_lost_stripe_refund`,
+`test_quiet_failure_is_caught_recovered_and_still_demotes`).
+
+```bash
+entire graph impact --repo . --symbol _recover
+```
+
+```
+Impact: RefundWorker._recover (sololicense/agent/worker.py:351) def=351 span=351-387 [method in RefundWorker]
+Blast radius: 3 callers (2 direct, 1 transitive), 2 callees, 2 type consumers, 1 data flow, 25 co-change files, 12 siblings.
+Callers (2 direct, 1 transitive; who breaks if behavior changes):
+- RefundWorker._run_refund (sololicense/agent/worker.py:223, def :137)
+- RefundWorker.run_refund (sololicense/agent/worker.py:118, def :96) [via RefundWorker._run_refund]
+Callees (2; what it depends on):
+- sololicense.services.verify
+- RefundWorker._read (sololicense/agent/worker.py:322)
+Type consumers: -> RefundRequest (sololicense/domain/models.py:35) [PARAM_TYPE, USES_TYPE]
+Co-change coupling: app/api.py (6 recent commits), db/schema.sql (4), db/database.py (4), …
+```
+
+The blast radius is small and every caller goes through `run_refund`, which is why recovery could
+be added — and switched off for the before/after benchmark with `worker.recovery_enabled` —
+without touching the API, the licence service or the connectors.
