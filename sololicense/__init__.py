@@ -1,14 +1,15 @@
-"""Solo License - an operations agent that earns unattended autonomy.
+"""Solo License - the control layer for coding agents: autonomy is earned per
+repo and action class from verified results, and taken back on failure.
 
 The package is layered so dependencies only point inward:
 
-    ui / scripts        (app, generate_evidence)
-        │
-    agent / services    (worker, planner, license_service, verification, ...)
-        │
-    observability       (neatlogs spans + detections)
-        │
-    domain / db         (pure license logic, SQLite persistence)
+    api / cli / scripts     (HTTP adapter, command line, demo)
+        |
+    coding / services       (the gate, hooks, policy, git ledger)
+        |
+    observability           (neatlogs spans)
+        |
+    domain / db             (trust math, SQLite persistence)
 
 `domain` has no third-party dependencies and is safe to unit-test in
 isolation. Nothing in `domain` imports from an outer layer.

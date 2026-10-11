@@ -25,7 +25,7 @@ class Span:
 
 @dataclass
 class Trace:
-    """One refund run's worth of spans, identified by ``trace_id``."""
+    """One gated run's worth of spans, identified by ``trace_id``."""
 
     trace_id: str
     client: NeatlogsClient

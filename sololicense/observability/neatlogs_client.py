@@ -8,11 +8,10 @@ still shipping real traces + detections when a key is present.
 
 Mapping (documented for judges)
 --------------------------------
-* A *trace* groups the spans of one refund run and carries a ``trace_id``.
-* A *span* is one step (plan / check-license / execute / verify) with
-  attributes such as before/after refunded amounts.
-* A *detection* is a tagged event on the trace with a severity; our custom
-  rules (state_mismatch, missing_verification, policy_breach) emit these.
+* A *trace* groups the spans of one gated agent turn and carries a ``trace_id``.
+* A *span* is one step (permission / tool result / turn check) with its
+  decision and evidence as attributes.
+* A *detection* is a tagged event on the trace with a severity.
 """
 
 from __future__ import annotations
@@ -42,7 +41,7 @@ class NeatlogsClient:
         if not self.enabled or self._sdk is None:
             return None
         try:  # pragma: no cover - requires live SDK + key
-            task_class = str((attributes or {}).get("task_class", "refund"))
+            task_class = str((attributes or {}).get("task_class", "agent"))
             extra = {"session_id": session_id} if session_id else {}
             context = self._sdk.trace(f"{task_class}.run", kind="WORKFLOW", **extra)
             root = context.__enter__()
@@ -184,16 +183,6 @@ def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | bool | int |
 
 _ACTIVE_SDK: Any = None
 _ACTIVE_KEY: str = ""
-
-
-def wrap_llm_client(client: Any) -> Any:
-    """Auto-trace an LLM client's calls when neatlogs is live; else unchanged."""
-    if _ACTIVE_SDK is None:
-        return client
-    try:  # pragma: no cover - requires live SDK + key
-        return _ACTIVE_SDK.wrap(client)
-    except Exception:
-        return client
 
 
 def init_neatlogs(config: Config) -> NeatlogsClient:

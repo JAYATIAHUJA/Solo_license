@@ -3,6 +3,12 @@
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
 
+-- Legacy: the payments agent's tables (orders, license_state, runs,
+-- policies, policy_rules, policy_impacts, execution_permits, detections,
+-- license_events, armed_faults, intakes, tickets) stay for one release so
+-- older databases keep opening. Only the startup migration in database.py
+-- touches them; the app reads settings, spans and the agent_* tables.
+
 -- The "real world" the agent acts on. orders.refunded_amount is the ONLY
 -- authority on whether a refund actually landed - the verifier reads it
 -- back after every execution rather than trusting the tool's response.
