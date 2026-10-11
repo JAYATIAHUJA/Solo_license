@@ -188,6 +188,15 @@ def test_unrelated_paths_outside_the_repo_are_not_denied(gate):
     ("cp ../secrets/.env /tmp/x", True),
     ("terraform apply infra/prod/main.tf", True),
     ("echo hi > .env", True),
+    ("echo hi>.env", True),                     # Trail #31: glued to a redirection
+    ("cat .env|less", True),
+    ("cat<.env", True),
+    ("(cat .env)", True),
+    ("true;cat .env", True),
+    ("x=$(cat .env)", True),
+    ("echo `cat .env`", True),
+    ("cat '.env'", True),
+    ("FILE=.env ./run.sh", True),
     ("cd deployment && npm test", False),       # contains 'env', not the file .env
     ("npm run env:check", False),
     ("ls environments/", False),

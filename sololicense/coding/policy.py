@@ -183,19 +183,45 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
     return ""
 
 
+_SHELL_PUNCTUATION = set("();<>|&")
+_WRAPPERS = "`'\"$(){}"
+
+
 def _command_paths(command: str) -> list[str]:
-    """Arguments of a shell command that could name a file: shell-split,
-    options and operators dropped, ``key=value`` / redirections unwrapped."""
+    """Arguments of a shell command that could name a file.
+
+    Split like a shell *including* its operators, so a path glued to one
+    (``echo hi>.env``, ``cat .env|less``, ``cat<.env``, ``(cat .env)``) is
+    still its own word; then strip quotes, backticks and ``$(`` wrappers and
+    unwrap ``key=value``. Options (``-x``) are not paths."""
     try:
-        words = shlex.split(command, posix=True)
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
     except ValueError:
         words = command.split()
     out = []
     for word in words:
-        word = word.lstrip("<>").split("=", 1)[-1] if not word.startswith("-") else ""
-        if word and word not in ("&&", "||", "|", ";", "&"):
-            out.append(word)
-    return out
+        # A word may still carry operators shlex kept inside it (e.g. after an
+        # unbalanced quote): split on them too.
+        for piece in _split_on(word, _SHELL_PUNCTUATION):
+            piece = piece.strip(_WRAPPERS)
+            if not piece or piece.startswith("-"):
+                continue
+            out.append(piece.split("=", 1)[-1] if "=" in piece and not piece.startswith(("./", "/", "..")) else piece)
+    return [w for w in out if w]
+
+
+def _split_on(word: str, chars: set[str]) -> list[str]:
+    parts, current = [], ""
+    for ch in word:
+        if ch in chars:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    parts.append(current)
+    return parts
 
 
 def _path_forms(path: str, root: str | Path) -> list[str]:
