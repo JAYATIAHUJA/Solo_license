@@ -9,7 +9,8 @@ Kinds:
 * ``tool-failed`` - an action that changes the repo failed (right after it ran);
 * ``turn-failed`` - the turn's checks failed at ``Stop``;
 * ``denied``      - repeated forbidden attempts in one turn;
-* ``flagged``     - a person marked the agent's last turn as wrong.
+* ``flagged``     - a person marked the agent's last turn as wrong;
+* ``repeat`` / ``same-failure`` / ``loop-stop`` / ``edit-thrash`` - loop guidance (:mod:`loops`).
 """
 
 from __future__ import annotations
@@ -82,6 +83,11 @@ def _classes(classes, demoted: bool = True) -> str:
     return f" {names} {'is' if len(classes) == 1 else 'are'} back to asking." if demoted else f" {names} still asks."
 
 
+def _ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def _checkpoint(checkpoint: str | None) -> str:
     return f" Entire checkpoint: `{entire.explain_command(checkpoint)}`." if checkpoint else ""
 
@@ -99,6 +105,26 @@ def compose(kind: str, *, action_class: str = "", command: str = "", reason: str
         text = (f"Solo License: `{command}` failed and {action_class} "
                 f"{'is back to asking' if demoted else 'still asks'}. {undo} and continue without it.")
         return Remediation(text, commands)
+
+    if kind == "repeat":
+        return Remediation(
+            f"Solo License: you have run `{command}` {attempts} times with nothing edited in between. "
+            "If it is not getting you closer, stop repeating it and try a different approach.")
+    if kind == "same-failure":
+        return Remediation(
+            f"Solo License: `{command}` keeps failing for the same reason: {reason}. Stop retrying it; "
+            "read the error and try something else, or ask the user.")
+    if kind == "loop-stop":
+        return Remediation(
+            f"Solo License: this is the {_ordinal(attempts)} time `{command}` runs with nothing edited in "
+            "between. Stopping here so a person can look: say what you were trying to do and ask the user "
+            "how to proceed.")
+    if kind == "edit-thrash":
+        listed = ", ".join(f"{path} ({n} times)" for path, n in files)
+        return Remediation(
+            f"Solo License: you edited the same file again and again this turn: {listed}. Step back: re-read "
+            "the file, decide the change once and make it in one edit, then check the file is what you "
+            "intend before finishing.")
 
     if kind == "denied":
         return Remediation(

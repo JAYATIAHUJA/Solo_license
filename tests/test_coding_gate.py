@@ -244,9 +244,12 @@ def test_actions_the_agents_own_settings_let_through_earn_nothing(gate):
     """Trail #26 finding: an agent whose hook fires on every call must not
     unlock L1 just because its own settings ran the command."""
     gate.user_prompt({"session_id": "cur", "cwd": str(gate.project), "prompt": "x", "_agent": "cursor"})
-    for _ in range(6):
+    for i in range(6):
         gate.permission(_cursor_shell(gate, "npm install left-pad"))
         gate.tool_result(_cursor_shell(gate, "npm install left-pad"), failed=False)
+        # An edit in between: repeated work, not a loop the loop guard would stop.
+        gate.tool_result({**_cursor_shell(gate, ""), "tool_name": "Edit", "tool_input": {"file_path": f"f{i}.py"}},
+                         failed=False)
     gate.stop({"session_id": "cur", "cwd": str(gate.project)})
     lic = _license(gate, "install-dep")
     assert lic["level"] == 0 and lic["successes"] == 0

@@ -370,3 +370,17 @@ CREATE TABLE IF NOT EXISTS agent_remediations (
     delivered_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_agent_remediations_session ON agent_remediations (session_id, delivered_at);
+
+-- Rolling per-session fingerprints of tool calls (loop detection). Repeat
+-- counters reset on every edit; 'edit:<turn>:<path>' rows count edits per file.
+CREATE TABLE IF NOT EXISTS agent_fingerprints (
+    session_id    TEXT NOT NULL,
+    fingerprint   TEXT NOT NULL,
+    count         INTEGER NOT NULL DEFAULT 0,
+    failures      INTEGER NOT NULL DEFAULT 0,    -- consecutive failures with the same error
+    last_outcome  TEXT,                          -- ok | failed
+    last_error    TEXT,
+    seq           INTEGER NOT NULL DEFAULT 0,    -- recency within the session window
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, fingerprint)
+);
