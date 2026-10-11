@@ -255,3 +255,34 @@ def test_trust_earned_through_a_person_is_shared_by_every_agent_in_the_repo(gate
         _approve_and_run(gate, "npm test")          # Claude Code: a person approved each one
     answer = gate.permission(_cursor_shell(gate, "npm test"))
     assert answer["hookSpecificOutput"]["decision"]["behavior"] == "allow"
+
+
+
+def test_the_claude_route_cannot_be_used_to_pose_as_another_agent(gate, harness, tmp_path, monkeypatch):
+    """Trail #26 finding: /api/hooks/{event} is Claude Code's alone; a caller
+    cannot pick the agent or the prompt-only flag through it."""
+    from fastapi.testclient import TestClient
+
+    from sololicense.api import app as app_module
+    from sololicense.db.database import init_db
+
+    conn = init_db(tmp_path / "route.db", check_same_thread=False)
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+                          jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+
+    class Ctx:
+        coding_gate = threaded
+
+    Ctx.conn = conn
+    monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
+    client = TestClient(app_module.app)
+    spoof = {**_bash(gate, "npm test"), "_agent": "cursor", "_prompt_only": False}
+    client.post("/api/hooks/permission?agent=cursor", json=spoof)
+    row = conn.execute("SELECT agent, decided_by FROM agent_decisions ORDER BY id DESC LIMIT 1").fetchone()
+    assert row["agent"] == "claude-code" and row["decided_by"] == "license"
+
+    # The agent route decides prompt-only from the agent itself, not the body.
+    client.post("/api/hooks/cursor/beforeShellExecution",
+                json={"conversation_id": "k", "command": "npm test", "cwd": str(gate.project), "_prompt_only": True})
+    row = conn.execute("SELECT agent, decided_by FROM agent_decisions ORDER BY id DESC LIMIT 1").fetchone()
+    assert row["agent"] == "cursor" and row["decided_by"] == "agent-settings"

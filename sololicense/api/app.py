@@ -1366,6 +1366,12 @@ _HOOK_EVENTS = {
 }
 
 
+def _client_fields(body: dict) -> dict:
+    """Drop gate-internal keys (``_agent``, ``_prompt_only``, ...) a caller
+    might send: who an event came from is decided by the route, never the body."""
+    return {k: v for k, v in body.items() if not str(k).startswith("_")}
+
+
 def _hook_secret(context: AppContext) -> str:
     """Shared secret for hook calls that do not come from this machine."""
     stored = settings_repo.get_all(context.conn).get("hook_secret_hint")
@@ -1390,7 +1396,6 @@ def coding_hook(
     event: str,
     request: Request,
     body: dict = Body(default_factory=dict),
-    agent: str = Query(default="claude-code", max_length=40, pattern=r"^[a-z0-9-]+$"),
     x_solo_hook_key: str | None = Header(default=None),
 ) -> dict:
     """One endpoint per Claude Code hook. The response is the hook's JSON
@@ -1406,7 +1411,10 @@ def coding_hook(
         gate = context.coding_gate
         if gate is None:
             return {}
-        body = {**body, "_agent": agent}
+        # This route is Claude Code's: its PermissionRequest fires only when a
+        # person would be asked. Every other agent uses /api/hooks/{agent}/...
+        # Server-set keys always replace anything the caller sent.
+        body = {**_client_fields(body), "_agent": "claude-code", "_prompt_only": True}
         if event == "user-prompt":
             return gate.user_prompt(body)
         if event == "permission":
@@ -1605,8 +1613,11 @@ def agent_hook(
             native = agents.Native()
         else:
             event, payload = translated
+            payload = _client_fields(payload)
             payload["_agent"] = spec.key
-            payload["_prompt_only"] = native_event == "PermissionRequest"
+            # Only a hook that fires when a person would be prompted can stand
+            # for that person's yes: Claude Code's and Codex's PermissionRequest.
+            payload["_prompt_only"] = native_event == "PermissionRequest" and spec.key in ("claude-code", "codex")
             if event == "user-prompt":
                 answer = gate.user_prompt(payload)
             elif event == "permission":
