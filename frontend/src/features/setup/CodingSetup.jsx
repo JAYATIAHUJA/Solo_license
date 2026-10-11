@@ -191,10 +191,6 @@ export function CodingSetup() {
           <p className="pl-small pl-muted">Also connected: {seen.filter((s) => s.agent !== agent).map((s) => s.agent).join(', ')}.</p>
         )}
       </Step>
-
-      <footer className="su-foot pl-small pl-muted">
-        Run a shop too? Solo License also runs a <Link className="app-link" to="/onboarding/payments">payments agent</Link> that earns the right to refund customers the same way.
-      </footer>
     </div>
   );
 }
