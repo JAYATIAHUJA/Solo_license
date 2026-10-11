@@ -162,5 +162,9 @@ def ensure_repo(conn: sqlite3.Connection, repo: str, path: str) -> sqlite3.Row:
     return conn.execute("SELECT * FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
 
 
+def set_last_tests(conn: sqlite3.Connection, repo: str, result: str) -> None:
+    conn.execute("UPDATE agent_repos SET last_tests = ? WHERE repo = ?", (result, repo))
+
+
 def set_test_command(conn: sqlite3.Connection, repo: str, command: str | None) -> None:
     conn.execute("UPDATE agent_repos SET test_command = ? WHERE repo = ?", (command or None, repo))

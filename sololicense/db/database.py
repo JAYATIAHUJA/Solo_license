@@ -66,6 +66,9 @@ _ADDED_COLUMNS = {
     "agent_decisions": (
         ("agent", "TEXT NOT NULL DEFAULT 'claude-code'"),
     ),
+    "agent_repos": (
+        ("last_tests", "TEXT"),                    # passed | failed at the last turn check
+    ),
 }
 
 
