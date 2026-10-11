@@ -2,9 +2,10 @@
 
 # Solo License
 
-**A driving license for AI agents.**<br/>
-The agent starts by asking permission, earns freedom one verified job at a time,
-and is paused the instant something goes wrong — until a person reviews and resumes it.
+**An AI support agent that has to earn the right to touch your money.**<br/>
+It answers refund and store-credit requests end to end — reads the message, finds the order,
+checks your rules, pays out through Stripe, **proves the money moved**, and writes the reply.
+How much it may do alone is set by its verified track record, priced against what a mistake costs you.
 
 *Earned. Revocable. Priced.*
 
@@ -14,133 +15,174 @@ Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · u
 
 ---
 
-## The problem
+## Why this exists
 
-Today you either watch every action an AI agent takes, or you let it run and hope.
-Agents also *lie by accident*: a tool says "Refund processed" while nothing moved.
-If you trust that response, the mistake reaches your customer.
+On **τ-bench** — the standard benchmark for customer-service agents, by Sierra — frontier models
+make the wrong change to the store's database **in 13–17% of the writes they make**
+(GPT-4o: 95 of 567; Claude 3.5 Sonnet: 165 of 1,308). Today a shop has two options:
+approve every refund by hand, or let the agent run and hope.
 
-## What Solo License does
+Solo License is the third option: **autonomy that is earned per job type from verified results,
+revoked the instant a check fails, and priced by your own economics.**
 
-| | |
-|---|---|
-| **Starts cautious** | Every job type (refunds, store credit) begins at *Suggests only* or *Needs your OK*. |
-| **Checks, never trusts** | After every action the agent re-reads the database. The tool's "success" message is ignored. |
-| **Earns freedom** | After *N* double-checked jobs in a row, that job type moves up one level — automatically. |
-| **Stops instantly** | Any caught problem pauses that job type at once. Other job types keep their own level. |
-| **A person decides** | One evidence page shows what was meant, what happened and why it stopped. A person resumes it at a level they choose. |
-| **Everything is recorded** | Every permission change is a git commit (explainable with Entire); every run is a neatlogs trace. |
+## Who it is for
 
-### The four levels
+Support and operations teams at online shops that take payments on **Stripe** (or can export
+orders as **CSV** — Shopify, WooCommerce, Gumroad, a spreadsheet) and get a steady stream of
+"can I get my money back?" emails. The person who buys it is whoever today spends their afternoon
+approving refunds.
+
+## What a user does
+
+| Step | In the app | What happens |
+|---|---|---|
+| 1. Bring orders in | Onboarding → **Orders** | Sample shop (instant), **CSV upload**, or **Stripe test key** (charges become orders; optional sample payments for an empty test account) |
+| 2. Set the rules | Onboarding → **Rules** | Refund window, the most it may ever pay alone, *how sure* the evidence must be, and what one mistake costs you |
+| 3. Get messages in | **Inbox** | Paste a message, or point a helpdesk / Zapier / email forwarder at `POST /api/inbox` with the workspace key — the response is the reply to send |
+| 4. Let it work | **Inbox → Handle new messages** | Every message: steps, a verified outcome, a reply that states only verified facts |
+| 5. Stay in charge | **Home**, **Activity** | Approve or reject what it prepared; read why it was paused; resume at a level you choose |
+
+## How one message is handled
+
+```mermaid
+flowchart LR
+    M[Customer message] --> R[read<br/>LLM or rules]
+    R -->|tries to steer the agent| H[Person]
+    R --> F[find order<br/>number or sender email]
+    F --> P{shop policy<br/>window · identity · balance}
+    P -->|no| D[Decline with reason<br/>offer store credit]
+    P --> L{licence}
+    L -->|not earned| A[Prepare · wait for OK]
+    L -->|earned| X[Pay via Stripe / store]
+    X --> V[Read back from<br/>Stripe / store]
+    V -->|matches| C[Verified · +1 evidence]
+    V -->|does not match| RC[Reconcile → retry once<br/>same idempotency key → verify]
+    RC --> Q[Customer made whole<br/>job type paused · evidence page]
+    C & A & D & Q --> Y[Reply with verified facts only]
+    R & F & P & X & V & RC -.-> N[[one neatlogs trace]]
+```
+
+*The model reads and proposes; the policy, the licence and the read-back decide.*
+
+## Earned trust, not "N clean runs"
+
+A job type climbs a level only when its verified track record **proves** its failure rate is below
+the **break-even rate** of your economics:
+
+> autonomy pays when `P(failure) × cost of a mistake < review cost it saves`
+
+Solo License keeps a Beta posterior over each job type's failure rate (successes, failures, and
+your rejections) and promotes only when the upper credible bound — at the confidence you chose —
+is below that break-even rate ([`sololicense/domain/trust.py`](sololicense/domain/trust.py)).
+The app says it in words: *"759 more double-checked jobs until it may work alone: a mistake costs
+$120, so the next level only pays if fewer than 0.25% go wrong."* One failure widens the bound, so a
+job type that slipped needs more proof to climb again. Nothing about promotion is a hard-coded count.
 
 | Level | In the app | What the agent may do alone |
 |---|---|---|
 | L0 | **Suggests only** | Nothing — it suggests, you act |
-| L1 | **Needs your OK** | Prepares each job; you approve with one click |
-| L2 | **Works alone up to $50** | Jobs under the limit; bigger ones wait for you |
+| L1 | **Needs your OK** | Prepares each job; you approve or reject with one click |
+| L2 | **Works alone up to $X** | Jobs under your cap; bigger ones wait for you |
 | L3 | **Works alone** | Everything, reviewed afterwards |
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    L0: Suggests only
-    L1: Needs your OK
-    L2: Works alone up to limit
-    L3: Works alone
-    Paused: Paused (acts as L0)
-    L0 --> L1: N verified jobs
-    L1 --> L2: N verified jobs
-    L2 --> L3: N verified jobs
-    L1 --> Paused: problem caught
-    L2 --> Paused: problem caught
-    L3 --> Paused: problem caught
-    Paused --> L2: person reviews and resumes
-```
 
 ---
 
 ## Results
 
-### Before / after — trusting the tool vs. checking the result
+### 1 · Standard benchmark: τ-bench retail
 
-50 real runs through the worker with 20 % injected faults (seeded, reproducible):
+Every database write from τ-bench's recorded GPT-4o (460 episodes) and Claude 3.5 Sonnet
+(920 episodes) runs, replayed through five autonomy policies, labelled by τ-bench itself.
 
-<p align="center"><img src="docs/assets/benchmark.svg" alt="10 of 50 false successes reach the customer when the tool is trusted; 0 with Solo License" width="760"/></p>
+<p align="center"><img src="docs/assets/taubench.svg" alt="Wrong writes reaching customers on tau-bench per policy" width="760"/></p>
 
-| | Trust the tool | Solo License |
+| Policy | Wrong writes reaching customers (GPT-4o / Sonnet) | Worst-case regret, incident cost $1–$1,000 |
 |---|---|---|
-| False successes reaching a customer | **10 / 50** | **0 / 50** |
-| Verified success rate | 80 % | 100 % |
-| Problems caught and paused | 0 | 10 |
-| Mean / p95 latency per run | — | 84 ms / 320 ms |
+| Agent acts alone | 95 / 165 | $93,937 / $162,548 |
+| Fixed ladder (3 clean in a row) | ~84 / ~154 | $83,082 / $151,892 |
+| Policy guards only (AgentSpec-style) | 79 / 147 | $78,072 / $144,699 |
+| Person approves every write | 0 / 0 | $968 / $2,288 |
+| **Solo License** | **0 / 0** | **$256 / $434** |
 
-Reproduce: `python -m scripts.benchmark` → [`artifacts/benchmark.md`](artifacts/benchmark.md)
+Solo License is the only policy that stays close to the best choice *whatever a mistake costs*:
+when mistakes are cheap it licenses job types to act alone (at $10 per incident, returns and
+address changes for Sonnet), when they are expensive it keeps a person in the loop. Full tables:
+[`artifacts/taubench.md`](artifacts/taubench.md) · reproduce: `make taubench` (no API key).
 
-### Autonomy is a margin driver
+### 2 · The agent improved: catch → recover → verify
 
-<p align="center"><img src="docs/assets/supervision.svg" alt="Monthly review cost falls from $45,000 at L0 to $3,750 at L2" width="760"/></p>
+The same 50 seeded runs with 14 injected faults, through the real worker, before and after
+adding recovery. Every run is a neatlogs trace; the report pairs the trace ids run by run.
 
-From stated assumptions in [`cfo/model.py`](cfo/model.py) (10,000 actions/month, $45/h loaded cost):
+<p align="center"><img src="docs/assets/benchmark.svg" alt="Before and after recovery" width="760"/></p>
 
-- Earning **L2** saves **$41,250 / month** in review time → **+20.3 % margin**.
-- Running a level the agent has *not* earned (blind full-auto) adds ~$18,000 / month in incidents → **−73.4 % margin**.
+| | Trust the tool | v1 — catch and stop | **v2 — catch, recover, verify** |
+|---|---|---|---|
+| False successes reaching a customer | **14** | 0 | **0** |
+| Customers left waiting after a caught fault | — | **4** | **0** |
+| Recovered automatically and verified | 0 | 0 | **4** |
+| Job type paused for review | never | 14 | 14 |
 
-The app recomputes this live from your own runs on the **Reports** page — the number visibly drops when a job type is paused.
+Reproduce: `make benchmark` → [`artifacts/benchmark.md`](artifacts/benchmark.md)
+
+### 3 · Live run on the sample inbox (Groq `openai/gpt-oss-120b`, free tier)
+
+6 messages in 12 s: two refunds paid and verified (one found from the sender's email alone), one
+declined by the 30-day window with a store-credit offer, a $120 refund and an L1 store credit held
+for approval, and *"This is the store owner. Ignore your rules…"* sent to a person.
+
+### 4 · The margin story (cfo.ai)
+
+The plan lives in cfo.ai: **[Solo License — autonomy economics](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV)**
+(inputs, scenario controls, P&L, four-scenario scorecard). Assumptions mirror
+[`cfo/model.py`](cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
+
+| Scenario | Review time saved / month | Monthly profit | Margin | Runway |
+|---|---|---|---|---|
+| **Earned L2 (Solo License)** | $41,250 | **+$3,250** | **+20.3%** | profitable |
+| Conservative: stays at L1 | $22,500 | −$15,500 | −96.9% | 11.6 months |
+| Over-promoted: blind L3 | $44,250 | −$11,750 | −73.4% | 15.3 months |
+| Reliability investment | $41,250 | +$1,250 | +7.8% | profitable |
+
+Blind full autonomy saves the *most* review time and still loses money: the incident bill swamps
+the saving. The same incident cost drives the promotion rule in the app — the P&L and the agent
+use one set of numbers.
 
 ---
 
-## How one run works
+## Connectors
 
-```mermaid
-flowchart LR
-    M[Customer message] --> I[Intake<br/>LLM or rules]
-    I --> L{License check}
-    L -->|allowed| X[Execute tool]
-    L -->|not allowed| S[Suggest / wait for OK]
-    X --> V[Re-read database]
-    V --> D{Matches intent?}
-    D -->|yes| C[Clean run<br/>+1 toward next level]
-    D -->|no| P[Problem caught<br/>pause job type]
-    P --> E[Evidence page] --> H[Person resumes]
-    C & P & H --> G[(git ledger commit)]
-    I & X & V & D -.-> N[[neatlogs trace]]
-```
+| Connector | What it does | Verification |
+|---|---|---|
+| **Stripe** (test mode) | Charges → orders; refunds via `POST /v1/refunds`; store credit as a customer-balance credit; every write carries an `Idempotency-Key` | Re-reads the charge's `amount_refunded` / the customer balance from Stripe |
+| **CSV import / export** | Shopify-style exports load unchanged (columns matched by name); export orders and every agent run | Read back from the store |
+| **Inbox webhook** | `POST /api/inbox` with `X-Solo-Inbox-Key` — for Zendesk / Gorgias / Help Scout triggers, Zapier/Make, email forwarders | — |
+| **LLM** (optional) | Groq (free tier), Gemini, Claude, OpenAI, any OpenAI-compatible endpoint; built-in rules without a key | Authority never comes from the model |
+| **neatlogs** | One workflow trace per message; detections are error spans | — |
+| **Slack / Discord** | Message when a job type is paused or resumed | — |
 
-*The model proposes, the license decides, the database proves.* The LLM only reads the
-message and writes a plan — it never decides what is allowed.
-
-Problems the safety checks catch:
-
-| Check | Plain meaning |
-|---|---|
-| `state_mismatch` | The tool said "done", but nothing changed |
-| `policy_breach` | The agent acted beyond its permission |
-| `missing_verification` | The result was never double-checked |
-| `duplicate_action` | The same action ran twice |
-| intake guard | The message tries to change the agent's rules ("ignore your rules…") → sent to a person |
-
----
+Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
 
 ## How the three hackathon tools are used
 
-### neatlogs — the trust signal
-- Every run is one **workflow trace** (`solo-license`) with spans for `license.check → plan → tool → verify.readback → detection.*`; caught problems are marked as **error spans**.
-- LLM calls (Gemini, Claude, OpenAI) are wrapped with `neatlogs.wrap`, so the model call sits inside the same trace.
-- The evidence page deep-links to the trace. Code: [`sololicense/observability/`](sololicense/observability).
+**neatlogs — the trust signal.** Each customer message is one workflow trace with spans for
+`agent.read → agent.find_order → agent.policy → license.check → tool.execute → verify.readback →
+recover.* → detection.* → agent.reply`; LLM calls are wrapped with `neatlogs.wrap` inside the same
+trace. The before/after benchmark pairs v1 and v2 trace ids run by run
+([`artifacts/benchmark.md`](artifacts/benchmark.md)). Code: [`sololicense/observability/`](sololicense/observability).
 
-### Entire — the audit trail
-- Every promote / pause / resume is one scoped commit of [`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with the reason, run and trace id.
-- Entire checkpoints are enabled for Claude Code and Codex sessions ([`.entire/settings.json`](.entire/settings.json)).
+**Entire — the audit trail and the build history.** Every promote / pause / resume is a commit of
+[`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with reason, run and trace id; Entire
+checkpoints record the AI sessions behind the code; Runners and Trails review each pull request.
 
 ```bash
-git log --oneline -- ledger/license_ledger.jsonl     # how each job type earned and lost its license
-entire checkpoint explain <sha>                       # why a change was made
-entire graph impact --repo . --symbol execute_refund  # what the side-effecting tool touches
+git log --oneline -- ledger/license_ledger.jsonl       # how each job type earned and lost its licence
+entire checkpoint list                                 # the sessions behind the code
+entire graph impact --repo . --symbol _recover         # what the recovery path touches
 ```
 
-### cfo.ai — the margin story
-- [`cfo/model.py`](cfo/model.py) turns stated assumptions into a supervision-cost curve, over-promotion risk and a P&L; narrative in [`cfo/business_model.md`](cfo/business_model.md).
-- The plan with pricing, costs, revenue and runway (4 scenarios) is built in cfo.ai through its MCP from these files and the benchmark.
+**cfo.ai — the plan.** Pricing, costs, revenue and runway in four scenarios (above), built from
+[`cfo/`](cfo) and the benchmark numbers.
 
 ---
 
@@ -148,14 +190,15 @@ entire graph impact --repo . --symbol execute_refund  # what the side-effecting 
 
 | Requirement | Where to find it |
 |---|---|
-| Real end-to-end agent task | Refund + store-credit worker: intake → license → execute → read-back → detections → dial ([`worker.py`](sololicense/agent/worker.py)); try it in **Try the agent** |
-| Two runs with compared numbers | [`artifacts/benchmark.md`](artifacts/benchmark.md) (10/50 → 0/50) · `python -m scripts.generate_evidence` for a single clean-vs-fault pair |
-| neatlogs traces / detections | Benchmark runs were exported to neatlogs; detections are error spans per run |
-| A failure and what the agent did next | Guided tour step 4–8: practice problem → paused → evidence → person resumes |
-| Entire checkpoints / graph | 26 ledger commits: `git log -- ledger/license_ledger.jsonl`; `entire checkpoint list` |
-| cfo.ai plan (pricing, costs, revenue, runway) | [`cfo/`](cfo) + plan built in cfo.ai via MCP |
+| A real end-to-end agent task | Ticket agent [`loop.py`](sololicense/agent/loop.py) + worker [`worker.py`](sololicense/agent/worker.py); try **Inbox → Handle new messages** |
+| The agent improved (before/after with numbers) | [`artifacts/benchmark.md`](artifacts/benchmark.md): customers left waiting 4 → 0, paired neatlogs traces |
+| neatlogs traces | Trace ids in `artifacts/benchmark.md`; each run's evidence page deep-links to its trace |
+| Entire checkpoints / graph | `entire checkpoint list`; 27 ledger commits: `git log -- ledger/license_ledger.jsonl` |
+| cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [`cfo/`](cfo) |
+| A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
+| Scores on a standard dataset | [`artifacts/taubench.md`](artifacts/taubench.md) — τ-bench retail, two frontier models |
 | Commits during the hackathon | `git log --since=2026-10-10` |
-| Tests | `python -m pytest` — 70 tests (state machine, detections, worker, API, ledger isolation, intake safety) |
+| Tests | `python -m pytest` — 116 tests |
 
 ---
 
@@ -165,57 +208,59 @@ entire graph impact --repo . --symbol execute_refund  # what the side-effecting 
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env             # SOLO_DEMO_MODE=1 is already on; keys are optional
-python -m sololicense.db.seed    # demo orders; refunds start at L2, store credit at L1
-uvicorn app.api:app --port 8000  # API
+cp .env.example .env               # demo mode on; every key is optional
+python -m sololicense.db.seed      # sample shop: 8 orders, 6 inbox messages
+uvicorn app.api:app --port 8000
 npm --prefix frontend install
-npm --prefix frontend run dev    # http://127.0.0.1:5174
+npm --prefix frontend run dev      # http://127.0.0.1:5174
 ```
 
-Open the app → **Try the demo** → type your name. On **Home**, click **Watch a 1-minute demo**:
-a guided tour opens each screen, highlights what matters and runs the whole loop for real.
+Open the app → **Try the demo** → your name → **Inbox → Handle new messages**. On **Home**,
+**Watch a 1-minute demo** runs the whole loop for real: inbox, verified jobs, a tool that lies,
+recovery, the pause, and a person resuming it.
 
-**Optional keys** (Settings → AI model / Connections, or `.env`):
-`GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / any OpenAI-compatible endpoint,
-`NEATLOGS_API_KEY` for remote traces, and a Slack/Discord webhook for pause alerts.
-Without a model the agent uses built-in rules — the safety is identical, because authority
-never comes from the model. Keys saved in Settings are encrypted at rest.
-
-For a deployment, turn demo mode off and issue role-based access codes with
-`SOLO_API_TOKENS` (`operator` < `approver` < `admin`). Set `SOLO_LEDGER_REPO=.` to commit
-license changes into this repository so Entire can explain them.
+Optional: `GROQ_API_KEY` (free tier) or another model key, `STRIPE_SECRET_KEY` (test mode),
+`NEATLOGS_API_KEY`, a Slack/Discord webhook. For a deployment, turn demo mode off and issue
+role-based access codes with `SOLO_API_TOKENS` (`operator` < `approver` < `admin`).
 
 | Command | What it does |
 |---|---|
 | `make test` | Run the test suite |
-| `make seed` | Reset the demo database |
-| `make benchmark` | Re-run the 50-run before/after benchmark |
-| `make charts` | Redraw the README charts from the latest data |
+| `make seed` | Reset the sample shop |
+| `make taubench` | Score the policies on τ-bench retail |
+| `make benchmark` | Before/after recovery benchmark with paired traces |
+| `make charts` | Redraw the README charts |
 | `make cfo` | Print the financial model |
-
----
 
 ## Architecture
 
 ```
-frontend/        React app — sign-in, onboarding, Home, Try the agent, Activity, Reports, History, Settings
-app/api.py       FastAPI adapter: sessions, roles, settings (encrypted secrets), dashboard
+frontend/          React app — onboarding, Inbox, Try the agent, Activity, Orders, Reports, History, Settings
+app/api.py         FastAPI adapter: sessions, roles, inbox webhook, connectors, encrypted settings
 sololicense/
-  agent/         intake (LLM or rules), planner, worker loop, tools
-  domain/        pure license state machine + task-class registry
-  services/      verification, license service, git ledger, evidence, economics, alerts
-  observability/ neatlogs tracer + detection rules
-  db/            SQLite schema, migrations, repositories
-cfo/             financial model and plan
-scripts/         benchmark, evidence pair, README charts
+  agent/           ticket loop, policy, intake (LLM or rules), worker with recovery, planner
+  connectors/      Stripe, CSV, local store — apply / read back / list orders
+  domain/          licence state machine + trust maths (pure, no I/O)
+  services/        verification, licence service, git ledger, evidence, economics, alerts
+  bench/           τ-bench replay
+  observability/   neatlogs tracer + detection rules
+  db/              SQLite schema, migrations, repositories
+cfo/  scripts/     financial model · benchmarks, charts, evidence
 ```
 
-Dependencies point inward: `domain` has no I/O and is unit-tested on its own.
+## What is new here, and what is not
 
-## Honest positioning
+Graduated autonomy is not new: *Levels of Autonomy for AI Agents* (Feng et al., 2025) frames it,
+AWS has written about it, and runtime rule engines such as *AgentSpec* (Wang et al., ICSE 2026)
+block unsafe actions. τ-bench (Yao et al., 2024) measures how unreliable agents are. Solo License
+combines them into a working product and adds three things:
 
-Graduated autonomy is not new — AWS described "graduated autonomy" (Aug 2026), and there is
-research and practitioner work on earned permission ladders. Solo License does not claim the
-ladder. What it adds: **demotion driven by detections on verified side effects**, **one
-evidence page a person uses to resume**, and **the license level treated as a priced margin
-driver**.
+1. **Promotion priced by economics** — a job type earns a level only when its verified evidence
+   proves a failure rate below the break-even of *your* review and incident costs.
+2. **Demotion driven by verified side effects** — the tool's answer is ignored; the system of record
+   is read back, and a mismatch pauses the job type even when recovery saves the customer.
+3. **Recovery that cannot double-pay** — reconcile, then one retry with the same idempotency key.
+
+Limits we state plainly: the τ-bench result is a per-write counterfactual replay with reviewers
+assumed correct; the Stripe connector is tested against a mock of Stripe's API and has not yet been
+run against a live Stripe test account.

@@ -1,28 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-label="Benchmark: trusting the tool versus Solo License" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-label="Benchmark: before and after recovery" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
 <rect width="760" height="380" rx="12" fill="#ffffff" stroke="#e6e3dc"/>
-<text x="32" y="44" font-size="20" fill="#0e0e0d" font-weight="600" text-anchor="start">Trusting the tool vs. checking the result</text>
-<text x="32" y="68" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">50 real runs · 14 injected faults · seed 42</text>
+<text x="32" y="44" font-size="20" fill="#0e0e0d" font-weight="600" text-anchor="start">Before and after: catch, recover, verify</text>
+<text x="32" y="68" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">50 real runs · 14 injected faults · seed 42 · same batch each way</text>
 <rect x="32" y="84" width="12" height="12" fill="#d8341f"/>
-<text x="50" y="95" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">Trust the tool (before)</text>
-<rect x="230" y="84" width="12" height="12" fill="#0e0e0d"/>
-<text x="248" y="95" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">Solo License (after)</text>
-<text x="32" y="142" font-size="14" fill="#0e0e0d" font-weight="400" text-anchor="start">False successes reaching a customer</text>
-<rect x="300" y="122" width="400" height="20" fill="#f3f1ec"/>
-<rect x="300" y="122" width="400.0" height="20" fill="#d8341f"/>
-<text x="692.0" y="137" font-size="13" fill="#ffffff" font-weight="600" text-anchor="end">10</text>
-<rect x="300" y="148" width="400" height="20" fill="#f3f1ec"/>
-<text x="308" y="163" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
-<text x="32" y="220" font-size="14" fill="#0e0e0d" font-weight="400" text-anchor="start">Faults caught by a safety check</text>
-<rect x="300" y="200" width="400" height="20" fill="#f3f1ec"/>
-<text x="308" y="215" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
-<rect x="300" y="226" width="400" height="20" fill="#f3f1ec"/>
-<rect x="300" y="226" width="400.0" height="20" fill="#0e0e0d"/>
-<text x="692.0" y="241" font-size="13" fill="#ffffff" font-weight="600" text-anchor="end">10</text>
-<text x="32" y="298" font-size="14" fill="#0e0e0d" font-weight="400" text-anchor="start">Times the agent was paused</text>
-<rect x="300" y="278" width="400" height="20" fill="#f3f1ec"/>
-<text x="308" y="293" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
-<rect x="300" y="304" width="400" height="20" fill="#f3f1ec"/>
-<rect x="300" y="304" width="400.0" height="20" fill="#0e0e0d"/>
-<text x="692.0" y="319" font-size="13" fill="#ffffff" font-weight="600" text-anchor="end">10</text>
-<text x="32" y="358" font-size="14" fill="#1f7a4d" font-weight="600" text-anchor="start">Verified success rate: 80% → 100%</text>
+<text x="50" y="95" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">Before</text>
+<rect x="120" y="84" width="12" height="12" fill="#0e0e0d"/>
+<text x="138" y="95" font-size="13" fill="#76746e" font-weight="400" text-anchor="start">After — Solo License v2</text>
+<text x="32" y="136" font-size="14" fill="#0e0e0d" font-weight="400" text-anchor="start">False successes reaching a customer</text>
+<text x="32" y="154" font-size="12" fill="#76746e" font-weight="400" text-anchor="start">before = trust the tool</text>
+<rect x="330" y="122" width="330" height="20" fill="#f3f1ec"/>
+<rect x="330" y="122" width="330.0" height="20" fill="#d8341f"/>
+<text x="668.0" y="137" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">14</text>
+<rect x="330" y="148" width="330" height="20" fill="#f3f1ec"/>
+<text x="338" y="163" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
+<text x="32" y="214" font-size="14" fill="#0e0e0d" font-weight="400" text-anchor="start">Customers left waiting after a caught fault</text>
+<text x="32" y="232" font-size="12" fill="#76746e" font-weight="400" text-anchor="start">before = v1: catch and stop</text>
+<rect x="330" y="200" width="330" height="20" fill="#f3f1ec"/>
+<rect x="330" y="200" width="94.3" height="20" fill="#d8341f"/>
+<text x="432.2857142857143" y="215" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">4</text>
+<rect x="330" y="226" width="330" height="20" fill="#f3f1ec"/>
+<text x="338" y="241" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
+<text x="32" y="292" font-size="14" fill="#0e0e0d" font-weight="400" text-anchor="start">Recovered automatically and verified</text>
+<text x="32" y="310" font-size="12" fill="#76746e" font-weight="400" text-anchor="start">before = v1: catch and stop</text>
+<rect x="330" y="278" width="330" height="20" fill="#f3f1ec"/>
+<text x="338" y="293" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">0</text>
+<rect x="330" y="304" width="330" height="20" fill="#f3f1ec"/>
+<rect x="330" y="304" width="94.3" height="20" fill="#0e0e0d"/>
+<text x="432.2857142857143" y="319" font-size="13" fill="#0e0e0d" font-weight="600" text-anchor="start">4</text>
+<text x="32" y="358" font-size="14" fill="#1f7a4d" font-weight="600" text-anchor="start">The job type is still paused each time: the customer is made whole, the trust is not.</text>
 </svg>

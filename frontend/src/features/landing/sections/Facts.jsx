@@ -3,9 +3,9 @@ import { animate, useInView } from 'motion/react';
 import { SectionHead } from '../Reveal.jsx';
 
 const FACTS = [
-  { n: 4, label: 'Rungs of autonomy, per task class' },
-  { n: 3, label: 'Detection rules that can demote' },
-  { n: 1, label: 'Evidence packet to restore' },
+  { n: 17, label: '% of GPT-4o database writes on τ-bench that were wrong' },
+  { n: 0, label: 'Wrong writes Solo License let through on τ-bench' },
+  { n: 4, label: 'Customers left waiting before recovery — now 0' },
   { n: 0, label: 'Tool responses taken on trust' },
 ];
 

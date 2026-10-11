@@ -9,9 +9,9 @@ import { AskBar } from './AskBar.jsx';
 import { Magnetic } from '../../../components/fx/Magnetic.jsx';
 
 const META = [
-  ['For', 'Ops teams putting AI agents near money'],
-  ['Proves', 'Every side effect, read back from the database'],
-  ['Records', 'Every promotion and demotion as a git commit'],
+  ['For', 'Support teams refunding on Stripe or Shopify'],
+  ['Proves', 'Every refund, read back from Stripe before it counts'],
+  ['Earns', 'More freedom only when the evidence beats your break-even'],
 ];
 
 export function Hero() {
@@ -36,8 +36,8 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.8 }}
           >
-            Solo License is a refund agent that climbs from <b>suggest-only</b> to <b>full auto</b> one
-            verified run at a time — and drops to zero the instant something looks wrong.
+            An AI agent that answers refund emails end to end — and has to <b>earn</b> the right to
+            pay out alone. Every refund is checked in Stripe; one bad result drops it to zero.
           </motion.p>
           <motion.div className="lp-hero-cta" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.8 }}>
             <AskBar />

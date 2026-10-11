@@ -89,6 +89,9 @@ class RefundWorker:
         self._faults = fault_injector
         self._planner = planner
         self._connectors = connectors or Connectors(conn, config)
+        # Off reproduces v1 behaviour (catch and stop, no retry); used by the
+        # before/after benchmark so the improvement is measured, not claimed.
+        self.recovery_enabled = True
 
     def run_refund(
         self,
@@ -215,7 +218,8 @@ class RefundWorker:
 
         result, recovered = first, False
         authorised_execution = authorized in _EXECUTING
-        if will_execute and error is None and authorised_execution and not (first.verified and first.matched):
+        if (self.recovery_enabled and will_execute and error is None and authorised_execution
+                and not (first.verified and first.matched)):
             result, recovered = self._recover(
                 trace, connector, request, order, task_class, column, key, before, intended_delta,
             )
