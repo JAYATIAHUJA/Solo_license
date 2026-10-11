@@ -5,6 +5,7 @@ import { StoreProvider, useStore } from './lib/store.jsx';
 import { Access } from './features/access/Access.jsx';
 import { LandingPage } from './features/landing/LandingPage.jsx';
 import { Onboarding } from './features/onboarding/Onboarding.jsx';
+import { CodingSetup } from './features/setup/CodingSetup.jsx';
 import { AppShell } from './features/app/AppShell.jsx';
 import { Overview } from './features/app/pages/Overview.jsx';
 import { Coding } from './features/app/pages/Coding.jsx';
@@ -43,7 +44,9 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing" element={<Navigate to="/" replace />} />
         <Route path="/access" element={<Access />} />
-        <Route path="/onboarding" element={guarded(<Onboarding />)} />
+        <Route path="/onboarding" element={guarded(<CodingSetup />)} />
+        <Route path="/onboarding/payments" element={guarded(<Onboarding />)} />
+        <Route path="/setup" element={<Navigate to="/onboarding" replace />} />
         <Route path="/app" element={guarded(<AppShell />)}>
           <Route index element={<Coding />} />
           <Route path="payments" element={<Overview />} />
