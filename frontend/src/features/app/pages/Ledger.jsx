@@ -21,13 +21,13 @@ function CopyCmd({ cmd }) {
 }
 
 /** One permission change as a sentence a shop owner can read. */
-function sentence(data, e, threshold) {
+function sentence(data, e) {
   const key = e.task_class || 'refund';
   const jobs = jobsName(data, key);
   const to = levelWords(data, key, e.to_level).short;
   if (e.kind === 'promote') {
-    const n = Number(/^(\d+)/.exec(e.reason || '')?.[1]) || threshold;
-    return <>{jobs} earned <b>‘{to}’</b> after {n} correct job{n === 1 ? '' : 's'}</>;
+    const n = Number(/^(\d+)/.exec(e.reason || '')?.[1]);
+    return <>{jobs} earned <b>‘{to}’</b>{n ? <> with {n} double-checked jobs on record</> : ''}</>;
   }
   if (e.kind === 'demote') {
     const p = problemFromReason(e.reason);
@@ -52,7 +52,6 @@ export function Ledger() {
   const classes = (data.task_classes || []).map((c) => c.key);
   const events = data.events.filter((e) => cls === 'all' || (e.task_class || 'refund') === cls);
   const repo = data.observability?.ledger?.repo;
-  const threshold = data.config?.promotion_clean_runs || 3;
 
   return (
     <div className="pl-page">
@@ -78,7 +77,7 @@ export function Ledger() {
             const date = toDate(e.created_at);
             return (
               <li key={e.id} className="hist-row">
-                <b>{sentence(data, e, threshold)}</b>
+                <b>{sentence(data, e)}</b>
                 <small>
                   <span title={date ? date.toLocaleString() : undefined}>{when(e.created_at)}</span>
                   {who && e.kind !== 'restore' ? ` · during a job by ${who}` : ''}

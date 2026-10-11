@@ -4,7 +4,8 @@ import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { ModelFields, modelReady, providerLabel } from '../components/ModelFields.jsx';
 import {
-  AlertFields, CEILING_FIELD, ECON_FIELDS, NeatlogsFields, formFromSettings, validWebhook,
+  AlertFields, CEILING_FIELD, ECON_FIELDS, InboxFields, NeatlogsFields, StripeFields, TrustFields,
+  formFromSettings, validWebhook,
 } from '../components/IntegrationFields.jsx';
 import { levelCopy } from '../../../lib/copy.js';
 import { jobsName, limitVerb, shortMoney } from '../components/words.js';
@@ -104,13 +105,9 @@ function SettingsForm({ data }) {
           <ModelFields providers={providers} values={form} onChange={set} settings={s} />
         </Section>
 
-        <Section title="Rules" sub="When the agent earns more freedom, and how much it may hand out on its own.">
+        <Section title="Rules" sub="When the agent earns more freedom, and how much it may hand out on its own. Freedom comes from double-checked results, weighed against what a mistake costs you.">
           <div className="st-stack">
-            <label className="field">
-              <span>How many correct jobs before the agent gets more freedom</span>
-              <input className="input st-num" type="number" min={1} max={20} value={form.promotion_clean_runs} onChange={(e) => set({ promotion_clean_runs: e.target.value })} />
-              <small>In a row, double-checked, for each job type separately.</small>
-            </label>
+            <TrustFields values={form} onChange={set} />
             {taskClasses.map((tc) => {
               const field = CEILING_FIELD[tc.key];
               if (!field) return null;
@@ -129,6 +126,27 @@ function SettingsForm({ data }) {
         <div className="st-group">
           <h2 className="st-group-title">Connections <span className="pl-muted">(optional)</span></h2>
           <Section
+            title="Stripe"
+            sub="Orders come from your Stripe payments; refunds and store credit happen in Stripe and are checked by reading Stripe back. Test mode only."
+            status={pill(s.stripe_connected, 'Connected', 'Not connected')}
+          >
+            <StripeFields values={form} onChange={set} settings={s} />
+            {s.stripe_connected && (
+              <div className="pl-actions">
+                <button type="button" className="btn btn-line btn-sm" disabled={busy}
+                  onClick={() => run(api.syncStripe, (r) => `Stripe: ${r?.import?.added ?? 0} new, ${r?.import?.updated ?? 0} updated.`)}>
+                  Sync orders from Stripe
+                </button>
+              </div>
+            )}
+          </Section>
+          <Section
+            title="Customer messages"
+            sub="Messages sent to this address go straight to the agent, which answers with the reply to send."
+          >
+            <InboxFields />
+          </Section>
+          <Section
             title="Activity recording (neatlogs)"
             sub="Sends a step-by-step record of every agent action to neatlogs so you or an auditor can replay it. Without it, records are still kept in this app."
             status={pill(s.neatlogs_enabled, 'On', 'Off')}
@@ -145,11 +163,11 @@ function SettingsForm({ data }) {
         </div>
 
         <details className="pl-more st-advanced">
-          <summary>Advanced: savings estimate</summary>
+          <summary>Advanced: costs</summary>
           <div className="st-advanced-body">
-            <p className="pl-muted pl-small">Used only to estimate savings on the Reports page. They don't change what the agent does.</p>
+            <p className="pl-muted pl-small">Your hourly cost prices the review time the agent saves, so it also sets how much proof each level needs. Volume only affects the savings estimate.</p>
             <div className="pl-fields">
-              {ECON_FIELDS.map((f) => (
+              {ECON_FIELDS.filter((f) => f.key !== 'econ_incident_cost').map((f) => (
                 <label key={f.key} className="field">
                   <span>{f.label}</span>
                   <input className="input" type="number" min={0} step={f.step} value={form[f.key]} onChange={(e) => set({ [f.key]: e.target.value })} />

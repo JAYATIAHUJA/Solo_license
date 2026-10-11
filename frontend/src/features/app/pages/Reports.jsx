@@ -26,7 +26,6 @@ export function Reports() {
   const { data } = useStore();
   const { hash } = useLocation();
   const cards = classCards(data);
-  const threshold = data.config.promotion_clean_runs;
   const safety = safetyNumbers(data);
   const econ = data.economics || {};
   const assumptions = econ.assumptions || {};
@@ -92,7 +91,7 @@ export function Reports() {
         <h2 id="h-licenses">Agent licenses</h2>
         <p className="pl-sub">One license per job type. Download one as an image or copy a short post to share.</p>
         <div className="app-lic-grid">
-          {cards.map((card) => <LicenseCard key={card.key} data={data} card={card} threshold={threshold} />)}
+          {cards.map((card) => <LicenseCard key={card.key} data={data} card={card} />)}
         </div>
       </section>
     </div>

@@ -9,7 +9,7 @@ import { StepWorkspace } from './steps/StepWorkspace.jsx';
 import { StepModel } from './steps/StepModel.jsx';
 import { StepSignals } from './steps/StepSignals.jsx';
 import { StepRules } from './steps/StepRules.jsx';
-import { StepOrders } from './steps/StepOrders.jsx';
+import { StepOrders, ordersReady } from './steps/StepOrders.jsx';
 import { StepReview } from './steps/StepReview.jsx';
 import '../app/components/plain-form.css';
 import './onboarding.css';
@@ -17,10 +17,10 @@ import './onboarding.css';
 /** The order here is the order on screen. `optional` steps can be skipped. */
 const STEPS = [
   { key: 'workspace', title: 'Your business', Body: StepWorkspace },
-  { key: 'model', title: 'AI model', Body: StepModel },
+  { key: 'data', title: 'Orders', Body: StepOrders },
   { key: 'rules', title: 'Rules', Body: StepRules },
+  { key: 'model', title: 'AI model', Body: StepModel },
   { key: 'signals', title: 'Connections', Body: StepSignals, optional: true },
-  { key: 'data', title: 'Sample orders', Body: StepOrders },
   { key: 'review', title: 'Review', Body: StepReview },
 ];
 
@@ -28,7 +28,7 @@ const STEPS = [
 const RECOMMENDED_START = 1;
 
 /** Keys that live in the onboarding form but are not settings values. */
-const NOT_VALUES = new Set(['business_name', 'starting_levels', 'load_sample_orders', 'orders']);
+const NOT_VALUES = new Set(['business_name', 'starting_levels', 'load_sample_orders', 'orders', 'orders_csv', 'stripe_sample']);
 
 function initialForm(data) {
   const form = formFromSettings(data.settings, data.providers, data.task_classes);
@@ -39,8 +39,11 @@ function initialForm(data) {
   return {
     ...form,
     starting_levels: startingLevels,
-    load_sample_orders: !(data.orders || []).length,
+    orders_source: form.orders_source || ((data.orders || []).length ? '' : 'sample'),
+    load_sample_orders: !(data.orders || []).length && !form.orders_source,
     orders: [],
+    orders_csv: '',
+    stripe_sample: false,
   };
 }
 
@@ -91,9 +94,9 @@ function OnboardingFlow({ data }) {
   const ready = {
     workspace: form.business_name.trim().length > 1,
     model: modelReady(data.providers, form, data.settings),
-    rules: Number(form.promotion_clean_runs) >= 1 && ceilingsOk,
+    rules: ceilingsOk && Number(form.trust_confidence) >= 0.5 && Number(form.refund_window_days) >= 0,
     signals: validWebhook(form.alert_webhook_url),
-    data: form.load_sample_orders || form.orders.length > 0 || (data.orders || []).length > 0,
+    data: ordersReady(form, data),
     review: true,
   };
   const current = STEPS[step];
@@ -106,10 +109,14 @@ function OnboardingFlow({ data }) {
       await api.onboard({
         business_name: form.business_name.trim(),
         starting_levels: form.starting_levels,
-        load_sample_orders: form.load_sample_orders,
+        load_sample_orders: form.orders_source === 'sample',
         orders: form.orders,
+        orders_csv: form.orders_source === 'csv' ? form.orders_csv : null,
         values: settingsValues(form, data.providers),
       });
+      if (form.orders_source === 'stripe') {
+        await (form.stripe_sample ? api.stripeSample() : api.syncStripe());
+      }
       await load();
       navigate('/app?welcome=1');
     } catch (cause) {

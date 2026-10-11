@@ -45,7 +45,18 @@ function buildScript(primary) {
       say: (d) => {
         const { state, ceiling } = classInfo(d, primary);
         const now = state.quarantined ? 'paused' : `set to “${levelCopy(state.effective_level, limitOf(ceiling)).short}”`;
-        return `Your agent handles ${nameOf(d).toLowerCase()} for the shop. Right now it is ${now}. Each kind of job earns its own freedom, one correct job at a time.`;
+        return `Your agent handles ${nameOf(d).toLowerCase()} for the shop. Right now it is ${now}. Each kind of job earns its own freedom from double-checked results — and loses it the moment something goes wrong.`;
+      },
+    },
+    {
+      id: 'inbox',
+      title: 'Customer messages come in',
+      where: () => ({ route: '/app/inbox', target: '[data-tour="inbox"]' }),
+      say: () => 'These are real customer emails. For each one the agent reads it, finds the order (even from just the email address), checks the shop’s rules, acts only as far as its licence allows, and writes a reply that states only what was verified.',
+      run: async (ctx) => {
+        if ((ctx.data().tickets || []).some((t) => t.status === 'new')) {
+          await ctx.call(() => api.handleNewTickets());
+        }
       },
     },
     {
@@ -73,12 +84,16 @@ function buildScript(primary) {
       where: () => ({ route: '/app', target: '[data-tour="recent"]' }),
       say: (d) => {
         const { state } = classInfo(d, primary);
-        const need = state.level >= 3 ? 1 : Math.max(1, d.config.promotion_clean_runs - state.clean_runs);
-        return `The agent now handles ${need} real job${need > 1 ? 's' : ''}. After each one we re-read the order to double-check the money actually moved. Only double-checked jobs count toward more freedom.`;
+        const p = state.progress || {};
+        const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
+        const why = p.target_rate != null && d.trust
+          ? ` To move up it needs ${p.runs_needed} more: a mistake costs about $${Math.round(d.trust.incident_cost)}, so the next level only pays if fewer than ${pct(p.target_rate)} of jobs go wrong — and the record has to prove it.`
+          : '';
+        return `The agent now handles three real jobs. After each one we re-read the order to check the money actually moved. Only double-checked jobs count as evidence.${why}`;
       },
       run: async (ctx) => {
-        const { spec, state, ceiling } = classInfo(ctx.data(), primary);
-        const need = state.level >= 3 ? 1 : Math.max(1, ctx.data().config.promotion_clean_runs - state.clean_runs);
+        const { spec, ceiling } = classInfo(ctx.data(), primary);
+        const need = 3;
         const used = new Set();
         for (let i = 0; i < need; i += 1) {
           let pick = pickOrder(ctx.data(), ceiling, used);
@@ -97,7 +112,7 @@ function buildScript(primary) {
       id: 'fault',
       title: 'Something goes wrong',
       where: () => ({ route: '/app', target: `[data-tour="paused-${primary}"]` }),
-      say: () => 'We made the payment tool pretend it worked while changing nothing. The double-check saw that the money never moved, so the agent was stopped and this warning appeared.',
+      say: () => 'We made the payment tool say “done” while changing nothing. The agent re-read the order, saw no money had moved, retried once with the same request key and checked again — so the customer still got their refund. But the tool could not be trusted, so this job type was paused at once.',
       run: async (ctx) => {
         const { spec, ceiling } = classInfo(ctx.data(), primary);
         ctx.mem.savedBefore = ctx.data().economics.net_saved_month;

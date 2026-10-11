@@ -1,2 +1,6 @@
 /* Integration fields use the shared plain-form styles (plain-form.css). */
 .pl-form .pl-form { gap: 14px; }
+
+/* Trust choices: a plain group, not a boxed fieldset. */
+.pl-form fieldset.pl-choices { border: 0; padding: 0; margin: 0; min-width: 0; }
+.pl-legend { padding: 0; margin-bottom: 8px; font-weight: 500; font-size: 14.5px; }

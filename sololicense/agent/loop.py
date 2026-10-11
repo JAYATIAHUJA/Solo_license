@@ -112,7 +112,7 @@ class TicketAgent:
         spec = get_spec(intake.task_class)
         step("read", "ok",
              f"Asks for {spec.label.lower()}" + (f" on {intake.order_id}" if intake.order_id else "")
-             + (f", {_money(intake.amount)}" if intake.amount is not None else "") + f" · read by {intake.source}",
+             + (f", {_money(intake.amount)}" if intake.amount is not None else "") + " · read by " + (intake.source.removeprefix("llm:") if intake.source.startswith("llm:") else "built-in rules"),
              source=intake.source, task_class=intake.task_class, confidence=intake.confidence)
         if intake.note:
             step("read", "ok", intake.note)

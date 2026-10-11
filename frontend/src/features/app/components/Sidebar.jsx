@@ -6,6 +6,7 @@ import { classCards, waitingRuns } from './mission/derive.js';
 
 const NAV = [
   { to: '/app', end: true, label: 'Home' },
+  { to: '/app/inbox', label: 'Inbox', badge: 'inbox' },
   { to: '/app/agent', label: 'Try the agent' },
   { to: '/app/runs', label: 'Activity', badge: 'waiting' },
   { to: '/app/reports', label: 'Reports' },
@@ -18,7 +19,10 @@ export function Sidebar({ onClose }) {
   const { data, session } = useStore();
   const navigate = useNavigate();
   const cards = classCards(data);
-  const badges = { waiting: waitingRuns(data).length };
+  const badges = {
+    waiting: waitingRuns(data).length,
+    inbox: (data.tickets || []).filter((t) => t.status === 'new').length,
+  };
 
   function signOut() {
     clearSession();

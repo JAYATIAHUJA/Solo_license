@@ -1038,7 +1038,7 @@ def test_llm(
     if not cfg.llm_enabled:
         return {"ok": False, "message": "Add an API key (and base URL) for this provider first."}
     try:
-        reply = complete(cfg, "Reply with the single word: ready", max_tokens=10)
+        reply = complete(cfg, "Reply with the single word: ready", max_tokens=256)
         return {"ok": True, "message": f"Connected to {cfg.llm_model}. Model replied: {reply[:40]}"}
     except Exception as error:  # surfaced to the operator; key never echoed
         return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}

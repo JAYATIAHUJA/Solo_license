@@ -142,3 +142,8 @@ p.app-outcome { display: block; }
   .app-chip-short { display: inline; }
   .app-top-title { display: none; }
 }
+
+/* Evidence toward the next level (Home job cards). */
+.app-evidence { height: 6px; background: var(--paper-2); margin: 4px 0 2px; overflow: hidden; }
+.app-evidence i { display: block; height: 100%; background: var(--ok); transition: width 0.4s var(--ease); }
+.app-why { margin-top: 0; }

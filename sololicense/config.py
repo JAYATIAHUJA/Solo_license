@@ -124,7 +124,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
     "anthropic": ProviderSpec("Anthropic Claude", "anthropic_api_key", "anthropic_model", "claude-sonnet-5-5"),
     "openai": ProviderSpec("OpenAI", "openai_api_key", "openai_model", "gpt-4o"),
     "groq": ProviderSpec(
-        "Groq", "groq_api_key", "groq_model", "llama-3.3-70b-versatile",
+        "Groq", "groq_api_key", "groq_model", "openai/gpt-oss-120b",
         base_url="https://api.groq.com/openai/v1",
     ),
     "zcode_glm": ProviderSpec(

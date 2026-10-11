@@ -40,13 +40,39 @@ export function classCards(data) {
   });
 }
 
-/** Progress toward the next level, as a sentence. */
-export function progressText(card, threshold) {
-  if (card.paused) return 'Review what happened to resume it.';
-  if (card.level >= 3) return 'Highest level reached.';
-  const left = Math.max(1, threshold - (card.license.clean_runs || 0));
+/** Evidence toward the next level: { needed, total, done, sentence }.
+ *  `needed` comes from the server's trust maths (verified jobs still required
+ *  for the failure rate to be provably below the break-even rate). */
+export function progressOf(card) {
+  const p = card.license.progress || {};
+  const done = card.license.clean_runs || 0;
+  const needed = p.runs_needed;
+  if (card.paused) return { needed: null, done, total: null, sentence: 'Review what happened to resume it.' };
+  if (card.level >= 3 || p.next_level == null) return { needed: 0, done, total: done, sentence: 'Highest level reached.' };
   const next = levelCopy(card.level + 1, limitOf(card.ceiling)).short;
-  return `${left} more correct job${left === 1 ? '' : 's'} until it moves up to “${next}”.`;
+  if (needed == null) return { needed: null, done, total: null, sentence: `Its mistakes cost more than “${next}” would save, so it stays here.` };
+  const n = Math.max(1, needed);
+  return {
+    needed: n,
+    done,
+    total: done + n,
+    sentence: `${n} more double-checked job${n === 1 ? '' : 's'} until it may move up to “${next}”.`,
+  };
+}
+
+/** Back-compatible one-liner. */
+export function progressText(card) {
+  return progressOf(card).sentence;
+}
+
+/** Why that many: the economics behind the rule, in one sentence. */
+export function whyText(data, card) {
+  const t = data.trust;
+  const p = card.license.progress || {};
+  if (!t || p.target_rate == null || card.paused || card.level >= 3) return '';
+  const pctText = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
+  return `A mistake costs about $${Math.round(t.incident_cost)}, so moving up only pays if fewer than ${pctText(p.target_rate)} of jobs go wrong. `
+    + `With ${card.license.successes} verified and ${card.license.failures} failed so far, we can only promise below ${pctText(p.upper_bound)} (${Math.round(t.confidence * 100)}% sure).`;
 }
 
 /** The run that paused a job type (most recent caught problem). */
