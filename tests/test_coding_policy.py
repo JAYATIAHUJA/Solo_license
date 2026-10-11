@@ -155,3 +155,17 @@ def test_policy_init_writes_a_starter_that_parses(tmp_path):
     path = policy.write_starter(tmp_path)
     rules = policy.from_file(tmp_path)
     assert path.exists() and not rules.freeze and ".env" in rules.deny_paths
+
+
+def test_a_policy_denial_demotes_the_class_like_a_hard_deny(gate):
+    """Trail #31: a command the repo's policy forbids is a failure - the class
+    drops to L0 and the attempt is recorded - so it cannot simply be retried."""
+    gate.user_prompt({"session_id": "s", "cwd": str(gate.project), "prompt": "x"})
+    _earn(gate, "install-dep", 2)
+    _write_file_policy(gate, '[deny]\ncommands = ["npm install left-pad"]\n')
+    assert _decision(gate.permission(_bash(gate, "npm install left-pad"))) == "deny"
+    lic = agent_repo.get_license(gate.conn, "shop-api", "install-dep")
+    assert lic["level"] == 0 and lic["demoted_from"] == 2 and lic["failures"] == 1
+    assert _decision(gate.permission(_bash(gate, "npm install lodash"))) == "defer"
+    by = gate.conn.execute("SELECT decided_by FROM agent_decisions WHERE command = 'npm install left-pad'").fetchone()
+    assert by["decided_by"] == "policy"

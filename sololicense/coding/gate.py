@@ -149,7 +149,12 @@ class CodingGate:
                    decision_id=decision_id, tool=tool, command=command, action_class=spec.key,
                    pattern=result.pattern, level=level, decided_by=by, source=result.source, reason=reason,
                    policy=rules.digest, policy_source=rules.source, ceiling=ceiling)
-        if decision == "deny":
+        if decision == "deny" and by == "policy":
+            # As serious as a hard deny: recorded, and the class goes back to asking.
+            trace.span("detection.policy_violation", status="error", severity="critical",
+                       message=reason, action_class=spec.key, command=command, policy=rules.digest)
+            self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace)
+        elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
                        message=reason, action_class=spec.key, command=command)
             self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace)
