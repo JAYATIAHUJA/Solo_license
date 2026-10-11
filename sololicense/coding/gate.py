@@ -25,10 +25,11 @@ from __future__ import annotations
 import sqlite3
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from sololicense.coding import entire, jev
+from sololicense.coding import agents, entire, jev, remediation
 from sololicense.coding import policy as policy_mod
 from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe
 from sololicense.coding.ladder import CodingLadder
@@ -40,6 +41,8 @@ from sololicense.services.git_ledger import GitLedger, LedgerEntry
 # run is the agent doing its job.
 DIAGNOSTIC = {"read", "test-run", "lint-format", "build"}
 GATE_ACTOR = "system:coding-gate"
+# Denied attempts in one turn after which the agent is stopped, not just refused.
+INTERRUPT_AFTER_DENIALS = 3
 
 
 def turn_reason(conn: sqlite3.Connection, turn_id: int) -> str | None:
@@ -97,8 +100,15 @@ class CodingGate:
         )
         self._traces[turn_id] = trace
         trace.span("turn.start", turn=turn_id, prompt=str(event.get("prompt", ""))[:300])
+        answer: dict = {}
+        if agent in agents.TAKES_CONTEXT:
+            queued = agent_repo.take_remediations(self.conn, session)
+            if queued:
+                text = "\n\n".join(r["text"] for r in queued)
+                trace.span("remediation.delivered", turn=turn_id, count=len(queued), text=text[:300])
+                answer = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": text}}
         self.conn.commit()
-        return {}
+        return answer
 
     def permission(self, event: dict) -> dict:
         self._agent = str(event.get("_agent") or "claude-code")
@@ -157,8 +167,19 @@ class CodingGate:
             trace.span("detection.forbidden_action", status="error", severity="critical",
                        message=reason, action_class=spec.key, command=command)
             self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace)
+        interrupt = False
+        if decision == "deny":
+            denials = sum(1 for d in agent_repo.decisions_for_turn(self.conn, turn["id"]) if d["decision"] == "deny")
+            if denials >= INTERRUPT_AFTER_DENIALS:
+                interrupt = True
+                text = remediation.compose("denied", reason=reason, attempts=denials).text
+                agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn["id"], kind="denied",
+                                             text=text, delivered=True)
+                reason = text.removeprefix("Solo License: ")
+                trace.span("remediation.sent", status="error", kind="denied", decision_id=decision_id,
+                           attempts=denials)
         self.conn.commit()
-        return self._permission_response(decision, reason)
+        return self._permission_response(decision, reason, interrupt=interrupt)
 
     def tool_result(self, event: dict, *, failed: bool) -> dict:
         session = str(event.get("session_id", ""))
@@ -177,11 +198,14 @@ class CodingGate:
             agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
             trace.span("gate.approved_by_person", decision_id=row["id"], pattern=row["pattern"], action_class=key)
         error = str(event.get("error", ""))[:300]
+        answer: dict = {}
         if failed and key not in DIAGNOSTIC and not event.get("is_interrupt"):
             # A failure always counts, whoever let the action run.
             agent_repo.set_outcome(self.conn, row["id"], "failed")
             trace.span("tool.failed", status="error", decision_id=row["id"], action_class=key, error=error)
-            self._fail(repo, key, f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}", trace)
+            was = self._fail(repo, key, f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}",
+                             trace)
+            answer = self._remedy_failed_tool(row, tool_input, demoted=was > 0, trace=trace)
         elif unattended:
             agent_repo.set_outcome(self.conn, row["id"], "observed")
             trace.span("tool.observed", decision_id=row["id"], action_class=key,
@@ -194,7 +218,25 @@ class CodingGate:
             agent_repo.set_outcome(self.conn, row["id"], "ran")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="ok")
         self.conn.commit()
-        return {}
+        return answer
+
+    def _remedy_failed_tool(self, row: sqlite3.Row, tool_input: dict, *, demoted: bool, trace: Trace) -> dict:
+        """Tell the agent, next to the failed tool's result, what to undo. Claude
+        Code's PostToolUseFailure takes only ``additionalContext`` (it cannot block)."""
+        path = str(tool_input.get("file_path") or "")
+        fix = remediation.compose("tool-failed", action_class=row["action_class"], command=row["command"],
+                                  files=(path,) if path else (), demoted=demoted)
+        delivered = row["agent"] in agents.TAKES_CONTEXT
+        if delivered:
+            agent_repo.queue_remediation(self.conn, session_id=row["session_id"], turn_id=row["turn_id"],
+                                         kind="tool-failed", text=fix.text, delivered=True)
+        trace.span("remediation.sent", status="error", kind="tool-failed", decision_id=row["id"],
+                   action_class=row["action_class"], revert=list(fix.revert_commands), delivered=delivered)
+        return {
+            "hookSpecificOutput": {"hookEventName": "PostToolUseFailure", "additionalContext": fix.text},
+            "systemMessage": f"Solo License: {row['action_class']} "
+                             f"{'is back to asking' if demoted else 'still asks'} after `{row['command']}` failed.",
+        }
 
     def stop(self, event: dict) -> dict:
         session = str(event.get("session_id", ""))
@@ -208,6 +250,8 @@ class CodingGate:
             ok, reason, details = self.verifier(self, turn, decisions)
         retrying = bool(event.get("stop_hook_active"))
         changed = [d for d in decisions if d["outcome"] == "ran"]
+        demoted: list[str] = []
+        checkpoint_id = None
         if ok:
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "verified")
@@ -216,20 +260,28 @@ class CodingGate:
             checkpoint = self.checkpoint_lookup(turn["cwd"], session)
             evidence = reason
             if checkpoint and checkpoint.get("checkpoint_id"):
-                details["entire_checkpoint"] = checkpoint["checkpoint_id"]
-                agent_repo.set_checkpoint(self.conn, turn["id"], checkpoint["checkpoint_id"])
-                evidence = f"{reason}\nEntire: {entire.explain_command(checkpoint['checkpoint_id'])}"
+                checkpoint_id = checkpoint["checkpoint_id"]
+                details["entire_checkpoint"] = checkpoint_id
+                agent_repo.set_checkpoint(self.conn, turn["id"], checkpoint_id)
+                evidence = f"{reason}\nEntire: {entire.explain_command(checkpoint_id)}"
             for key in sorted({d["action_class"] for d in changed} | set(details.get("blame", ()))):
-                self._fail(turn["repo"], key, evidence, trace)
+                if self._fail(turn["repo"], key, evidence, trace) > 0:
+                    demoted.append(key)
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "failed")
         measured = {k: v for k, v in details.items() if k != "blame"}
         if not ok and not retrying:
             # Send the agent back to fix it; the turn stays open and is checked again.
+            fix = remediation.compose("turn-failed", reason=reason, files=self._turn_files(turn),
+                                      base_ref=turn["base_ref"], checkpoint=checkpoint_id, classes=demoted)
             trace.span("turn.blocked", status="error", turn=turn["id"], reason=reason, **measured)
+            trace.span("remediation.sent", status="error", kind="turn-failed", turn=turn["id"],
+                       revert=list(fix.revert_commands))
             agent_repo.note_block(self.conn, turn["id"], reason)
+            agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn["id"], kind="turn-failed",
+                                         text=fix.text, delivered=True)
             self.conn.commit()
-            return {"decision": "block", "reason": f"Solo License: {reason}"}
+            return {"decision": "block", "reason": fix.text}
         for d in decisions:
             if d["outcome"] == "pending":  # left to a person who said no
                 agent_repo.set_outcome(self.conn, d["id"], "not-run")
@@ -257,12 +309,14 @@ class CodingGate:
                          f"{lic['successes']} verified, {lic['failures']} failed: the failure rate is below "
                          f"break-even for {ACTION_CLASSES[key].label.lower()} in {repo}.", trace)
 
-    def _fail(self, repo: str, key: str, reason: str, trace: Trace) -> None:
+    def _fail(self, repo: str, key: str, reason: str, trace: Trace) -> int:
+        """Evidence against a class: back to L0. Returns the level it had."""
         agent_repo.add_evidence(self.conn, repo, key, ok=False)
         lic = agent_repo.get_license(self.conn, repo, key)
         if lic["level"] > 0:
             self._change(repo, key, "demote", lic["level"], 0, reason, trace)
         agent_repo.forget_patterns(self.conn, repo, key)
+        return int(lic["level"])
 
     def restore(self, repo: str, key: str, level: int, *, actor_id: str, reason: str) -> int:
         """A person resumes a paused class at a level they choose (up to its
@@ -326,16 +380,30 @@ class CodingGate:
         return f"{spec.label} is at L{level}; {more} to earn L{level + 1}."
 
     @staticmethod
-    def _permission_response(decision: str, reason: str) -> dict:
+    def _permission_response(decision: str, reason: str, *, interrupt: bool = False) -> dict:
         if decision == "ask":
             return {"systemMessage": f"Solo License: {reason}"}
-        body = {"behavior": decision}
-        if decision == "deny":
+        body: dict = {"behavior": decision}
+        if decision == "deny" and interrupt:
+            body.update(message=f"Solo License: {reason}", interrupt=True)
+        elif decision == "deny":
             body["message"] = f"Solo License: {reason} Choose a safer way to do this."
         return {
             "hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": body},
             "systemMessage": f"Solo License: {reason}",
         }
+
+    @staticmethod
+    def _turn_files(turn: sqlite3.Row) -> list[str]:
+        """Files this turn changed against its starting snapshot."""
+        from sololicense.coding.verify import changed_files
+
+        try:
+            started = datetime.strptime(turn["created_at"], "%Y-%m-%d %H:%M:%S").replace(
+                tzinfo=timezone.utc).timestamp() - 1
+        except (TypeError, ValueError):
+            started = None
+        return [c.path for c in changed_files(turn["cwd"], turn["base_ref"], since=started)]
 
     def _turn(self, session: str, repo: str, root: str) -> sqlite3.Row:
         turn = agent_repo.current_turn(self.conn, session)

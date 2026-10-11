@@ -320,3 +320,98 @@ def test_the_coding_dashboard_lists_license_events(gate, harness, tmp_path, monk
     monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
     events = TestClient(app_module.app).get("/api/coding?repo=shop-api").json()["events"]
     assert [(e["action_class"], e["kind"], e["to_level"]) for e in events] == [("test-run", "restore", 1)]
+
+
+# --- remediation: every demotion tells the agent what to undo -----------------------
+
+def test_a_failed_install_tells_the_agent_what_to_undo_right_away(gate):
+    gate.user_prompt(_event(gate, prompt="add left-pad"))
+    agent_repo.get_license(gate.conn, "shop-api", "install-dep")
+    agent_repo.set_level(gate.conn, "shop-api", "install-dep", 2)
+    gate.permission(_bash(gate, "npm install left-pad"))
+    answer = gate.tool_result(_bash(gate, "npm install left-pad") | {"error": "Exit code 1\nE404"}, failed=True)
+
+    out = answer["hookSpecificOutput"]
+    assert out["hookEventName"] == "PostToolUseFailure"
+    assert "install-dep is back to asking" in out["additionalContext"]
+    assert "git checkout -- package.json package-lock.json" in out["additionalContext"]
+    assert "decision" not in answer  # PostToolUseFailure cannot block; context is its channel
+    sent = gate.conn.execute("SELECT * FROM agent_remediations").fetchall()
+    assert len(sent) == 1 and sent[0]["delivered_at"] and sent[0]["session_id"] == "s1"
+
+
+def test_a_failing_test_run_gets_no_remediation(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    gate.permission(_bash(gate, "npm test"))
+    assert gate.tool_result(_bash(gate, "npm test") | {"error": "Exit code 1"}, failed=True) == {}
+
+
+def test_the_third_denied_attempt_in_a_turn_interrupts_the_agent(gate):
+    gate.user_prompt(_event(gate, prompt="ship"))
+    answers = [gate.permission(_bash(gate, "git push --force origin main")) for _ in range(3)]
+    decisions = [a["hookSpecificOutput"]["decision"] for a in answers]
+    assert [d.get("interrupt", False) for d in decisions] == [False, False, True]
+    assert "3 blocked attempts this turn" in decisions[2]["message"]
+
+
+def test_a_sent_back_turn_names_the_files_the_stash_and_the_checkpoint(gate):
+    gate.checkpoint_lookup = lambda cwd, session: {"checkpoint_id": "cp_0123456789abcdef"}
+    gate.verifier = lambda g, turn, decisions: (False, "tests fail after the change.", {"tests": "failed"})
+    gate.user_prompt(_event(gate, prompt="fix"))
+    (gate.project / "app.py").write_text("print('broken')\n")
+    gate.permission(_bash(gate, "git commit -m x"))
+    gate.tool_result(_bash(gate, "git commit -m x"), failed=False)
+
+    blocked = gate.stop(_event(gate))
+    assert blocked["decision"] == "block"
+    assert "tests fail after the change." in blocked["reason"]
+    assert "app.py" in blocked["reason"] and "git stash push --include-untracked" in blocked["reason"]
+    assert "entire checkpoint explain cp_012345678" in blocked["reason"]
+
+
+def test_a_queued_remediation_reaches_the_next_prompt_once(gate):
+    agent_repo.queue_remediation(gate.conn, session_id="s1", turn_id=None, kind="flagged",
+                                 text="Solo License: revert it.")
+    first = gate.user_prompt(_event(gate, prompt="next"))
+    assert first == {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                            "additionalContext": "Solo License: revert it."}}
+    assert gate.user_prompt(_event(gate, prompt="again")) == {}
+
+
+def test_agents_that_cannot_take_prompt_context_keep_it_queued(gate):
+    agent_repo.queue_remediation(gate.conn, session_id="cur", turn_id=None, kind="flagged", text="revert it")
+    answer = gate.user_prompt({"session_id": "cur", "cwd": str(gate.project), "prompt": "x", "_agent": "cursor"})
+    assert answer == {}
+    assert gate.conn.execute("SELECT delivered_at FROM agent_remediations").fetchone()["delivered_at"] is None
+
+
+def test_remediation_through_the_claude_and_codex_routes(gate, harness, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sololicense.api import app as app_module
+    from sololicense.db.database import init_db
+
+    conn = init_db(tmp_path / "remedy.db", check_same_thread=False)
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+                          jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+
+    class Ctx:
+        coding_gate = threaded
+
+    Ctx.conn = conn
+    monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
+    client = TestClient(app_module.app)
+    client.post("/api/hooks/permission", json=_bash(gate, "npm install left-pad"))
+    claude = client.post("/api/hooks/post-tool-failure",
+                         json=_bash(gate, "npm install left-pad") | {"error": "Exit code 1"}).json()
+    assert claude["hookSpecificOutput"]["hookEventName"] == "PostToolUseFailure"
+    assert "package-lock.json" in claude["hookSpecificOutput"]["additionalContext"]
+
+    codex_call = {"session_id": "cx", "cwd": str(gate.project), "tool_name": "Bash",
+                  "tool_input": {"command": "npm install left-pad"}}
+    client.post("/api/hooks/codex/PermissionRequest", json=codex_call)
+    codex = client.post("/api/hooks/codex/PostToolUse",
+                        json=codex_call | {"tool_response": {"exit_code": 1}}).json()
+    assert codex["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+    assert "package-lock.json" in codex["hookSpecificOutput"]["additionalContext"]
+    assert "decision" not in codex  # a Codex block would replace the error output the agent needs
