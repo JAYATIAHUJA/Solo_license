@@ -35,7 +35,25 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     """Create every table/index if absent. Safe to call on every startup."""
     conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
     _migrate_runs(conn)
+    _migrate_v3(conn)
     conn.commit()
+
+
+def _migrate_v3(conn: sqlite3.Connection) -> None:
+    """Coding events used to share ``license_events`` with the payments agent
+    (as ``<class>@<repo>``). Copy them into ``agent_events`` the first time."""
+    if conn.execute("SELECT 1 FROM agent_events LIMIT 1").fetchone():
+        return
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'license_events'").fetchone():
+        return
+    conn.execute(
+        """
+        INSERT INTO agent_events (repo, action_class, kind, from_level, to_level, reason, actor_id, git_sha, created_at)
+        SELECT substr(task_class, instr(task_class, '@') + 1), substr(task_class, 1, instr(task_class, '@') - 1),
+               kind, from_level, to_level, reason, actor_id, git_sha, created_at
+          FROM license_events WHERE task_class LIKE '%@%' ORDER BY id
+        """
+    )
 
 
 _ADDED_COLUMNS = {
