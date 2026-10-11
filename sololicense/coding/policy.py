@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import shlex
 import hashlib
 import json
 import sqlite3
@@ -166,10 +167,13 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
             r = rule.lower()
             if ("*" in r and fnmatch.fnmatch(low, r)) or ("*" not in r and r in low):
                 return f"this repo's policy forbids '{rule}'"
-        for pattern in policy.deny_paths:
-            bare = pattern.rstrip("*").rstrip("/")
-            if bare and bare in command:
-                return f"this repo's policy forbids touching '{pattern}'"
+        # Paths in a command: split it like a shell, and match each argument
+        # as a path (normalised, traversal-proof) - never a raw substring.
+        for token in _command_paths(command):
+            for candidate in _path_forms(token, root):
+                for pattern in policy.deny_paths:
+                    if fnmatch.fnmatch(candidate, pattern):
+                        return f"this repo's policy forbids touching '{pattern}'"
     path = str(tool_input.get("file_path", "") or "")
     if path:
         for candidate in _path_forms(path, root):
@@ -177,6 +181,64 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
                 if fnmatch.fnmatch(candidate, pattern):
                     return f"this repo's policy forbids editing '{pattern}'"
     return ""
+
+
+_SHELL_PUNCTUATION = set("();<>|&")
+_WRAPPERS = "`'\"$(){}"
+
+
+def _command_paths(command: str) -> list[str]:
+    """Arguments of a shell command that could name a file.
+
+    Split like a shell *including* its operators, so a path glued to one
+    (``echo hi>.env``, ``cat .env|less``, ``cat<.env``, ``(cat .env)``) is
+    still its own word; then strip quotes, backticks and ``$(`` wrappers and
+    unwrap ``key=value``. Options (``-x``) are not paths."""
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
+    except ValueError:
+        words = command.split()
+    out = []
+    for word in words:
+        # A word may still carry operators shlex kept inside it (e.g. after an
+        # unbalanced quote): split on them too.
+        for piece in _split_on(word, _SHELL_PUNCTUATION):
+            piece = piece.strip(_WRAPPERS)
+            if not piece:
+                continue
+            if piece.startswith("-"):
+                # Options can carry a path: --file=.env, -var-file=x, -o.env.
+                value = _option_value(piece)
+                if value:
+                    out.append(value.strip(_WRAPPERS))
+                continue
+            out.append(piece.split("=", 1)[-1] if "=" in piece and not piece.startswith(("./", "/", "..")) else piece)
+    return [w for w in out if w]
+
+
+def _option_value(option: str) -> str:
+    """The value glued to an option, if any: ``--file=.env`` / ``-var-file=x``
+    -> after ``=``; ``-o.env`` (single-letter option with its value attached)
+    -> ``.env``. A bare flag (``-v``, ``--force``) has none."""
+    if "=" in option:
+        return option.split("=", 1)[1]
+    if len(option) > 2 and option[1] != "-" and option[1].isalpha():
+        return option[2:]
+    return ""
+
+
+def _split_on(word: str, chars: set[str]) -> list[str]:
+    parts, current = [], ""
+    for ch in word:
+        if ch in chars:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    parts.append(current)
+    return parts
 
 
 def _path_forms(path: str, root: str | Path) -> list[str]:

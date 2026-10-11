@@ -181,3 +181,32 @@ def test_path_traversal_cannot_dodge_a_deny_rule(gate, target):
 def test_unrelated_paths_outside_the_repo_are_not_denied(gate):
     rules = policy.Policy(deny_paths=(".env",))
     assert not policy.denied(rules, "Edit", {"file_path": "../notes/todo.md"}, gate.project)
+
+
+@pytest.mark.parametrize("command, denied", [
+    ("cat .env", True),
+    ("cp ../secrets/.env /tmp/x", True),
+    ("terraform apply infra/prod/main.tf", True),
+    ("echo hi > .env", True),
+    ("echo hi>.env", True),                     # Trail #31: glued to a redirection
+    ("cat .env|less", True),
+    ("cat<.env", True),
+    ("(cat .env)", True),
+    ("true;cat .env", True),
+    ("x=$(cat .env)", True),
+    ("echo `cat .env`", True),
+    ("cat '.env'", True),
+    ("FILE=.env ./run.sh", True),
+    ("cat --file=.env", True),                  # Trail #32: paths inside options
+    ("terraform apply -var-file=infra/prod/secrets.tfvars", True),
+    ("curl --output=.env http://example.com/x", True),
+    ("curl -o.env http://example.com/x", True),
+    ("npm test --watch=false", False),
+    ("git commit -m fix -v", False),
+    ("cd deployment && npm test", False),       # contains 'env', not the file .env
+    ("npm run env:check", False),
+    ("ls environments/", False),
+])
+def test_paths_in_commands_are_matched_as_paths_not_substrings(gate, command, denied):
+    rules = policy.Policy(deny_paths=(".env", "infra/prod/**"))
+    assert bool(policy.denied(rules, "Bash", {"command": command}, gate.project)) is denied
