@@ -9,8 +9,9 @@ import sqlite3
 from sololicense.domain.models import ExecutionPermit
 
 
-def create(conn: sqlite3.Connection, permit: ExecutionPermit, *, actor_id: str) -> None:
-    conn.execute(
+def create(conn: sqlite3.Connection, permit: ExecutionPermit, *, actor_id: str) -> int:
+    """Store the permit's digest (never the token) and return its row id."""
+    cur = conn.execute(
         """
         INSERT INTO execution_permits
             (permit_digest, policy_version, task_class, tool, order_id, amount, actor_id, expires_at)
@@ -21,6 +22,7 @@ def create(conn: sqlite3.Connection, permit: ExecutionPermit, *, actor_id: str) 
             permit.order_id, permit.amount, actor_id, permit.expires_at.isoformat(),
         ),
     )
+    return int(cur.lastrowid)
 
 
 def consume(conn: sqlite3.Connection, permit: ExecutionPermit) -> str | None:

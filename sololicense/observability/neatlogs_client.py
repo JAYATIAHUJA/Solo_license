@@ -58,11 +58,18 @@ class NeatlogsClient:
         """Emit one safe child span inside the active refund workflow."""
         if workflow is None or not self.enabled or self._sdk is None:
             return
-        try:  # pragma: no cover - requires live SDK + key
+        try:
             with self._sdk.trace(name, kind=_span_kind(name)) as span:
                 span.set_attribute("sololicense.status", status)
                 for key, value in _safe_attributes(attributes).items():
-                    span.set_attribute(f"sololicense.{key}", value)
+                    # OpenTelemetry GenAI semantic conventions keep their own names.
+                    span.set_attribute(key if key.startswith("gen_ai.") else f"sololicense.{key}", value)
+                if name.startswith("detection."):
+                    span.add_event("detection", {
+                        "detection.rule": name.removeprefix("detection."),
+                        "detection.severity": str(attributes.get("severity", "unknown")),
+                        "detection.message": str(attributes.get("message", ""))[:200],
+                    })
                 if status == "error":
                     _mark_error(span, str(attributes.get("message", name)))
         except Exception:
@@ -126,7 +133,10 @@ def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | bool | int |
     """Keep telemetry scalar and ensure configuration secrets never export."""
     safe: dict[str, str | bool | int | float] = {}
     for key, value in attributes.items():
-        if any(secret in key.lower() for secret in ("api_key", "token", "password", "secret")):
+        # Token *counts* (gen_ai.usage.*_tokens) are telemetry, not credentials.
+        if not key.startswith("gen_ai.usage.") and any(
+            secret in key.lower() for secret in ("api_key", "token", "password", "secret")
+        ):
             continue
         if isinstance(value, (str, bool, int, float)):
             safe[key] = value
