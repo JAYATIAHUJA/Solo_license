@@ -206,10 +206,27 @@ def _command_paths(command: str) -> list[str]:
         # unbalanced quote): split on them too.
         for piece in _split_on(word, _SHELL_PUNCTUATION):
             piece = piece.strip(_WRAPPERS)
-            if not piece or piece.startswith("-"):
+            if not piece:
+                continue
+            if piece.startswith("-"):
+                # Options can carry a path: --file=.env, -var-file=x, -o.env.
+                value = _option_value(piece)
+                if value:
+                    out.append(value.strip(_WRAPPERS))
                 continue
             out.append(piece.split("=", 1)[-1] if "=" in piece and not piece.startswith(("./", "/", "..")) else piece)
     return [w for w in out if w]
+
+
+def _option_value(option: str) -> str:
+    """The value glued to an option, if any: ``--file=.env`` / ``-var-file=x``
+    -> after ``=``; ``-o.env`` (single-letter option with its value attached)
+    -> ``.env``. A bare flag (``-v``, ``--force``) has none."""
+    if "=" in option:
+        return option.split("=", 1)[1]
+    if len(option) > 2 and option[1] != "-" and option[1].isalpha():
+        return option[2:]
+    return ""
 
 
 def _split_on(word: str, chars: set[str]) -> list[str]:

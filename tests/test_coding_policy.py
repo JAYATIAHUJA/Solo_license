@@ -197,6 +197,12 @@ def test_unrelated_paths_outside_the_repo_are_not_denied(gate):
     ("echo `cat .env`", True),
     ("cat '.env'", True),
     ("FILE=.env ./run.sh", True),
+    ("cat --file=.env", True),                  # Trail #32: paths inside options
+    ("terraform apply -var-file=infra/prod/secrets.tfvars", True),
+    ("curl --output=.env http://example.com/x", True),
+    ("curl -o.env http://example.com/x", True),
+    ("npm test --watch=false", False),
+    ("git commit -m fix -v", False),
     ("cd deployment && npm test", False),       # contains 'env', not the file .env
     ("npm run env:check", False),
     ("ls environments/", False),
