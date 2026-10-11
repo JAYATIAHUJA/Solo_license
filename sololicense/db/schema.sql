@@ -384,3 +384,16 @@ CREATE TABLE IF NOT EXISTS agent_fingerprints (
     updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (session_id, fingerprint)
 );
+
+-- A person said a decision or a turn was wrong. Its classes went back to L0
+-- and the session's next prompt carries the remediation.
+CREATE TABLE IF NOT EXISTS agent_flags (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id    INTEGER,
+    turn_id        INTEGER,
+    actor_id       TEXT NOT NULL,
+    reason         TEXT NOT NULL,
+    remediation_id INTEGER,                      -- the queued message for the agent
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    delivered_at   TEXT
+);

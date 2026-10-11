@@ -48,6 +48,8 @@ def _commit_message(entry: LedgerEntry) -> str:
     }.get(entry.kind, entry.kind)
     if entry.kind == "policy":
         title = f"policy({entry.task_class}): {entry.reason.splitlines()[0][:72]}"
+    elif entry.kind == "flag":
+        title = f"flag({entry.task_class}): L{entry.from_level} -> L{entry.to_level}"
     else:
         title = (
             f"license({entry.task_class}): {verb} L{entry.from_level}"
