@@ -195,7 +195,28 @@ def test_editing_the_same_notebook_again_and_again_sends_the_turn_back_once(gate
     assert blocked["decision"] == "block" and "nb.ipynb" in blocked["reason"] and "4 times" in blocked["reason"]
 
 
-def test_loop_guidance_reaches_codex_and_is_a_no_op_for_cursor(gate, harness, tmp_path, monkeypatch):
+def test_a_loop_stop_holds_for_every_call_until_the_next_prompt(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    for _ in range(5):
+        gate.tool_result(_event(gate, tool_name="Read", tool_input={"file_path": "a.py"}), failed=False)
+    gate.tool_result(_edit(gate), failed=False)
+    denied = gate.permission(_bash(gate, "npm test"))["hookSpecificOutput"]["decision"]
+    assert denied["behavior"] == "deny" and denied["interrupt"] is True and "5th time" in denied["message"]
+
+    gate.user_prompt(_event(gate, prompt="try something else"))
+    assert "hookSpecificOutput" not in gate.permission(_bash(gate, "npm test"))
+
+
+def test_the_end_of_a_turn_clears_a_loop_stop(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    for _ in range(5):
+        gate.tool_result(_event(gate, tool_name="Read", tool_input={"file_path": "a.py"}), failed=False)
+    gate.stop(_event(gate))
+    assert loops.halted(gate.conn, "s1") == ""
+
+
+@pytest.fixture
+def client(harness, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     from sololicense.api import app as app_module
@@ -210,7 +231,44 @@ def test_loop_guidance_reaches_codex_and_is_a_no_op_for_cursor(gate, harness, tm
 
     Ctx.conn = conn
     monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
-    client = TestClient(app_module.app)
+    return TestClient(app_module.app)
+
+
+def test_cursor_is_stopped_at_its_next_pre_tool_hook(gate, client):
+    shell = {"conversation_id": "cu", "cwd": str(gate.project), "command": "ls"}
+    answers = [client.post("/api/hooks/cursor/afterShellExecution", json=shell).json() for _ in range(5)]
+    assert answers[4] == {}
+    other = client.post("/api/hooks/cursor/beforeShellExecution", json=shell | {"command": "git status"}).json()
+    assert other["permission"] == "deny" and "5th time" in other["agent_message"]
+
+    client.post("/api/hooks/cursor/beforeSubmitPrompt", json={"conversation_id": "cu", "cwd": str(gate.project),
+                                                               "prompt": "go on"})
+    again = client.post("/api/hooks/cursor/beforeShellExecution", json=shell | {"command": "git status"}).json()
+    assert again.get("permission") != "deny"
+
+
+def test_copilot_is_stopped_at_its_next_pre_tool_hook(gate, client):
+    call = {"sessionId": "cp", "cwd": str(gate.project), "toolName": "view", "toolArgs": {"path": "a.py"}}
+    answers = [client.post("/api/hooks/copilot/postToolUse", json=call).json() for _ in range(5)]
+    assert answers[4] == {}
+    other = client.post("/api/hooks/copilot/preToolUse", json=call | {"toolName": "bash",
+                                                                      "toolArgs": {"command": "ls"}}).json()
+    assert other["permissionDecision"] == "deny" and "5th time" in other["permissionDecisionReason"]
+
+
+def test_gemini_and_cline_are_stopped_by_the_post_tool_hook_itself(gate, client):
+    gemini = {"session_id": "ge", "cwd": str(gate.project), "tool_name": "read_file",
+              "tool_input": {"absolute_path": "a.py"}}
+    fifth = [client.post("/api/hooks/gemini/AfterTool", json=gemini).json() for _ in range(5)][4]
+    assert fifth["continue"] is False and "5th time" in fifth["stopReason"]
+
+    cline = {"taskId": "cl", "cwd": str(gate.project),
+             "postToolUse": {"toolName": "read_file", "parameters": {"path": "a.py"}, "success": True}}
+    fifth = [client.post("/api/hooks/cline/PostToolUse", json=cline).json() for _ in range(5)][4]
+    assert fifth["cancel"] is True and "5th time" in fifth["errorMessage"]
+
+
+def test_loop_guidance_reaches_codex_and_is_a_no_op_for_cursor(gate, client):
     call = {"session_id": "cx", "cwd": str(gate.project), "tool_name": "Bash", "tool_input": {"command": "ls"}}
     answers = [client.post("/api/hooks/codex/PostToolUse", json=call).json() for _ in range(3)]
     assert "3 times" in answers[2]["hookSpecificOutput"]["additionalContext"]
