@@ -98,6 +98,6 @@ class Planner:
             f"({state.effective_level.label})."
         )
         try:
-            return complete(self._config, prompt, max_tokens=200)
+            return complete(self._config, prompt, max_tokens=700)
         except Exception:  # pragma: no cover - network/credential issues
             return None

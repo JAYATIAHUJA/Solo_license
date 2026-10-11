@@ -6,6 +6,7 @@ import { jobName } from './mission/derive.js';
 
 const TITLES = {
   '': 'Home',
+  inbox: 'Inbox',
   agent: 'Try the agent',
   orders: 'Orders',
   runs: 'Activity',

@@ -71,7 +71,7 @@ function Ticket({ ticket }) {
           <details className="pl-more" open={ticket.status !== 'done'}>
             <summary>What the agent did</summary>
             <StepList steps={ticket.steps} />
-            {ticket.run_id && <p className="pl-small"><Link className="app-link" to={`/app/runs/${ticket.run_id}`}>Open the run and its evidence</Link></p>}
+            {ticket.run_id && <p className="pl-small ib-runlink"><Link className="app-link" to={`/app/runs/${ticket.run_id}`}>Open the run and its evidence</Link></p>}
           </details>
           {ticket.reply && (
             <div className="ib-reply">
