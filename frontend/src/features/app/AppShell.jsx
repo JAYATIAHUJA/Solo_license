@@ -4,7 +4,6 @@ import { useStore } from '../../lib/store.jsx';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Toast } from './components/Toast.jsx';
-import { Autopilot } from './autopilot/Autopilot.jsx';
 import './app.css';
 
 export function AppShell() {
@@ -30,9 +29,6 @@ export function AppShell() {
       </div>
     );
   }
-  // The coding agent needs no shop set-up; only the payments pages use onboarding.
-  if (!data.settings.onboarded && location.pathname === '/app/payments') return <Navigate to="/onboarding/payments" replace />;
-
   return (
     <div className={`app ${navOpen ? 'nav-open' : ''}`}>
       <Sidebar onClose={() => setNavOpen(false)} />
@@ -44,7 +40,6 @@ export function AppShell() {
         </main>
       </div>
       <Toast />
-      <Autopilot />
     </div>
   );
 }

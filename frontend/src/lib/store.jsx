@@ -24,9 +24,9 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('solo-session', sync);
   }, []);
 
-  const load = useCallback(async (runId) => {
+  const load = useCallback(async () => {
     try {
-      setData(await api.dashboard(runId));
+      setData(await api.dashboard());
       setError('');
       setStatus(0);
     } catch (cause) {
@@ -49,7 +49,7 @@ export function StoreProvider({ children }) {
     busyRef.current = true;
     try {
       const result = await fn();
-      if (result && result.licenses) setData(result);
+      if (result && result.settings) setData(result);
       const text = typeof success === 'function' ? success(result) : success;
       if (text) setToast({ kind: 'ok', text, at: Date.now() });
       return result;
