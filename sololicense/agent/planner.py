@@ -1,7 +1,7 @@
 """Planning for the refund worker.
 
 The planner explains *how* it will handle a request and in what order. It does
-**not** decide what is permitted — that authority belongs to
+**not** decide what is permitted - that authority belongs to
 :func:`sololicense.domain.license.decide`, and the plan is built around the
 decision it is handed. When an LLM key is configured the rationale is authored
 by the model; otherwise a deterministic template is used. Either way the plan

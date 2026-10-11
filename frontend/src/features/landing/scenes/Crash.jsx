@@ -13,7 +13,7 @@ const LOG = [
   ['detection.state_mismatch', 'intended $40.00 · verified $0.00'],
 ];
 
-/* Scene 05 — the page itself goes dark the moment the detection fires
+/* Scene 05 - the page itself goes dark the moment the detection fires
    (Moto's theme-invert), the level crashes, and the card is stamped. */
 export function Crash() {
   return (
@@ -54,7 +54,7 @@ function Scene({ p }) {
             ))}
           </ol>
           <motion.p className="sc-body" animate={{ opacity: stage === 3 ? 1 : 0 }}>
-            A quarantined class can’t earn its way back. Only a person who has read the evidence can restore it — and that decision is committed to git with their reason.
+            A quarantined class can’t earn its way back. Only a person who has read the evidence can restore it - and that decision is committed to git with their reason.
           </motion.p>
         </div>
 

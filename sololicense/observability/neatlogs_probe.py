@@ -8,7 +8,7 @@ must never shut down or reinitialise the live tracer just to test a key.
 
 The contract here:
 
-* credentials travel to the child through its environment — never on the
+* credentials travel to the child through its environment - never on the
   command line, never in logs, and never back in the report;
 * the child prints exactly one JSON line (the Doctor report) and exits;
 * the parent bounds the whole run (the Doctor's own read-back budget is
@@ -96,7 +96,7 @@ def run_doctor_probe(
 ) -> dict[str, Any]:
     """Doctor-probe neatlogs out of process; return a safe report dict.
 
-    Never raises: every failure mode — timeout, crash, unparseable output —
+    Never raises: every failure mode - timeout, crash, unparseable output -
     comes back as a structured ``{"status": "fail", "first_failure": ...}``
     report with the secret scrubbed.
     """
@@ -149,12 +149,12 @@ def run_doctor_probe(
 _MESSAGES = {
     "AUTH_FAILED": "neatlogs did not accept that API key. Copy the whole key from your neatlogs account and try again.",
     "CREDENTIAL_MISSING": "Add a neatlogs API key first.",
-    "TRACE_READBACK_TIMEOUT": "Connected. neatlogs accepted the probe trace, but it is still processing — check your neatlogs Traces page in a minute, or run the test again.",
+    "TRACE_READBACK_TIMEOUT": "Connected. neatlogs accepted the probe trace, but it is still processing - check your neatlogs Traces page in a minute, or run the test again.",
     "BACKEND_CONNECTION_FAILED": "Could not reach neatlogs at that address. Check the service address and your internet connection.",
     "BACKEND_HTTP_ERROR": "neatlogs answered with an error. Check the service address, or neatlogs status, and try again.",
     "ENDPOINT_INVALID": "That neatlogs service address is not valid. Keep the standard https://ingest.neatlogs.com unless neatlogs told you otherwise.",
-    "BACKEND_PROBE_UNAVAILABLE": "The diagnostic probe could not complete — this is a probe issue, not proof your key or network is wrong. Try again in a moment.",
-    "PROBE_TIMEOUT": "The diagnostic probe did not finish in time — neatlogs may be busy. Try again in a minute.",
+    "BACKEND_PROBE_UNAVAILABLE": "The diagnostic probe could not complete - this is a probe issue, not proof your key or network is wrong. Try again in a moment.",
+    "PROBE_TIMEOUT": "The diagnostic probe did not finish in time - neatlogs may be busy. Try again in a minute.",
 }
 
 
@@ -169,7 +169,7 @@ def response_for(report: dict[str, Any], secret: str = "") -> dict[str, Any]:
         return {
             "ok": True,
             "code": "PASS",
-            "message": "Connected. neatlogs accepted the probe trace and read it back — your key and the trace pipeline both work.",
+            "message": "Connected. neatlogs accepted the probe trace and read it back - your key and the trace pipeline both work.",
         }
     code = str(report.get("first_failure") or "UNKNOWN")
     checks = report.get("checks") or []
@@ -182,7 +182,7 @@ def response_for(report: dict[str, Any], secret: str = "") -> dict[str, Any]:
     elif code in _MESSAGES:
         message = _MESSAGES[code]
     else:
-        message = "neatlogs did not pass the test. Nothing looks wrong locally — try again, or check neatlogs status."
+        message = "neatlogs did not pass the test. Nothing looks wrong locally - try again, or check neatlogs status."
     detail = next(
         (str(check.get("message", "")) for check in checks if check.get("message")),
         "",

@@ -7,7 +7,7 @@ import { SectionHead } from '../Reveal.jsx';
 const QA = [
   ['Does the LLM decide what the agent is allowed to do?', 'No. The model reads customer messages and writes the plan. Permission comes from the license state machine, and the truth about what happened comes from reading the database back.'],
   ['Do I need an API key to try it?', 'No. Without a key, built-in rules run the same loop with the same safety. Groq\u2019s free tier, Gemini, Claude or OpenAI can be added in setup or Settings.'],
-  ['Where do my orders and messages come from?', 'Orders: a sample shop, a CSV export (Shopify, WooCommerce, a spreadsheet) or your Stripe account in test mode. Messages: paste them, or point your helpdesk or email forwarder at the inbox address — the answer is the reply to send.'],
+  ['Where do my orders and messages come from?', 'Orders: a sample shop, a CSV export (Shopify, WooCommerce, a spreadsheet) or your Stripe account in test mode. Messages: paste them, or point your helpdesk or email forwarder at the inbox address - the answer is the reply to send.'],
   ['How does it decide when the agent may act alone?', 'From evidence, priced by your costs. Acting alone pays only if the failure rate is below review cost \u00f7 cost of a mistake; the agent moves up only when its double-checked record proves that with the confidence you chose.'],
   ['What happens after a demotion?', 'The task class sits at L0 and earns nothing until a person opens the evidence packet and restores it to a level they choose. That decision is written to the ledger as a git commit.'],
   ['Can I test failures on purpose?', 'Yes. The app has a fault switch: arm a quiet failure or a policy breach for the next run and watch the detection catch it.'],

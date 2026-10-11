@@ -6,7 +6,7 @@ import { SketchBox } from '../../../components/sketch/Sketch.jsx';
 import { ScrambleText } from '../../../components/fx/ScrambleText.jsx';
 import { Pinned } from '../Pinned.jsx';
 
-/* Scene 02 — the failure nobody sees. Scroll plays it out:
+/* Scene 02 - the failure nobody sees. Scroll plays it out:
    agent claims success → database row refuses to move → stamp. */
 export function Problem() {
   return (
@@ -43,7 +43,7 @@ function Scene({ p }) {
             <span className="mono muted">agent · refund tool</span>
             <div className="sc-bubble">
               <HandIcon name="check" size={18} />
-              <span>Refund processed for <b>ORD-1002</b> — <b>$40.00</b>.</span>
+              <span>Refund processed for <b>ORD-1002</b> - <b>$40.00</b>.</span>
             </div>
             <span className="sc-chat-meta mono">tool.result · ok=true</span>
           </SketchBox>
@@ -73,7 +73,7 @@ function Scene({ p }) {
       </motion.div>
 
       <motion.p className="sc-foot" animate={{ opacity: stage >= 4 ? 1 : 0, y: stage >= 4 ? 0 : 12 }}>
-        Most agents would mark this “done” and move on. Solo License reads the database back after <b>every</b> action — and a mismatch costs the agent its license.
+        Most agents would mark this “done” and move on. Solo License reads the database back after <b>every</b> action - and a mismatch costs the agent its license.
       </motion.p>
     </div>
   );

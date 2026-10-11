@@ -1,9 +1,9 @@
-"""Connector contract — where orders come from and where money actually moves.
+"""Connector contract - where orders come from and where money actually moves.
 
 A connector does three things and nothing else:
 
 * ``apply``        performs a side effect (refund, store credit) and returns what
-                   it *claims* happened — a claim, never evidence;
+                   it *claims* happened - a claim, never evidence;
 * ``read_effect``  reads the authoritative amount back from the system of record
                    (Stripe, or the local store), which is what verification trusts;
 * ``list_orders``  imports the orders the agent may work on.

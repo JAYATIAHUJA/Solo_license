@@ -33,7 +33,7 @@ function sentence(data, e) {
     const p = problemFromReason(e.reason);
     return (
       <>
-        {pausedSentence(data, key)}{p ? <> — {p.title.charAt(0).toLowerCase() + p.title.slice(1)}</> : ''}
+        {pausedSentence(data, key)}{p ? <> - {p.title.charAt(0).toLowerCase() + p.title.slice(1)}</> : ''}
         {e.run_id ? <> (<Link to={`/app/runs/${e.run_id}`}>job #{e.run_id}</Link>)</> : null}
       </>
     );

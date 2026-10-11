@@ -40,7 +40,7 @@ export function levelCopy(level, limit) {
 /** Run outcomes, in the words a user would use. */
 export const OUTCOME = {
   clean: { label: 'Done', tone: 'ok', sentence: 'done and double-checked' },
-  demoted: { label: 'Problem caught', tone: 'bad', sentence: 'stopped — a problem was caught' },
+  demoted: { label: 'Problem caught', tone: 'bad', sentence: 'stopped - a problem was caught' },
   pending_approval: { label: 'Waiting for you', tone: 'wait', sentence: 'waiting for your OK' },
   suggested: { label: 'Suggestion', tone: 'wait', sentence: 'suggested for you to do' },
   approved: { label: 'Approved', tone: 'muted', sentence: 'approved by a person' },
@@ -78,4 +78,4 @@ export const PRACTICE = [
 ];
 
 /** One-line explanation of the product, reused on empty states and help. */
-export const ONE_LINER = 'Your AI agent starts by asking permission. Each time it does a job correctly it earns more freedom — and the moment something goes wrong it is paused until you check.';
+export const ONE_LINER = 'Your AI agent starts by asking permission. Each time it does a job correctly it earns more freedom - and the moment something goes wrong it is paused until you check.';

@@ -1,4 +1,4 @@
-"""Orders repository — the agent's "real world".
+"""Orders repository - the agent's "real world".
 
 ``refunded_amount`` is the authoritative side effect: the verifier reads it
 back after every execution. Nothing else in the system is allowed to claim a

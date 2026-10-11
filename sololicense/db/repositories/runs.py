@@ -1,4 +1,4 @@
-"""Runs repository — the recent-runs feed and the before/after numbers that
+"""Runs repository - the recent-runs feed and the before/after numbers that
 make a neatlogs trace comparison concrete."""
 
 from __future__ import annotations

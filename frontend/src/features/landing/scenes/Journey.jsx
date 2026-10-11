@@ -8,11 +8,11 @@ import { LicenseCard } from './LicenseCard.jsx';
 const STORY = [
   { title: 'It starts with nothing.', body: 'At L0 the agent reads the request and recommends what to do. A person does the refund. Nothing it says touches money.', proof: 'Suggest only' },
   { title: 'It drafts. You click.', body: 'Three verified runs in a row and it earns L1: it prepares the refund, you approve it, and the database is read back to prove it happened.', proof: 'Draft + approve' },
-  { title: 'Small refunds, on its own.', body: 'Three more clean runs and it acts alone — but only under a ceiling you set. Anything bigger still waits for a human.', proof: 'Auto under $50' },
+  { title: 'Small refunds, on its own.', body: 'Three more clean runs and it acts alone - but only under a ceiling you set. Anything bigger still waits for a human.', proof: 'Auto under $50' },
   { title: 'Full auto. Still watched.', body: 'At L3 it handles every refund in the class. Each run is sampled for audit, and the license can be taken back at any moment.', proof: 'Full auto, audited' },
 ];
 
-/* Scene 03 — Moto-card style: the license card stays pinned in the middle
+/* Scene 03 - Moto-card style: the license card stays pinned in the middle
    while the story scrolls past it, earning one rung per screen. */
 export function Journey() {
   return (
@@ -66,7 +66,7 @@ function Scene({ p }) {
           stamp={promoted ? { text: `Promoted · ${LEVELS[state.level].code}`, sub: '3 clean runs', tone: 'ink', angle: -7 } : null}
           style={{ rotateY, rotateX, y: cardY }}
         />
-        <p className="sc-card-note hand">{state.level < 3 ? `${3 - state.runs} clean run${3 - state.runs === 1 ? '' : 's'} to ${LEVELS[state.level + 1].code}` : 'top rung — audited'}</p>
+        <p className="sc-card-note hand">{state.level < 3 ? `${3 - state.runs} clean run${3 - state.runs === 1 ? '' : 's'} to ${LEVELS[state.level + 1].code}` : 'top rung - audited'}</p>
       </div>
     </div>
   );

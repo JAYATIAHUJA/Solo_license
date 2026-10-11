@@ -1,4 +1,4 @@
-"""Armed-faults repository — persists the fault queued for a task class's next
+"""Armed-faults repository - persists the fault queued for a task class's next
 run so a Streamlit rerun cannot lose it."""
 
 from __future__ import annotations

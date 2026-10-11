@@ -1,4 +1,4 @@
-/* Design tokens — black & white, paper, straight edges.
+/* Design tokens - black & white, paper, straight edges.
    No gradients, no border-radius. Status is expressed with fill patterns
    (solid / hatched / outline), not colour. */
 :root {

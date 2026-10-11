@@ -1,4 +1,4 @@
-"""Live unit economics of autonomy — the cfo.ai margin story, computed from
+"""Live unit economics of autonomy - the cfo.ai margin story, computed from
 the runs actually in the database rather than from a static spreadsheet.
 
 The thesis: **the license level is a margin driver.** Each rung trades human

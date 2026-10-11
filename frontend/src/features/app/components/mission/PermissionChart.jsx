@@ -46,7 +46,7 @@ function eventSentence(data, e, cards) {
   const card = cards.find((c) => c.key === (e.task_class || 'refund'));
   const name = card?.name || 'This job type';
   const to = `“${levelCopy(e.to_level, limitOf(card?.ceiling ?? 0)).short}”`;
-  if (e.kind === 'demote') return `${name} paused — a problem was caught`;
+  if (e.kind === 'demote') return `${name} paused - a problem was caught`;
   if (e.kind === 'restore') return `A person resumed ${name.toLowerCase()} at ${to}`;
   if (e.kind === 'promote') return `${name} moved up to ${to} after correct jobs`;
   return `${name} changed to ${to}`;

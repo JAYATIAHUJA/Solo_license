@@ -34,7 +34,7 @@ export function RestorePanel({ taskClass = 'refund', evidenceRunId }) {
         <h3>Resume {jobs.toLowerCase()}</h3>
         <p className="pl-muted">
           {pausedNow(data, taskClass)}. Read what happened{evidenceRunId == null && evidence ? <> (<Link to={`/app/runs/${evidence}`}>open it</Link>)</> : ' above'}.
-          {' '}Choose how much freedom to give back — you can always lower it later.
+          {' '}Choose how much freedom to give back - you can always lower it later.
         </p>
       </div>
 

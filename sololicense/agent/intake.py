@@ -1,4 +1,4 @@
-"""Intake agent — turns a free-text customer message into a structured refund
+"""Intake agent - turns a free-text customer message into a structured refund
 request. With an LLM configured the model does the extraction; without one a
 deterministic parser keeps the product fully usable. Either way the result is
 only a *request*: what may actually happen is still decided by the license."""

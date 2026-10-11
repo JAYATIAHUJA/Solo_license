@@ -6,7 +6,7 @@ const SOURCES = [
   {
     id: 'sample',
     title: 'Try it with a sample shop',
-    note: '8 realistic orders and 6 customer messages. Nothing to set up — best for a first look.',
+    note: '8 realistic orders and 6 customer messages. Nothing to set up - best for a first look.',
     tag: 'Fastest',
   },
   {
@@ -39,7 +39,7 @@ export function StepOrders({ form, set, data }) {
     <>
       <h1 className="ob-title">Where are your orders?</h1>
       <p className="ob-sub">
-        The agent can only refund or credit orders it knows about. Pick one — you can add the others later from the Orders page.
+        The agent can only refund or credit orders it knows about. Pick one - you can add the others later from the Orders page.
       </p>
       {existing > 0 && <p className="pl-help">This workspace already has {existing} order{existing === 1 ? '' : 's'}.</p>}
 
@@ -78,7 +78,7 @@ export function StepOrders({ form, set, data }) {
           <label className={`pl-choice ${form.stripe_sample ? 'is-on' : ''}`}>
             <input type="checkbox" checked={!!form.stripe_sample} onChange={(e) => set({ stripe_sample: e.target.checked })} />
             <span>
-              <b>My test account is empty — create sample payments in it</b>
+              <b>My test account is empty - create sample payments in it</b>
               <small>Adds 8 paid test charges with customers, so there is something to refund. Test mode only.</small>
             </span>
           </label>

@@ -1,4 +1,4 @@
-"""Refund policy — checked before the licence is even consulted.
+"""Refund policy - checked before the licence is even consulted.
 
 The licence answers "may the agent act alone?"; the policy answers "should this
 happen at all?". Every rule comes from the workspace's settings, so a shop

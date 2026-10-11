@@ -1,4 +1,4 @@
-"""License-state repository — reads/writes the autonomy dial and maps rows to
+"""License-state repository - reads/writes the autonomy dial and maps rows to
 and from the pure :class:`~sololicense.domain.license.LicenseState`."""
 
 from __future__ import annotations

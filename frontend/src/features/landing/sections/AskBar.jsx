@@ -5,7 +5,7 @@ import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 
 const PROMPTS = [
   'My order ORD-1002 arrived damaged, refund $40 please',
-  'Charged twice for ORD-1003 — refund $7.50',
+  'Charged twice for ORD-1003 - refund $7.50',
   'Never received ORD-1004, I want my money back',
 ];
 

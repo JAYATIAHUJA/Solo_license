@@ -30,7 +30,7 @@ def format_alert(
 ) -> str:
     icon = _ICONS.get(kind, "•")
     lines = [
-        f"{icon} *{business or 'Solo License'}* — `{task_class}` {kind} "
+        f"{icon} *{business or 'Solo License'}* - `{task_class}` {kind} "
         f"L{from_level} → L{to_level}",
         reason,
     ]

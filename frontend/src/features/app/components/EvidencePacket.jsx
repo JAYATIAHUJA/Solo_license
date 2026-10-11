@@ -44,7 +44,7 @@ function planLine(run, planAttrs) {
   const found = /\('([^']+)'\)/.exec(planAttrs.rationale || run.notes || '')?.[1];
   const quoted = found === 'approved by human' ? '' : found;
   const what = run.task_class === 'store_credit' ? `Give ${money(run.requested_amount)} store credit` : `Refund ${money(run.requested_amount)}`;
-  return `${what} on ${run.order_id}${quoted ? ` — reason given: “${quoted}”` : ''}.`;
+  return `${what} on ${run.order_id}${quoted ? ` - reason given: “${quoted}”` : ''}.`;
 }
 
 /** "What happened" for one job: a short checklist in words, then the
@@ -108,7 +108,7 @@ export function EvidencePacket({ packet, taskClass }) {
       ? {
         title: 'Double-checked the order',
         tone: firstMatched ? 'ok' : 'bad',
-        body: <>Before: <b>{money(before)}</b> {effect} · After: <b>{money(after)}</b> {effect}{firstMatched ? '' : ' — not what the tool claimed.'}</>,
+        body: <>Before: <b>{money(before)}</b> {effect} · After: <b>{money(after)}</b> {effect}{firstMatched ? '' : ' - not what the tool claimed.'}</>,
       }
       : { title: 'Skipped the double-check', tone: 'bad', body: 'The order was never re-read to confirm the result.' });
   }
@@ -120,7 +120,7 @@ export function EvidencePacket({ packet, taskClass }) {
         title: 'Recovered it safely',
         tone: 'ok',
         body: retried
-          ? <>Re-read the order (still nothing), then retried once with the <b>same request key</b> — so it could never pay twice — and checked again: <b>{money(finalAfter)}</b> {effect}.</>
+          ? <>Re-read the order (still nothing), then retried once with the <b>same request key</b> - so it could never pay twice - and checked again: <b>{money(finalAfter)}</b> {effect}.</>
           : <>Re-read the order and found the change had landed after all: <b>{money(finalAfter)}</b> {effect}.</>,
       }
       : {
@@ -169,8 +169,8 @@ export function EvidencePacket({ packet, taskClass }) {
                     const p = problem(d.rule);
                     return <p key={d.id}><b>{p.title}.</b> {p.explain}</p>;
                   })}
-                  {run.recovered ? <p><b>The customer still got their money</b> — but the tool could not be trusted, so the licence drops anyway.</p> : null}
-                  <p className="act-paused">{pausedSentence(data, key)} — nothing more runs until someone reviews this and presses Resume.</p>
+                  {run.recovered ? <p><b>The customer still got their money</b> - but the tool could not be trusted, so the licence drops anyway.</p> : null}
+                  <p className="act-paused">{pausedSentence(data, key)} - nothing more runs until someone reviews this and presses Resume.</p>
                 </>
               ) : run.status === 'clean' ? (
                 <p>The order shows the change, so this counts as a correct job.</p>
@@ -210,7 +210,7 @@ export function EvidencePacket({ packet, taskClass }) {
             <div>
               <b className="pl-small">Safety checks that fired</b>
               <ul className="act-tech-list">
-                {detections.map((d) => <li key={d.id}><code>{d.rule}</code>{d.severity ? ` · ${d.severity}` : ''} — {d.message}</li>)}
+                {detections.map((d) => <li key={d.id}><code>{d.rule}</code>{d.severity ? ` · ${d.severity}` : ''} - {d.message}</li>)}
               </ul>
             </div>
           )}

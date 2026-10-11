@@ -2,7 +2,7 @@
 
 The one place where concrete dependencies are constructed and wired. Both the
 Streamlit UI and the command-line scripts build their world through
-:func:`build_app`, so there is a single, consistent assembly order — and
+:func:`build_app`, so there is a single, consistent assembly order - and
 neatlogs is initialised here, before any agent object exists, as required."""
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ def build_app(
         warnings.append(f"{error} Re-enter API keys in Settings.")
     config = with_overrides(config, revealed)
 
-    # 2. Observability — instrument before any agent logic.
+    # 2. Observability - instrument before any agent logic.
     neatlogs = init_neatlogs(config)
     tracer = Tracer(neatlogs)
 

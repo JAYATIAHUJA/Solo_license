@@ -1,4 +1,4 @@
-"""License-events repository — the git-backed ledger of every autonomy change.
+"""License-events repository - the git-backed ledger of every autonomy change.
 
 Each row pairs with a git commit (``git_sha``) so Entire can graph and explain
 the full history of how a task class earned or lost its license."""

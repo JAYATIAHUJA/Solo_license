@@ -2,9 +2,9 @@
 
 A *task class* (e.g. ``refund``) holds one :class:`LicenseState`. The agent may
 only do what the current level permits. Levels are *earned* from verified
-evidence — enough successes that the failure rate is provably below the
+evidence - enough successes that the failure rate is provably below the
 break-even rate of the operator's own economics (see
-:mod:`sololicense.domain.trust`) — and *lost* immediately when a detection fires.
+:mod:`sololicense.domain.trust`) - and *lost* immediately when a detection fires.
 
     L0  suggest only                       (human does everything)
     L1  draft + human approves each run
@@ -17,7 +17,7 @@ Design notes
   outputs and never touches a database, clock, or network. Persistence and
   side effects live in outer layers.
 * A detection demotes the class straight to ``L0`` *and* quarantines it.
-  While quarantined the class behaves at L0 and **cannot** auto-promote —
+  While quarantined the class behaves at L0 and **cannot** auto-promote -
   only a human-reviewed evidence packet (``restore``) clears the quarantine.
   This is what makes recovery "with judgment, not blind retry".
 """
@@ -117,7 +117,7 @@ def record_clean_run(state: LicenseState, *, ladder: TrustLadder) -> LicenseStat
     """Add one verified success and promote one rung if the evidence now
     proves the failure rate is below the next step's break-even rate.
 
-    A quarantined class accrues no credit — it must be restored by a human
+    A quarantined class accrues no credit - it must be restored by a human
     first.
     """
     if state.quarantined:

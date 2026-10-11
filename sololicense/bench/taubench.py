@@ -9,13 +9,13 @@ each scored by comparing the final database with the expected one.
 We replay every database write those agents made and ask one question per
 write: **who would have let it through?** Five policies are compared:
 
-* ``full_auto``      — the agent acts alone (how the trajectories were recorded);
-* ``approve_all``    — a person approves every write;
-* ``fixed_ladder``   — autonomy after N reviewed-correct writes in a row
+* ``full_auto``      - the agent acts alone (how the trajectories were recorded);
+* ``approve_all``    - a person approves every write;
+* ``fixed_ladder``   - autonomy after N reviewed-correct writes in a row
                        (Solo License v1), demoted when an audit finds a mistake;
-* ``guards_only``    — the agent acts alone, but policy guards hold suspicious
+* ``guards_only``    - the agent acts alone, but policy guards hold suspicious
                        writes for a person (AgentSpec-style runtime rules);
-* ``solo_license``   — per-job-type licence earned from verified evidence with
+* ``solo_license``   - per-job-type licence earned from verified evidence with
                        :mod:`sololicense.domain.trust` (Bayesian, break-even from
                        the economics), plus the same guards and audits.
 
@@ -347,7 +347,7 @@ def stream(episodes: list[Episode], seed: int) -> list[Write]:
 
 
 def class_table(episodes: list[Episode], costs: Costs, confidence: float) -> list[dict]:
-    """Measured reliability per job type — the evidence a licence is learned from."""
+    """Measured reliability per job type - the evidence a licence is learned from."""
     trust = TrustPolicy(costs.review - costs.autonomous, costs.incident, confidence)
     totals: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for e in episodes:

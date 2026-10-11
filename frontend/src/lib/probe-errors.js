@@ -14,8 +14,8 @@ const PROBE_TEXT = {
   BACKEND_CONNECTION_FAILED: 'Could not reach neatlogs. Check the service address and your internet connection.',
   BACKEND_HTTP_ERROR: 'neatlogs answered with an error. Check the service address, or neatlogs status, and try again.',
   ENDPOINT_INVALID: 'That neatlogs service address is not valid. Keep the standard address unless neatlogs told you otherwise.',
-  BACKEND_PROBE_UNAVAILABLE: 'The diagnostic could not finish — that does not mean your key is wrong. Try again in a moment.',
-  PROBE_TIMEOUT: 'The diagnostic did not finish in time — neatlogs may be busy. Try again in a minute.',
+  BACKEND_PROBE_UNAVAILABLE: 'The diagnostic could not finish - that does not mean your key is wrong. Try again in a moment.',
+  PROBE_TIMEOUT: 'The diagnostic did not finish in time - neatlogs may be busy. Try again in a minute.',
 };
 
 /** Translate a structured probe result into guidance for the Test row. */

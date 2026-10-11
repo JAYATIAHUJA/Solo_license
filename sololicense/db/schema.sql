@@ -4,7 +4,7 @@ PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
 
 -- The "real world" the agent acts on. orders.refunded_amount is the ONLY
--- authority on whether a refund actually landed — the verifier reads it
+-- authority on whether a refund actually landed - the verifier reads it
 -- back after every execution rather than trusting the tool's response.
 CREATE TABLE IF NOT EXISTS orders (
     order_id         TEXT PRIMARY KEY,

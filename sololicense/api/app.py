@@ -496,7 +496,7 @@ def _stats_row(row) -> dict:
         "suggested": row["suggested"] or 0,
         "executed": row["executed"] or 0,
         "faults_injected": row["faulted"] or 0,
-        # Every injected fault that executed was caught (it demoted) — the
+        # Every injected fault that executed was caught (it demoted) - the
         # false-success count that reached the customer is the difference.
         "paid_out": round(row["paid"] or 0, 2),
     }
@@ -926,7 +926,7 @@ def approve_run(
 ) -> dict:
     """Human approves a draft (L1 / over the L2 ceiling) or acts on an L0
     suggestion. The approved execution is still verified and, when clean,
-    earns track-record credit — that is how a class climbs off L0."""
+    earns track-record credit - that is how a class climbs off L0."""
     with _lock:
         context = get_context()
         run = runs_repo.get_run(context.conn, run_id)
@@ -1024,7 +1024,7 @@ def export_orders(actor: Actor = Depends(require_role(Role.OPERATOR))) -> str:
 
 @app.get("/api/runs/export", response_class=PlainTextResponse)
 def export_runs(actor: Actor = Depends(require_role(Role.OPERATOR))) -> str:
-    """Every run with its verified numbers — for an accountant or an audit."""
+    """Every run with its verified numbers - for an accountant or an audit."""
     import csv
     import io
 

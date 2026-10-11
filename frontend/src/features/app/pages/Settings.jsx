@@ -213,7 +213,7 @@ function SettingsForm({ data }) {
 
       <Section title="Start over">
         <p className="pl-small">
-          <b>Reset demo data</b> — deletes all activity and history in this workspace and reloads sample orders. Your settings are kept.
+          <b>Reset demo data</b> - deletes all activity and history in this workspace and reloads sample orders. Your settings are kept.
         </p>
         {!confirmReset ? (
           <div className="pl-actions">

@@ -5,7 +5,7 @@ import { SectionHead } from '../Reveal.jsx';
 const FACTS = [
   { n: 17, label: '% of GPT-4o database writes on τ-bench that were wrong' },
   { n: 0, label: 'Wrong writes Solo License let through on τ-bench' },
-  { n: 4, label: 'Customers left waiting before recovery — now 0' },
+  { n: 4, label: 'Customers left waiting before recovery - now 0' },
   { n: 0, label: 'Tool responses taken on trust' },
 ];
 

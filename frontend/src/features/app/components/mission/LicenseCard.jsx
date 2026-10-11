@@ -61,7 +61,7 @@ export function shareText({ business, card }) {
   const now = levelCopy(license.effective_level, limitOf(ceiling)).short;
   const p = progressOf(card);
   const next = license.effective_level >= 3 ? 'It has reached the highest level.'
-    : `It has ${license.successes} double-checked jobs on record and needs ${p.needed ?? 'more'} more before it gets more freedom — earned from evidence, priced by what a mistake costs.`;
+    : `It has ${license.successes} double-checked jobs on record and needs ${p.needed ?? 'more'} more before it gets more freedom - earned from evidence, priced by what a mistake costs.`;
   return `${who} AI agent holds a license for ${name.toLowerCase()}: “${now}”. ${next} Every result is double-checked and every change is on record. #neatHack`;
 }
 
@@ -76,10 +76,10 @@ export function LicenseCard({ data, card }) {
   const copy = levelCopy(level, limitOf(ceiling));
   const business = data.settings?.business_name || 'Your business';
   const number = `SL-${key.replace(/[^a-z]/gi, '').slice(0, 3).toUpperCase()}-${String(hash(`${business}:${key}`) % 100000).padStart(5, '0')}`;
-  const allowed = paused ? 'Paused — suggests only until reviewed' : copy.short;
+  const allowed = paused ? 'Paused - suggests only until reviewed' : copy.short;
   const progress = paused
     ? 'On hold'
-    : level >= 3 ? 'Highest level' : `${license.successes} verified · ${progressOf(card).needed ?? '—'} more to go`;
+    : level >= 3 ? 'Highest level' : `${license.successes} verified · ${progressOf(card).needed ?? '-'} more to go`;
   const incident = facts.lastIncident
     ? `${stampDate(facts.lastIncident.created_at)} · ${facts.incidentProblem?.title || 'Problem caught'}`
     : 'None on record';

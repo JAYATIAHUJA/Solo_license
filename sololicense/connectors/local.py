@@ -1,7 +1,7 @@
 """The built-in store: orders and their side effects live in SQLite.
 
 Used for sample data and CSV-imported orders. ``suppress_write`` exists for the
-fault switch: the write is skipped but the tool still reports success — the
+fault switch: the write is skipped but the tool still reports success - the
 exact lie verification is built to catch."""
 
 from __future__ import annotations

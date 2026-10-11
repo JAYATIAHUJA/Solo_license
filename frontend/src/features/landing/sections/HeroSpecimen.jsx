@@ -4,7 +4,7 @@ import { SketchBox } from '../../../components/sketch/Sketch.jsx';
 import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 
 /* A looping specimen of one task class's life: three clean runs promote it,
-   then a quiet failure is caught and the dial crashes. Illustrative only —
+   then a quiet failure is caught and the dial crashes. Illustrative only -
    the real thing runs in the app against the API. */
 const FRAMES = [
   { level: 1, runs: 0, line: 'ORD-1001 · $25.00 · drafted for approval', icon: 'message' },
@@ -12,7 +12,7 @@ const FRAMES = [
   { level: 1, runs: 2, line: 'ORD-1002 · $40.00 · executed · read-back matched', icon: 'check' },
   { level: 2, runs: 0, line: '3 clean runs → promoted to L2 · commit 4f1a2c', icon: 'commit' },
   { level: 2, runs: 1, line: 'ORD-1005 · $45.00 · executed · read-back matched', icon: 'check' },
-  { level: 0, runs: 0, line: 'state_mismatch — tool said done, DB moved $0.00', icon: 'warn', alert: true },
+  { level: 0, runs: 0, line: 'state_mismatch - tool said done, DB moved $0.00', icon: 'warn', alert: true },
 ];
 
 export function HeroSpecimen() {

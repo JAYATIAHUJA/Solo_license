@@ -1,4 +1,4 @@
-"""Settings repository — operator-editable key/value configuration."""
+"""Settings repository - operator-editable key/value configuration."""
 
 from __future__ import annotations
 

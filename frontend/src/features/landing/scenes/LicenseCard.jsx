@@ -6,7 +6,7 @@ import { Stamp } from '../../../components/fx/Stamp.jsx';
 import { Logo } from '../../../components/brand/Logo.jsx';
 
 /** The physical "license" the agent carries: level, track record, holder's
- *  signature, stamps. Purely presentational — the scenes drive it. */
+ *  signature, stamps. Purely presentational - the scenes drive it. */
 export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = false, stamp = null, style }) {
   const signature = useMemo(loadSignature, []);
   const info = LEVELS[level];
@@ -23,7 +23,7 @@ export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = 
           <span className="mono lc-label">Authorised to</span>
           <AnimatePresence mode="wait">
             <motion.b key={`${level}-${quarantined}`} className="lc-auth" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              {quarantined ? 'Suggest only — quarantined' : info.name}
+              {quarantined ? 'Suggest only - quarantined' : info.name}
             </motion.b>
           </AnimatePresence>
         </div>
