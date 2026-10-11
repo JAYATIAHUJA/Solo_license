@@ -154,16 +154,24 @@ class CodingGate:
             return {}
         trace = self._trace(agent_repo.current_turn(self.conn, session))
         repo, key = row["repo"], row["action_class"]
-        if row["decision"] == "ask":  # it ran: the person (or the agent's own settings) said yes
+        # Trust only grows from a person's yes or from the gate's own earned
+        # "allow". An action the *agent's* settings let through (its hook fires
+        # on every call, so nobody was asked) is observed, never credited.
+        unattended = row["decision"] == "ask" and row["decided_by"] == "agent-settings"
+        if row["decision"] == "ask" and not unattended:  # it ran, so the person said yes
             agent_repo.approve_pattern(self.conn, repo, key, row["pattern"])
-            if row["decided_by"] == "license":
-                agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
+            agent_repo.set_outcome(self.conn, row["id"], "pending", decided_by="person")
             trace.span("gate.approved_by_person", decision_id=row["id"], pattern=row["pattern"], action_class=key)
         error = str(event.get("error", ""))[:300]
         if failed and key not in DIAGNOSTIC and not event.get("is_interrupt"):
+            # A failure always counts, whoever let the action run.
             agent_repo.set_outcome(self.conn, row["id"], "failed")
             trace.span("tool.failed", status="error", decision_id=row["id"], action_class=key, error=error)
             self._fail(repo, key, f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}", trace)
+        elif unattended:
+            agent_repo.set_outcome(self.conn, row["id"], "observed")
+            trace.span("tool.observed", decision_id=row["id"], action_class=key,
+                       note="ran under the agent's own settings; not credited")
         elif key in DIAGNOSTIC:
             agent_repo.set_outcome(self.conn, row["id"], "verified")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="error" if failed else "ok")

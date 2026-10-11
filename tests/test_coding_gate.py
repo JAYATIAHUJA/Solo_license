@@ -219,3 +219,39 @@ def test_a_tool_that_ran_after_the_prompt_is_recorded_as_the_persons_approval(ga
     _approve_and_run(gate, "npm test")
     row = gate.conn.execute("SELECT decided_by, outcome FROM agent_decisions ORDER BY id DESC LIMIT 1").fetchone()
     assert row["decided_by"] == "person" and row["outcome"] == "verified"
+
+
+
+def _cursor_shell(gate, command):
+    return {"session_id": "cur", "cwd": str(gate.project), "tool_name": "Bash",
+            "tool_input": {"command": command}, "_agent": "cursor", "_prompt_only": False}
+
+
+def test_actions_the_agents_own_settings_let_through_earn_nothing(gate):
+    """Trail #26 finding: an agent whose hook fires on every call must not
+    unlock L1 just because its own settings ran the command."""
+    gate.user_prompt({"session_id": "cur", "cwd": str(gate.project), "prompt": "x", "_agent": "cursor"})
+    for _ in range(6):
+        gate.permission(_cursor_shell(gate, "npm install left-pad"))
+        gate.tool_result(_cursor_shell(gate, "npm install left-pad"), failed=False)
+    gate.stop({"session_id": "cur", "cwd": str(gate.project)})
+    lic = _license(gate, "install-dep")
+    assert lic["level"] == 0 and lic["successes"] == 0
+    assert not agent_repo.pattern_approved(gate.conn, "shop-api", "npm install")
+    outcomes = {r["outcome"] for r in gate.conn.execute("SELECT outcome FROM agent_decisions WHERE agent = 'cursor'")}
+    assert outcomes == {"observed"}
+
+
+def test_failures_count_whoever_let_the_action_run(gate):
+    gate.user_prompt({"session_id": "cur", "cwd": str(gate.project), "prompt": "x", "_agent": "cursor"})
+    gate.permission(_cursor_shell(gate, "npm install left-pad"))
+    gate.tool_result(_cursor_shell(gate, "npm install left-pad") | {"error": "Exit code 1"}, failed=True)
+    assert _license(gate, "install-dep")["failures"] == 1
+
+
+def test_trust_earned_through_a_person_is_shared_by_every_agent_in_the_repo(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    for _ in range(3):
+        _approve_and_run(gate, "npm test")          # Claude Code: a person approved each one
+    answer = gate.permission(_cursor_shell(gate, "npm test"))
+    assert answer["hookSpecificOutput"]["decision"]["behavior"] == "allow"
