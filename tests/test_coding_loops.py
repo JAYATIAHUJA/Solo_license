@@ -160,6 +160,18 @@ def test_an_edit_clears_edit_tool_fingerprints_but_keeps_the_turn_bookkeeping(ga
     assert _fingerprints(conn, "s9") == {"edit:1:a.py", "edit:1:b.py"}
 
 
+def test_a_new_turn_drops_the_edit_bookkeeping_of_earlier_turns(gate):
+    conn = gate.conn
+    loops.record_edit(conn, "s9", 1, "a.py")
+    loops.record_edit(conn, "s9", 1, "b.py")
+    loops.record_edit(conn, "s8", 1, "a.py")
+    loops.record_edit(conn, "s9", 12, "a.py")
+    assert _fingerprints(conn, "s9") == {"edit:12:a.py"}
+    assert _fingerprints(conn, "s8") == {"edit:1:a.py"}
+    loops.record_edit(conn, "s9", 1, "c.py")
+    assert _fingerprints(conn, "s9") == {"edit:1:c.py"}
+
+
 def test_the_window_caps_edit_tool_fingerprints_too(gate):
     conn = gate.conn
     loops.record_edit(conn, "s9", 1, "a.py")

@@ -120,8 +120,12 @@ def record(conn: sqlite3.Connection, session_id: str, fp: str, *, failed: bool, 
 
 
 def record_edit(conn: sqlite3.Connection, session_id: str, turn_id: int | None, path: str) -> None:
-    """An edit: repeat counters start over, and the file's edits this turn grow."""
+    """An edit: repeat counters start over, and the file's edits this turn grow
+    (earlier turns' counts are dropped: only the open turn is checked)."""
     conn.execute(f"DELETE FROM agent_fingerprints WHERE session_id = ? AND {_COUNTERS}", (session_id,))
+    if turn_id is not None:
+        conn.execute("DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint GLOB 'edit:*' "
+                     "AND fingerprint NOT GLOB ?", (session_id, f"edit:{int(turn_id)}:*"))
     if turn_id is not None and path:
         record(conn, session_id, f"edit:{turn_id}:{path}", failed=False)
 
