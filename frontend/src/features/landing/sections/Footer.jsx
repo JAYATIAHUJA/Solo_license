@@ -15,7 +15,6 @@ export function Footer({ onReplayIntro }) {
         </nav>
         <nav>
           <Link to="/app">Dashboard</Link>
-          <Link to="/app/payments">Payments agent</Link>
           <Link to="/app/settings">Settings</Link>
         </nav>
       </div>
