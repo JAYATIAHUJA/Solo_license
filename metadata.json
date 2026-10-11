@@ -1,0 +1,16 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4PE2CEY0M8NETJ6MHDGNY0X",
+  "strategy": "manual-commit",
+  "branch": "feat/observability-depth",
+  "checkpoints_count": 20,
+  "files_touched": [
+    "sololicense/observability/neatlogs_client.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
