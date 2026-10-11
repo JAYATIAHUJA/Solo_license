@@ -216,3 +216,34 @@ html[data-invert="1"] .alt { color: var(--paper); }
   .am-list { display: none; }
   .sc-ev-note { display: none; }
 }
+
+/* Inside your agent: a terminal session with the gate's answers inline */
+.sc-term-wrap { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(20px, 4vw, 64px); align-items: center; }
+.sc-term-copy { align-self: start; }
+.sc-term-agents { margin-top: clamp(14px, 3vh, 28px); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; display: flex; gap: 8px; }
+.sc-term-agents b { color: var(--ink); }
+.term { background: #0e0e0d; color: #e9e6df; border: 1px solid var(--ink); box-shadow: 16px 16px 0 rgba(14, 14, 13, 0.18); min-height: min(64vh, 560px); display: flex; flex-direction: column; }
+.term-chrome { display: flex; gap: 6px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #2a2a27; }
+.term-chrome i { width: 9px; height: 9px; border-radius: 50%; background: #3a3a36; }
+.term-chrome span { margin-left: 10px; font-size: 11px; color: #8d8a82; text-transform: none; letter-spacing: 0; }
+.term-body { list-style: none; margin: 0; padding: clamp(12px, 2vh, 20px) 16px; display: grid; gap: 8px; align-content: start; font-size: clamp(11px, 1.05vw, 13.5px); line-height: 1.45; text-transform: none; letter-spacing: 0; }
+.term-line { display: grid; grid-template-columns: 18px 1fr; gap: 8px; }
+.term-mark { color: #8d8a82; }
+.term-line.is-you { color: #fff; margin-top: 6px; }
+.term-line.is-you .term-mark { color: #fff; }
+.term-line.is-out { color: #a7a39a; }
+.term-line.is-agent { color: #e9e6df; }
+.term-line.is-gate { padding: 6px 10px; margin-left: 18px; grid-template-columns: 14px 1fr; border-left: 3px solid #6fae6b; background: rgba(111, 174, 107, 0.08); }
+.term-line.is-gate b { font-weight: 600; margin-right: 4px; }
+.term-line.is-gate.is-bad { border-left-color: var(--signal); background: rgba(216, 52, 31, 0.12); }
+.term-line.is-gate.is-ok .term-mark { color: #6fae6b; }
+.term-line.is-gate.is-bad .term-mark { color: var(--signal); }
+.term-cursor i { width: 8px; height: 15px; background: #e9e6df; animation: term-blink 1s steps(1) infinite; }
+@keyframes term-blink { 50% { opacity: 0; } }
+@media (max-width: 900px) {
+  .sc-term-wrap { grid-template-columns: 1fr; align-content: start; }
+  .sc-term-copy .sc-body { display: none; }
+  .term { min-height: 0; }
+}
+.term .mono, .term .mono * { text-transform: none; letter-spacing: 0; }
+.term .term-chrome i { border-radius: 50%; display: block; }

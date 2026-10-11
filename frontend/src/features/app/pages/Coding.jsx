@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole, toDate, when } from '../../../lib/format.js';
@@ -72,7 +73,7 @@ function CopyLine({ cmd }) {
 function Setup({ open }) {
   return (
     <details className="pl-help cd-setup" open={open}>
-      <summary><b>Connect Claude Code</b> - two commands, then work as usual</summary>
+      <summary><b>Connect a coding agent</b> - Claude Code, Codex, Cursor, Gemini, Antigravity, Copilot, Grok, Windsurf, Kiro, Cline, OpenCode</summary>
       <ol>
         <li>Keep this API running (<code>make run-api</code>). Claude Code calls it from its hooks.</li>
         <li>In Claude Code, install the plugin:
@@ -85,6 +86,7 @@ function Setup({ open }) {
           <div className="cd-cmds"><CopyLine cmd="python -m sololicense.coding.install path/to/your/repo" /></div>
         </li>
       </ol>
+      <p><Link className="btn btn-ink btn-sm" to="/onboarding">Open the setup guide for any agent</Link></p>
       <p className="pl-small pl-muted">Every repository starts at zero trust. If this API is down, Claude Code simply asks you as before. Nothing is ever allowed silently.</p>
     </details>
   );

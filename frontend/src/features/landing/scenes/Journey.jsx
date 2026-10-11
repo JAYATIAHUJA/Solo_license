@@ -38,7 +38,7 @@ function Scene({ p }) {
     <div className="sc-wrap sc-journey-wrap">
       <div className="sc-journey-copy">
         <div className="sc-head">
-          <span className="mono muted">(003)</span>
+          <span className="mono muted">(004)</span>
           <ScrambleText className="mono" text="How it earns the keys" />
         </div>
         <AnimatePresence mode="wait">

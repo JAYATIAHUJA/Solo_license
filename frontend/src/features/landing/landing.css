@@ -263,3 +263,14 @@
   .lp-closing { height: 100svh; min-height: 0; }
   .lp-closing-title { font-size: clamp(56px, min(10vw, 15vh), 150px); }
 }
+
+/* Install: one line, any agent */
+.lp-install-agents { display: flex; flex-wrap: wrap; gap: 8px; margin: clamp(18px, 3vw, 32px) 0 16px; }
+.lp-install-chip { padding: 8px 14px; border: 1px solid var(--ink); background: transparent; cursor: pointer; font-size: 14px; }
+.lp-install-chip.is-on { background: var(--ink); color: var(--paper); }
+.lp-install-box { display: grid; gap: 14px; padding: clamp(16px, 2.4vw, 28px); background: var(--sheet); border: 1px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); margin-bottom: 24px; }
+.lp-install-box > div { display: grid; gap: 6px; }
+.lp-install-line { display: flex; gap: 8px; align-items: center; }
+.lp-install-line code { flex: 1; min-width: 0; background: #0e0e0d; color: #e9e6df; padding: 10px 12px; font: 13px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.lp-install-note { margin: 0; font-size: 14px; }
+@media (max-width: 640px) { .lp-install-line { flex-direction: column; align-items: stretch; } }

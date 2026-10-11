@@ -54,6 +54,9 @@ export function saveText(text, filename, type = 'text/csv') {
 }
 
 export const api = {
+  codingAgents: () => request('/api/coding/agents', { auth: false }),
+  codingInstall: (agent) => request(`/api/coding/install?agent=${encodeURIComponent(agent)}`, { auth: false }),
+  testJev: () => request('/api/coding/jev/test', { method: 'POST' }),
   coding: (repo) => request(`/api/coding${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`),
   codingRestore: (body) => request('/api/coding/licenses/restore', { method: 'POST', body }),
   codingRewind: (turnId) => request(`/api/coding/turns/${turnId}/rewind`, { method: 'POST' }),

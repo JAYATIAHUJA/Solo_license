@@ -1643,3 +1643,22 @@ def coding_agents() -> dict:
          "install": f"solo-license init --agent {a.key}"}
         for a in agents.AGENTS.values()
     ], "unsupported": agents.UNSUPPORTED}
+
+
+@app.get("/api/coding/install")
+def coding_install(agent: str = Query(default="auto", max_length=40, pattern=r"^[a-z0-9-]+$")) -> dict:
+    """Everything a person needs to wire one agent: the one-liner, the
+    command to keep the gate running, and a prompt their agent can follow."""
+    from sololicense.cli import INSTALL_ONE_LINER, REPO_URL, agent_prompt
+
+    return {
+        "agent": agent,
+        "one_liner": INSTALL_ONE_LINER.replace("--agent auto", f"--agent {agent}"),
+        "persistent": f"uv tool install git+{REPO_URL}",
+        "init": f"solo-license init --agent {agent}",
+        "serve": "solo-license serve",
+        "doctor": "solo-license doctor",
+        "prompt": agent_prompt(agent),
+        "claude_plugin": ["/plugin marketplace add JAYATIAHUJA/Solo_license",
+                          "/plugin install solo-license@solo-license"],
+    }

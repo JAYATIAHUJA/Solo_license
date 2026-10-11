@@ -1,0 +1,30 @@
+.su { max-width: 900px; margin: 0 auto; padding: 20px 16px 64px; display: grid; gap: 18px; }
+.su-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.su-brand { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; }
+.su-intro { padding: 18px 0 6px; display: grid; gap: 10px; }
+.su-intro h1 { margin: 0; font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.02em; }
+.su-intro p:last-child { max-width: 64ch; color: var(--muted); }
+.su-step header { display: flex; gap: 12px; align-items: center; }
+.su-step h2 { margin: 0; font: 600 18px/1.3 var(--font-sans); }
+.su-n { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--ink); font: 600 13px/1 var(--font-mono); flex: none; }
+.su-step.is-done .su-n { background: var(--ink); color: var(--paper); }
+.su-agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.su-agent { position: relative; text-align: left; display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+.su-agent:hover { border-color: var(--ink); }
+.su-agent.is-on { border-color: var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+.su-agent small { color: var(--muted); font-size: 12px; }
+.su-dot { position: absolute; top: 10px; right: 10px; width: 8px; height: 8px; background: var(--ok); }
+.su-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.su-tab { padding: 8px 14px; border: 0; background: none; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.su-tab.is-on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+.su-body { display: grid; gap: 8px; }
+.su-body p { margin: 4px 0 0; }
+.su-copy { display: flex; gap: 8px; align-items: flex-start; }
+.su-copy code, .su-copy pre { flex: 1; min-width: 0; background: #0e0e0d; color: #e9e6df; padding: 9px 12px; font: 13px/1.5 var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere; margin: 0; }
+.su-copy pre { white-space: pre-wrap; max-height: 280px; overflow: auto; }
+.su-keys { grid-template-columns: 1fr; }
+.su-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.su-ok { padding: 12px 14px; background: var(--ok-bg); color: var(--ok); margin: 0; }
+.su-wait { padding: 12px 14px; background: var(--wait-bg); margin: 0; }
+.su-foot { text-align: center; padding-top: 8px; }
+@media (max-width: 560px) { .su-copy { flex-direction: column; align-items: stretch; } }
