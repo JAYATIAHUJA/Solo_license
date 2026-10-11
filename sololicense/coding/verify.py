@@ -135,16 +135,39 @@ def detect_test_command(root: str) -> str | None:
     return None
 
 
-def run_tests(root: str, command: str) -> tuple[bool, str]:
+def run_tests(root: str, command: str) -> tuple[bool, str, str]:
+    """(passed, last lines for the agent, full output)."""
     try:
         result = subprocess.run(command, cwd=root, shell=True, capture_output=True, text=True,
                                 timeout=TEST_TIMEOUT_SECONDS, check=False)
     except subprocess.TimeoutExpired:
-        return False, f"timed out after {TEST_TIMEOUT_SECONDS}s"
+        return False, f"timed out after {TEST_TIMEOUT_SECONDS}s", ""
     except OSError as error:
-        return False, str(error)
-    tail = "\n".join((result.stdout + result.stderr).strip().splitlines()[-6:])
-    return result.returncode == 0, tail
+        return False, str(error), ""
+    output = (result.stdout or "") + (result.stderr or "")
+    tail = "\n".join(output.strip().splitlines()[-6:])
+    return result.returncode == 0, tail, output
+
+
+# Failing-test lines of common runners: pytest, node --test (TAP), jest/vitest,
+# go test, cargo test, mocha. The captured group names the test.
+_FAILURE_LINES = (
+    re.compile(r"^FAILED (\S+)", re.M),                         # pytest short summary
+    re.compile(r"^\s*not ok \d+ - (.+?)\s*$", re.M),             # TAP (node --test)
+    re.compile(r"^\s*(?:✕|×|✗)\s+(.+?)(?:\s+\(\d+\s*m?s\))?\s*$", re.M),  # jest / vitest
+    re.compile(r"^--- FAIL: (\S+)", re.M),                       # go test
+    re.compile(r"^test (\S+) \.\.\. FAILED", re.M),               # cargo test
+    re.compile(r"^\s*\d+\) (.+?)\s*$", re.M),                     # mocha
+)
+
+
+def failing_tests(output: str) -> set[str] | None:
+    """The names of the failing tests, or ``None`` when the output is in a
+    format we cannot read (then nothing can be proven about regressions)."""
+    names: set[str] = set()
+    for pattern in _FAILURE_LINES:
+        names.update(m.strip() for m in pattern.findall(output or ""))
+    return names or None
 
 
 # Installed dependencies are untracked, so a fresh worktree lacks them; the
@@ -182,7 +205,7 @@ def _unlink_dir(link: Path) -> None:
         pass
 
 
-def tests_passed_before(root: str, base_ref: str | None, command: str) -> bool | None:
+def tests_before(root: str, base_ref: str | None, command: str) -> tuple[bool, str] | None:
     """Run the tests on the pre-turn snapshot in a throwaway worktree that
     shares the checkout's installed dependencies. ``None`` (unknown) when the
     snapshot or its dependencies cannot be set up; the caller then treats a
@@ -204,8 +227,8 @@ def tests_passed_before(root: str, base_ref: str | None, command: str) -> bool |
                     if not _link_dir(source, link):
                         return None
                     links.append(link)
-            passed, _ = run_tests(str(tree), command)
-            return passed
+            passed, _, output = run_tests(str(tree), command)
+            return passed, output
         finally:
             # Links first: removing the worktree must never reach into them.
             for link in links:
@@ -246,21 +269,35 @@ def check_turn(gate, turn: sqlite3.Row, decisions: list[sqlite3.Row]) -> tuple[b
     repo = agent_repo.ensure_repo(gate.conn, turn["repo"], root)
     command = repo["test_command"] or detect_test_command(root)
     if command:
-        passed, tail = run_tests(root, command)
+        passed, tail, output = run_tests(root, command)
         details["tests"] = "passed" if passed else "failed"
         details["test_command"] = command
+        agent_repo.set_last_tests(gate.conn, turn["repo"], "passed" if passed else "failed")
         if not passed:
-            # Only a regression is the agent's fault: tests that were already
-            # failing before the turn are reported, not held against it.
-            before = repo["last_tests"]
-            if before is None:
-                ran = tests_passed_before(root, turn["base_ref"], command)
-                before = None if ran is None else ("passed" if ran else "failed")
-            if before == "failed":
+            regression, why = is_regression(root, turn["base_ref"], command, output)
+            if not regression:
                 details["tests"] = "failing before and after"
-                agent_repo.set_last_tests(gate.conn, turn["repo"], "failed")
                 return True, "", details
             details["blame"] = ["file-edit"]
-            return False, f"the tests fail after this turn's changes (`{command}`):\n{tail}\nFix them before finishing.", details
-        agent_repo.set_last_tests(gate.conn, turn["repo"], "passed")
+            return False, f"the tests fail after this turn's changes (`{command}`){why}:\n{tail}\nFix them before finishing.", details
     return True, "", details
+
+
+def is_regression(root: str, base_ref: str | None, command: str, output: str) -> tuple[bool, str]:
+    """Did this turn break something? Compared against the turn's *own*
+    starting point every time - never a cached verdict - and test by test:
+    a turn that fixes one old failure but adds a new one is a regression.
+    Anything that cannot be proven innocent counts against the agent."""
+    before = tests_before(root, base_ref, command)
+    if before is None:
+        return True, ""
+    passed_before, output_before = before
+    if passed_before:
+        return True, ""
+    now, then = failing_tests(output), failing_tests(output_before)
+    if now is None or then is None:
+        return True, " (could not tell which tests failed before)"
+    new = sorted(now - then)
+    if new:
+        return True, f" - newly failing: {', '.join(new[:5])}"
+    return False, ""
