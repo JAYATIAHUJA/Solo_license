@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS runs (
     idempotency_key  TEXT,
     actor_id         TEXT NOT NULL DEFAULT 'system:license-service',
     actor_role       TEXT NOT NULL DEFAULT 'admin',
+    policy_version   INTEGER,
     fault_mode       TEXT NOT NULL DEFAULT 'none',
     trace_id         TEXT,
     notes            TEXT,
@@ -56,6 +57,110 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE INDEX IF NOT EXISTS idx_runs_created ON runs (created_at DESC);
 -- idx_runs_idempotency_executed is created in database._migrate_runs, after
 -- older databases have gained the idempotency_key column.
+
+-- Immutable workspace policy versions. Only one version is active at a time;
+-- runs retain the version that governed their authorization and evaluation.
+CREATE TABLE IF NOT EXISTS policies (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    version     INTEGER NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('active', 'superseded')),
+    summary     TEXT NOT NULL DEFAULT '',
+    created_by  TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_policies_one_active
+    ON policies (status) WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS policy_rules (
+    id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+    policy_id                       INTEGER NOT NULL,
+    task_class                      TEXT NOT NULL,
+    allowed_tool                    TEXT NOT NULL,
+    requires_approval_at_or_above   INTEGER NOT NULL,
+    l2_ceiling                      REAL NOT NULL,
+    evaluation_window               INTEGER NOT NULL,
+    minimum_samples                 INTEGER NOT NULL,
+    minimum_verified_pass_rate      REAL NOT NULL,
+    FOREIGN KEY (policy_id) REFERENCES policies (id) ON DELETE CASCADE,
+    UNIQUE (policy_id, task_class)
+);
+CREATE INDEX IF NOT EXISTS idx_policy_rules_policy ON policy_rules (policy_id, task_class);
+
+-- Policies are append-only audit records. The only legal transition is active
+-- -> superseded during creation of a newer version; rules are never edited.
+CREATE TRIGGER IF NOT EXISTS policies_immutable_fields
+BEFORE UPDATE OF version, name, summary, created_by, created_at ON policies
+BEGIN
+    SELECT RAISE(ABORT, 'policy versions are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS policies_status_transition
+BEFORE UPDATE OF status ON policies
+WHEN OLD.status != 'active' OR NEW.status != 'superseded'
+BEGIN
+    SELECT RAISE(ABORT, 'policy status transition is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS policies_immutable_delete
+BEFORE DELETE ON policies
+BEGIN
+    SELECT RAISE(ABORT, 'policy versions are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS policy_rules_immutable_update
+BEFORE UPDATE ON policy_rules
+BEGIN
+    SELECT RAISE(ABORT, 'policy rules are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS policy_rules_immutable_delete
+BEFORE DELETE ON policy_rules
+BEGIN
+    SELECT RAISE(ABORT, 'policy rules are immutable');
+END;
+
+-- A policy activation records why each current license state is held for
+-- review or remains eligible. It never silently changes the license level.
+CREATE TABLE IF NOT EXISTS policy_impacts (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    previous_version    INTEGER,
+    next_version        INTEGER NOT NULL,
+    task_class          TEXT NOT NULL,
+    available_samples   INTEGER NOT NULL,
+    required_samples    INTEGER NOT NULL,
+    pass_rate           REAL NOT NULL,
+    required_pass_rate  REAL NOT NULL,
+    action              TEXT NOT NULL,
+    reason              TEXT NOT NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_policy_impacts_version ON policy_impacts (next_version, task_class);
+CREATE TRIGGER IF NOT EXISTS policy_impacts_immutable_update
+BEFORE UPDATE ON policy_impacts
+BEGIN
+    SELECT RAISE(ABORT, 'policy impacts are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS policy_impacts_immutable_delete
+BEFORE DELETE ON policy_impacts
+BEGIN
+    SELECT RAISE(ABORT, 'policy impacts are immutable');
+END;
+
+-- Only the hash of a server-issued tool authorization is stored. A conditional
+-- update consumes it exactly once immediately before a side effect is written.
+CREATE TABLE IF NOT EXISTS execution_permits (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    permit_digest   TEXT NOT NULL UNIQUE,
+    policy_version  INTEGER NOT NULL,
+    task_class      TEXT NOT NULL,
+    tool            TEXT NOT NULL,
+    order_id        TEXT NOT NULL,
+    amount          REAL NOT NULL,
+    actor_id        TEXT NOT NULL,
+    issued_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at      TEXT NOT NULL,
+    consumed_at     TEXT,
+    disposition     TEXT NOT NULL DEFAULT 'issued'
+);
+CREATE INDEX IF NOT EXISTS idx_execution_permits_pending
+    ON execution_permits (permit_digest, expires_at) WHERE consumed_at IS NULL;
 
 -- Detections surfaced as incidents. Each row is one rule firing on one run.
 CREATE TABLE IF NOT EXISTS detections (

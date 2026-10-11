@@ -17,7 +17,7 @@ rules:
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from sololicense.db.repositories import events as events_repo
@@ -31,6 +31,7 @@ from sololicense.domain.license import (
     restore,
 )
 from sololicense.domain.trust import TrustLadder
+from sololicense.domain.policy import EvaluationProgress
 from sololicense.services.git_ledger import GitLedger, LedgerEntry
 from sololicense.security import Actor, Role
 
@@ -86,21 +87,53 @@ class LicenseService:
         run_id: int | None,
         trace_id: str | None,
         actor: Actor = SYSTEM_ACTOR,
+        evaluation: EvaluationProgress | None = None,
     ) -> Transition:
-        """Credit a verified-clean run; promote once the evidence earns it."""
+        """Credit a verified-clean run; optionally use policy-scoped evidence.
+
+        Older callers retain the workspace threshold behavior. Worker calls
+        provide an evaluation snapshot computed after the run was recorded,
+        so only outcomes collected under this exact policy version can earn a
+        promotion.
+        """
         old = self.get_or_create(task_class)
-        new = record_clean_run(old, ladder=self._ladder)
+        if evaluation is None:
+            new = record_clean_run(old, ladder=self._ladder)
+            promotion_reason = (
+                "Verified evidence crossed the economic confidence threshold; earned "
+                "{level} ({label})."
+            )
+        elif old.quarantined:
+            new = old
+            promotion_reason = ""
+        else:
+            # Evidence that predates this policy must never earn autonomy under
+            # the new rules. Keep the lifetime audit tally, but only the policy
+            # version's evaluation window determines a promotion.
+            new = replace(
+                old,
+                successes=old.successes + 1,
+                consecutive_clean_runs=evaluation.clean_runs,
+                demoted_from=None,
+            )
+            if evaluation.eligible and old.level < LicenseLevel.L3:
+                new = replace(
+                    new,
+                    level=LicenseLevel(old.level + 1),
+                    consecutive_clean_runs=0,
+                    demoted_from=None,
+                )
+            promotion_reason = (
+                f"Policy evaluation met {evaluation.required_samples} clean-run "
+                f"sample and {evaluation.required_pass_rate:.0%} verified pass-rate "
+                "requirements; earned {level} ({label})."
+            )
         if new.level > old.level:
-            step = self._ladder.step(int(old.level))
             return self._persist(
                 old,
                 new,
                 kind="promote",
-                reason=(
-                    f"{new.successes} verified jobs, {new.failures} failures: failure rate is below "
-                    f"{step.target_rate:.2%} with {self._ladder.confidence:.0%} confidence "
-                    f"(break-even for this step). Earned {new.level.name} ({new.level.label})."
-                ),
+                reason=promotion_reason.format(level=new.level.name, label=new.level.label),
                 run_id=run_id,
                 trace_id=trace_id,
                 actor=actor,

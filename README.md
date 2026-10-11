@@ -26,6 +26,14 @@ Solo License is the third option: **autonomy that is earned per job type from ve
 revoked the instant a check fails, and priced by your own economics.**
 
 ## Who it is for
+| | |
+|---|---|
+| **Starts cautious** | Every job type (refunds, store credit) begins at *Suggests only* or *Needs your OK*. |
+| **Checks, never trusts** | After every action the agent re-reads the database. The tool's "success" message is ignored. |
+| **Earns freedom** | After the current policy's required double-checked jobs, that job type moves up one level — automatically. |
+| **Stops instantly** | Any caught problem pauses that job type at once. Other job types keep their own level. |
+| **A person decides** | One evidence page shows what was meant, what happened and why it stopped. A person resumes it at a level they choose. |
+| **Everything is recorded** | Every permission change is a git commit (explainable with Entire); every run is a neatlogs trace. |
 
 Support and operations teams at online shops that take payments on **Stripe** (or can export
 orders as **CSV** — Shopify, WooCommerce, Gumroad, a spreadsheet) and get a steady stream of
@@ -183,6 +191,22 @@ use one set of numbers.
 | **Slack / Discord** | Message when a job type is paused or resumed | — |
 
 Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
+Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
+
+*The model proposes, the policy and license decide, the database proves.* The LLM only reads the
+message and writes a plan — it never decides what is allowed or writes directly to customer data.
+
+Problems the safety checks catch:
+
+| Check | Plain meaning |
+|---|---|
+| `state_mismatch` | The tool said "done", but nothing changed |
+| `policy_breach` | The agent acted beyond its permission |
+| `missing_verification` | The result was never double-checked |
+| `duplicate_action` | The same action ran twice |
+| intake guard | The message tries to change the agent's rules ("ignore your rules…") → sent to a person |
+
+---
 
 ## How the three hackathon tools are used
 
@@ -255,6 +279,16 @@ inside the React app. Deploy the FastAPI service separately, then add its public
 slash). On the API deployment set `SOLO_ALLOWED_ORIGINS=https://your-project.vercel.app` so the
 browser may call it. Locally, leave that variable unset: Vite continues to proxy `/api` to
 `SOLO_API_URL` or `http://127.0.0.1:8000`.
+
+### Operating policies in a real workspace
+
+An admin opens **Settings → Policy review**, changes a proposed version, previews
+its impact, then explicitly activates it. Every run records the version that
+governed it. Evidence from an earlier version never promotes a changed policy;
+the Home screen shows the fresh sample/pass-rate progress for each job type.
+An unauthorized tool attempt is blocked at the server-side write boundary,
+then recorded and paused for review. See [Policy governance](docs/policy-governance.md)
+for the normal-user operating guide and deployment secret ownership.
 
 | Command | What it does |
 |---|---|

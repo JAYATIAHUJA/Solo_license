@@ -36,6 +36,7 @@ class Connectors:
                 self._config.stripe_secret_key,
                 api_base=self._config.stripe_api_base,
                 allow_live=os.environ.get("SOLO_ALLOW_LIVE_STRIPE", "") == "1",
+                conn=self._conn,
             )
         return self._stripe
 

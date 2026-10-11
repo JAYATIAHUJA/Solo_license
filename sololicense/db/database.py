@@ -72,6 +72,8 @@ def _migrate_runs(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN actor_id TEXT NOT NULL DEFAULT 'system:license-service'")
     if "actor_role" not in columns:
         conn.execute("ALTER TABLE runs ADD COLUMN actor_role TEXT NOT NULL DEFAULT 'admin'")
+    if "policy_version" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN policy_version INTEGER")
     event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(license_events)")}
     if "actor_id" not in event_columns:
         conn.execute("ALTER TABLE license_events ADD COLUMN actor_id TEXT NOT NULL DEFAULT 'system:license-service'")

@@ -7,6 +7,7 @@ thing to the agent, the verifier, and the UI)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 
@@ -45,3 +46,23 @@ class RefundRequest:
             raise ValueError("refund amount cannot be negative")
         if not self.order_id:
             raise ValueError("order_id is required")
+
+
+@dataclass(frozen=True)
+class ExecutionPermit:
+    """A short-lived capability for exactly one approved side effect."""
+
+    token: str
+    policy_version: int
+    task_class: str
+    tool: str
+    order_id: str
+    amount: float
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
+class BlockedPermit:
+    """An auditable refusal to turn an attempted action into a tool call."""
+
+    reason: str

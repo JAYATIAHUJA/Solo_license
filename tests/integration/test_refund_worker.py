@@ -82,12 +82,14 @@ def test_retry_uses_the_same_idempotency_key(harness):
 
 def test_policy_violation_above_ceiling_demotes(harness):
     harness.fault_injector.arm("refund", FaultMode.POLICY_VIOLATION)
+    before = orders_repo.get_refunded_amount(harness.conn, "ORD-1004")
     result = harness.worker.run_refund(
         RefundRequest("ORD-1004", "Katherine", 120.0, "big")
     )
 
     assert result.status is RunStatus.DEMOTED
     assert any(d.rule == "policy_breach" for d in result.detections)
+    assert orders_repo.get_refunded_amount(harness.conn, "ORD-1004") == before
     assert _dial(harness).level is LicenseLevel.L0
 
 

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import sqlite3
 
-from sololicense.connectors.base import OrderRecord, ToolResult
+from sololicense.connectors.base import ConnectorError, OrderRecord, ToolResult
 from sololicense.db.repositories import orders as orders_repo
+from sololicense.domain.models import ExecutionPermit
 from sololicense.domain.task_classes import get_spec
 
 
@@ -20,11 +21,18 @@ class LocalConnector:
         self._conn = conn
 
     def apply(
-        self, task_class: str, order: dict, amount: float, *, idempotency_key: str, suppress_write: bool = False
+        self, task_class: str, order: dict, amount: float, *, idempotency_key: str,
+        suppress_write: bool = False, permit: ExecutionPermit | None = None,
     ) -> ToolResult:
         if suppress_write:
             return ToolResult(ok=True, message="Processed (reported).")
-        orders_repo.apply_effect(self._conn, order["order_id"], get_spec(task_class).effect_column, amount)
+        try:
+            orders_repo.apply_effect(
+                self._conn, order["order_id"], get_spec(task_class).effect_column,
+                amount, permit=permit,
+            )
+        except (PermissionError, KeyError) as error:
+            raise ConnectorError(str(error)) from error
         return ToolResult(ok=True, message="Processed.", reference=idempotency_key)
 
     def read_effect(self, task_class: str, order: dict) -> float:

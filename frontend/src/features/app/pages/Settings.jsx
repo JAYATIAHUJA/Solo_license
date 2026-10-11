@@ -7,8 +7,8 @@ import {
   AlertFields, CEILING_FIELD, ECON_FIELDS, InboxFields, NeatlogsFields, StripeFields, TrustFields,
   formFromSettings, validWebhook,
 } from '../components/IntegrationFields.jsx';
-import { levelCopy } from '../../../lib/copy.js';
-import { jobsName, limitVerb, shortMoney } from '../components/words.js';
+import { PolicyEditor } from '../components/PolicyEditor.jsx';
+import { jobsName, levelCopy, limitVerb, shortMoney } from '../components/words.js';
 import '../components/plain-form.css';
 import './settings.css';
 
@@ -79,6 +79,13 @@ function SettingsForm({ data }) {
 
   const pill = (on, onText, offText) => <span className={`pl-status ${on ? 'ok' : 'muted'}`}>{on ? onText : offText}</span>;
 
+  async function activatePolicy(payload) {
+    return run(async () => {
+      await api.activatePolicy(payload);
+      return api.dashboard();
+    }, 'New autonomy policy activated. Future runs now use this version.');
+  }
+
   return (
     <div className="pl-page st-page">
       <header className="pl-head">
@@ -121,6 +128,17 @@ function SettingsForm({ data }) {
               );
             })}
           </div>
+        <Section
+          title="Policy review"
+          sub="Review the exact guardrails behind the agent’s autonomy. Policy versions are immutable and affect only future work."
+          status={data.policy ? pill(true, `Version ${data.policy.version}`, 'Not configured') : null}
+        >
+          <PolicyEditor
+            policy={data.policy}
+            taskClasses={taskClasses}
+            onActivated={activatePolicy}
+            disabled={busy}
+          />
         </Section>
 
         <div className="st-group">

@@ -18,6 +18,7 @@ from sololicense.observability.tracer import Tracer
 from sololicense.services.git_ledger import GitLedger
 from sololicense.services import economics
 from sololicense.services.license_service import LicenseService
+from sololicense.services.policy_service import PolicyService
 
 
 @dataclass
@@ -59,9 +60,12 @@ def harness(tmp_path) -> Harness:
         conn, GitLedger(repo_root=repo),
         ladder=economics.trust_ladder({}, config.trust_confidence),
     )
+    policy_service = PolicyService(conn, config)
+    policy_service.ensure_default_policy()
     faults = FaultInjector(conn)
     worker = RefundWorker(
         conn, config, tracer=tracer, license_service=license_service,
+        policy_service=policy_service,
         fault_injector=faults, planner=Planner(config),
     )
     from sololicense.agent.loop import TicketAgent

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
+from sololicense.domain.models import ExecutionPermit
 
 
 class ConnectorError(RuntimeError):
@@ -52,7 +53,8 @@ class Connector(Protocol):
     name: str
 
     def apply(
-        self, task_class: str, order: dict, amount: float, *, idempotency_key: str, suppress_write: bool = False
+        self, task_class: str, order: dict, amount: float, *, idempotency_key: str,
+        suppress_write: bool = False, permit: ExecutionPermit | None = None
     ) -> ToolResult: ...
 
     def read_effect(self, task_class: str, order: dict) -> float: ...

@@ -68,6 +68,8 @@ export function Overview() {
   const waiting = waitingRuns(data);
   const recent = runs.slice(0, 5);
   const first = session?.name ? session.name.split(/\s+/)[0] : '';
+  const policy = data.policy;
+  const evaluations = data.policy_evaluations || {};
 
   return (
     <div className="pl-page">
@@ -98,6 +100,34 @@ export function Overview() {
 
       <HowItWorks />
       <WarningBanner warnings={data.warnings} />
+
+      {policy && (
+        <section className="pl-section" aria-labelledby="h-policy">
+          <div className="app-card-top">
+            <div>
+              <h2 id="h-policy">Evidence behind your agent’s freedom</h2>
+              <p className="pl-sub">Policy v{policy.version} is active. Only clean, verified runs under this version count toward the next level.</p>
+            </div>
+            <Link className="app-link" to="/app/settings">Review policy</Link>
+          </div>
+          <div className="pl-grid">
+            {cards.map((card) => {
+              const evidence = evaluations[card.key];
+              if (!evidence) return null;
+              const passRate = Math.round((evidence.pass_rate || 0) * 100);
+              return (
+                <article key={card.key} className="pl-card">
+                  <div className="app-card-top">
+                    <h3>{card.name}</h3>
+                    <span className={`pl-status ${evidence.eligible ? 'ok' : 'wait'}`}>{evidence.eligible ? 'Evidence ready' : 'Building evidence'}</span>
+                  </div>
+                  <p className="pl-small">{evidence.sample_size}/{evidence.required_samples} verified runs · {passRate}% pass rate (needs {Math.round((evidence.required_pass_rate || 0) * 100)}%).</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="pl-section" aria-labelledby="h-allowed">
         <h2 id="h-allowed">What your agent is allowed to do</h2>

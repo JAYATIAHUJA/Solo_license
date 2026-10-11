@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import sqlite3
 
+from sololicense.db.repositories import permits
+from sololicense.domain.models import ExecutionPermit
+
 
 def get_order(conn: sqlite3.Connection, order_id: str) -> sqlite3.Row | None:
     return conn.execute(
@@ -20,9 +23,11 @@ def get_refunded_amount(conn: sqlite3.Connection, order_id: str) -> float:
     return get_effect_amount(conn, order_id, "refunded_amount")
 
 
-def apply_refund(conn: sqlite3.Connection, order_id: str, amount: float) -> None:
+def apply_refund(
+    conn: sqlite3.Connection, order_id: str, amount: float, *, permit: ExecutionPermit | None
+) -> None:
     """Persist a real refund side effect. The caller commits."""
-    apply_effect(conn, order_id, "refunded_amount", amount)
+    apply_effect(conn, order_id, "refunded_amount", amount, permit=permit)
 
 
 def remaining_balance(row: sqlite3.Row) -> float:
@@ -41,9 +46,25 @@ def get_effect_amount(conn: sqlite3.Connection, order_id: str, column: str) -> f
     return float(row[column]) if row else 0.0
 
 
-def apply_effect(conn: sqlite3.Connection, order_id: str, column: str, amount: float) -> None:
-    """Persist a real side effect into ``column``. The caller commits."""
+def apply_effect(
+    conn: sqlite3.Connection, order_id: str, column: str, amount: float, *,
+    permit: ExecutionPermit | None,
+) -> None:
+    """Persist a side effect only after consuming its exact server permit."""
     _check_column(column)
+    if permit is None:
+        raise PermissionError("A validated execution permit is required for an order write.")
+    expected_tool = "refund" if column == "refunded_amount" else "store_credit"
+    if (
+        permit.task_class != expected_tool
+        or permit.tool != expected_tool
+        or permit.order_id != order_id
+        or permit.amount != amount
+    ):
+        raise PermissionError("Execution permit does not match this order write.")
+    reason = permits.consume(conn, permit)
+    if reason is not None:
+        raise PermissionError(f"Execution permit {reason}.")
     status = "refunded" if column == "refunded_amount" else "credited"
     cur = conn.execute(
         f"""

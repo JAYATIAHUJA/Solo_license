@@ -28,11 +28,13 @@ from sololicense.db.repositories import tickets as tickets_repo
 from sololicense.db.repositories import events as events_repo
 from sololicense.db.repositories import license as license_repo
 from sololicense.db.repositories import orders as orders_repo
+from sololicense.db.repositories import policies as policy_repo
 from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.seed import SEED_ORDERS, install_sample_store, seed
 from sololicense.domain.license import LicenseLevel, LicenseState
 from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
+from sololicense.domain.policy import PolicyImpact, PolicyRule, PolicyVersion
 from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 from sololicense.services import economics
@@ -164,6 +166,22 @@ class DemoSessionPayload(BaseModel):
 class TopUpPayload(BaseModel):
     task_class: str = _task_class_field()
     count: int = Field(default=4, ge=1, le=12)
+
+
+class PolicyRulePayload(BaseModel):
+    task_class: str = Field(min_length=1, max_length=40)
+    allowed_tool: str = Field(min_length=1, max_length=80)
+    requires_approval_at_or_above: int = Field(ge=0, le=3)
+    l2_ceiling: float = Field(ge=0, le=1_000_000)
+    evaluation_window: int = Field(ge=1, le=10_000)
+    minimum_samples: int = Field(ge=1, le=10_000)
+    minimum_verified_pass_rate: float = Field(ge=0, le=1)
+
+
+class PolicyPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    summary: str = Field(default="", max_length=1_000)
+    rules: list[PolicyRulePayload] = Field(min_length=1, max_length=20)
 
 
 # --- context --------------------------------------------------------------
@@ -318,6 +336,7 @@ def serialize_settings(context: AppContext) -> dict:
         "neatlogs_enabled": cfg.neatlogs_enabled,
         "alerts_enabled": valid_webhook_url(cfg.alert_webhook_url),
         "demo_mode": cfg.demo_mode,
+        "active_policy_version": context.policy_service.active().version,
     }
     for spec in PROVIDERS.values():
         if spec.model_field:
@@ -330,6 +349,93 @@ def serialize_settings(context: AppContext) -> dict:
     for key in ECON_KEYS:
         out[key] = getattr(assumptions, key.removeprefix("econ_"))
     return out
+
+
+def serialize_policy(policy: PolicyVersion) -> dict:
+    """Public policy representation; never includes a permit or secret."""
+    return {
+        "id": policy.id,
+        "version": policy.version,
+        "name": policy.name,
+        "status": policy.status,
+        "summary": policy.summary,
+        "created_by": policy.created_by,
+        "created_at": policy.created_at,
+        "rules": [
+            {
+                "task_class": rule.task_class,
+                "allowed_tool": rule.allowed_tool,
+                "requires_approval_at_or_above": rule.requires_approval_at_or_above,
+                "l2_ceiling": rule.l2_ceiling,
+                "evaluation_window": rule.evaluation_window,
+                "minimum_samples": rule.minimum_samples,
+                "minimum_verified_pass_rate": rule.minimum_verified_pass_rate,
+            }
+            for rule in policy.rules
+        ],
+    }
+
+
+def serialize_evaluation(context: AppContext, policy: PolicyVersion) -> dict[str, dict]:
+    return {
+        task_class: {
+            "sample_size": progress.sample_size,
+            "clean_runs": progress.clean_runs,
+            "pass_rate": progress.pass_rate,
+            "required_samples": progress.required_samples,
+            "required_pass_rate": progress.required_pass_rate,
+            "eligible": progress.eligible,
+        }
+        for task_class in TASK_CLASSES
+        for progress in [context.policy_service.evaluation_for(task_class, policy=policy)]
+    }
+
+
+def serialize_impact(impact: PolicyImpact) -> dict:
+    return {
+        "task_class": impact.task_class,
+        "previous_version": impact.previous_version,
+        "next_version": impact.next_version,
+        "action": impact.action,
+        "reason": impact.reason,
+        "evaluation": {
+            "sample_size": impact.evaluation.sample_size,
+            "clean_runs": impact.evaluation.clean_runs,
+            "pass_rate": impact.evaluation.pass_rate,
+            "required_samples": impact.evaluation.required_samples,
+            "required_pass_rate": impact.evaluation.required_pass_rate,
+            "eligible": impact.evaluation.eligible,
+        },
+    }
+
+
+def serialize_impacts(context: AppContext, *, version: int | None = None) -> list[dict]:
+    query = "SELECT * FROM policy_impacts"
+    values: tuple[object, ...] = ()
+    if version is not None:
+        query += " WHERE next_version = ?"
+        values = (version,)
+    query += " ORDER BY id DESC"
+    return [dict(row) for row in context.conn.execute(query, values).fetchall()]
+
+
+def policy_rules_from_payload(payload: PolicyPayload) -> tuple[PolicyRule, ...]:
+    try:
+        rules = tuple(
+            PolicyRule(
+                task_class=_task_class(rule.task_class),
+                allowed_tool=rule.allowed_tool.strip().lower(),
+                requires_approval_at_or_above=rule.requires_approval_at_or_above,
+                l2_ceiling=rule.l2_ceiling,
+                evaluation_window=rule.evaluation_window,
+                minimum_samples=rule.minimum_samples,
+                minimum_verified_pass_rate=rule.minimum_verified_pass_rate,
+            )
+            for rule in payload.rules
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return rules
 
 
 def serialize_state(state: LicenseState, progress: dict | None = None) -> dict:
@@ -466,6 +572,7 @@ def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -
         ).fetchall()
     ]
     armed = {key: context.fault_injector.peek(key).value for key in TASK_CLASSES}
+    active_policy = context.policy_service.active()
     return {
         "settings": serialize_settings(context),
         "warnings": list(context.warnings),
@@ -491,6 +598,8 @@ def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -
             "l2_auto_refund_ceiling": context.config.l2_auto_refund_ceiling,
             "ceilings": {key: context.config.ceiling_for(key) for key in TASK_CLASSES},
         },
+        "policy": serialize_policy(active_policy),
+        "policy_evaluations": serialize_evaluation(context, active_policy),
         "stats": _stats(context),
         "economics": economics.workspace_economics(
             context.conn,
@@ -588,6 +697,60 @@ def get_dashboard(
 def get_settings(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
     with _lock:
         return serialize_settings(get_context())
+
+
+@app.get("/api/policies")
+def list_policies(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """List immutable policy versions and the active version's evidence."""
+    with _lock:
+        context = get_context()
+        active = context.policy_service.active()
+        return {
+            "active": serialize_policy(active),
+            "versions": [serialize_policy(policy) for policy in policy_repo.list_versions(context.conn)],
+            "evaluations": serialize_evaluation(context, active),
+        }
+
+
+@app.post("/api/policies/preview")
+def preview_policy(
+    payload: PolicyPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """Calculate policy-change impact without mutating policy or autonomy."""
+    with _lock:
+        context = get_context()
+        rules = policy_rules_from_payload(payload)
+        try:
+            impacts = context.policy_service.preview_activation(rules)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return {"impacts": [serialize_impact(impact) for impact in impacts]}
+
+
+@app.post("/api/policies")
+def activate_policy(
+    payload: PolicyPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """Activate one immutable policy version after explicit admin approval."""
+    with _lock:
+        context = get_context()
+        rules = policy_rules_from_payload(payload)
+        try:
+            policy = context.policy_service.activate(
+                name=payload.name, summary=payload.summary, rules=rules, actor=actor
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return {
+            "policy": serialize_policy(policy),
+            "impacts": serialize_impacts(context, version=policy.version),
+        }
+
+
+@app.get("/api/policy-impacts")
+def list_policy_impacts(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    with _lock:
+        return {"impacts": serialize_impacts(get_context())}
 
 
 # --- agent ----------------------------------------------------------------

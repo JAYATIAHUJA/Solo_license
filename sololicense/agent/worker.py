@@ -33,7 +33,7 @@ from sololicense.db.repositories import orders as orders_repo
 from sololicense.db.repositories import runs as runs_repo
 from sololicense.db.repositories.runs import NewRun, insert_run
 from sololicense.domain.license import Decision, LicenseLevel, decide
-from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
+from sololicense.domain.models import BlockedPermit, ExecutionPermit, FaultMode, RefundRequest, RunStatus
 from sololicense.domain.task_classes import get_spec
 from sololicense.faults.injector import FaultInjector, effects_for
 from sololicense.observability import detections as rules
@@ -42,6 +42,8 @@ from sololicense.observability.tracer import Tracer
 from sololicense.services import verification
 from sololicense.security import Actor
 from sololicense.services.license_service import LicenseService, SYSTEM_ACTOR, Transition
+from sololicense.services.policy_gate import PolicyGate
+from sololicense.services.policy_service import PolicyService
 
 _EXECUTING = (Decision.AUTO_EXECUTE, Decision.AUTO_EXECUTE_AUDITED)
 
@@ -78,6 +80,7 @@ class RefundWorker:
         *,
         tracer: Tracer,
         license_service: LicenseService,
+        policy_service: PolicyService,
         fault_injector: FaultInjector,
         planner: Planner,
         connectors: Connectors | None = None,
@@ -86,6 +89,7 @@ class RefundWorker:
         self._config = config
         self._tracer = tracer
         self._licenses = license_service
+        self._policy_service = policy_service
         self._faults = fault_injector
         self._planner = planner
         self._connectors = connectors or Connectors(conn, config)
@@ -157,7 +161,8 @@ class RefundWorker:
             fault=armed_effects.mode.value,
         )
 
-        authorized = self._authorize(state, request, approved)
+        policy = self._policy_service.active()
+        authorized = self._authorize(state, request, approved, policy)
         attempted = self._attempt(authorized, state, armed_effects)
         plan = self._planner.plan(request, authorized, state)
         trace.span("plan", source=plan.source, rationale=plan.rationale)
@@ -181,6 +186,25 @@ class RefundWorker:
         effects = effects_for(FaultMode.NONE)
         if will_execute and armed_effects.active:
             effects = self._faults.consume_effects(task_class)
+        permit: ExecutionPermit | None = None
+        if will_execute:
+            candidate = PolicyGate(self._conn).issue(
+                policy=policy,
+                task_class=task_class,
+                tool=task_class,
+                order_id=request.order_id,
+                amount=request.amount,
+                authorized=authorized,
+                attempted=attempted,
+                license_level=int(state.effective_level),
+                approved=approved,
+                actor=actor,
+            )
+            if isinstance(candidate, BlockedPermit):
+                trace.span("policy.blocked", status="error", reason=candidate.reason)
+                will_execute = False
+            else:
+                permit = candidate
         intended_delta = request.amount if will_execute else 0.0
         key = idempotency_key or f"run:{trace.trace_id}"
 
@@ -188,7 +212,7 @@ class RefundWorker:
         reference: str | None = None
         if will_execute:
             try:
-                reference = self._do_execute(trace, connector, request, order, effects, task_class, key)
+                reference = self._do_execute(trace, connector, request, order, effects, task_class, key, permit)
             except ConnectorError as refusal:
                 error = str(refusal)
                 trace.span("tool.error", status="error", message=error[:200])
@@ -221,7 +245,7 @@ class RefundWorker:
         if (self.recovery_enabled and will_execute and error is None and authorised_execution
                 and not (first.verified and first.matched)):
             result, recovered = self._recover(
-                trace, connector, request, order, task_class, column, key, before, intended_delta,
+                trace, connector, request, order, task_class, column, key, before, intended_delta, permit,
             )
 
         # Detections judge the first attempt: a tool that lied, or a skipped
@@ -256,6 +280,7 @@ class RefundWorker:
             plan=plan,
             recovered=recovered,
             ticket_id=ticket_id,
+            policy_version=policy.version,
         )
 
         for d in found:
@@ -269,7 +294,7 @@ class RefundWorker:
             )
 
         transition = self._update_dial(
-            task_class, status, found, run_id, trace.trace_id, actor
+            task_class, status, found, run_id, trace.trace_id, actor, policy
         )
         self._conn.commit()
 
@@ -293,7 +318,7 @@ class RefundWorker:
     # --- helpers ---------------------------------------------------------
 
     def _authorize(
-        self, state, request: RefundRequest, approved: bool
+        self, state, request: RefundRequest, approved: bool, policy
     ) -> Decision:
         """What the license authorises. A human approval grants execution at
         the level's audit posture (L3 keeps the audited variant)."""
@@ -303,10 +328,20 @@ class RefundWorker:
                 if state.level is LicenseLevel.L3
                 else Decision.AUTO_EXECUTE
             )
-        return decide(
+        decision = decide(
             state, request.amount,
-            l2_ceiling=self._config.ceiling_for(state.task_class),
+            l2_ceiling=policy.rule_for(state.task_class).l2_ceiling,
         )
+        rule = policy.rule_for(state.task_class)
+        # The approval boundary is the first license level that may execute
+        # without a human approval. L0 stays a suggestion; L1's existing
+        # draft behavior is preserved. A stricter policy can hold L2 until L3.
+        if (
+            decision in _EXECUTING
+            and state.effective_level < rule.requires_approval_at_or_above
+        ):
+            return Decision.DRAFT_FOR_APPROVAL
+        return decision
 
     def _attempt(self, authorized: Decision, state, effects) -> Decision:
         """What the agent actually attempts. The policy-violation fault pushes
@@ -328,8 +363,11 @@ class RefundWorker:
         return value
 
     def _do_execute(
-        self, trace, connector, request: RefundRequest, order, effects, task_class: str, key: str
+        self, trace, connector, request: RefundRequest, order, effects, task_class: str,
+        key: str, permit: ExecutionPermit | None,
     ) -> str | None:
+        if permit is None:
+            raise ConnectorError("Execution permit missing for tool call.")
         trace.span(
             f"tool.execute_{task_class}",
             connector=connector.name,
@@ -340,6 +378,7 @@ class RefundWorker:
         )
         tool_result = connector.apply(
             task_class, order, request.amount, idempotency_key=key, suppress_write=effects.suppress_write,
+            permit=permit,
         )
         # The tool's claim is recorded but explicitly marked untrusted.
         trace.span(
@@ -350,7 +389,7 @@ class RefundWorker:
 
     def _recover(
         self, trace, connector, request: RefundRequest, order, task_class: str, column: str,
-        key: str, before: float, intended_delta: float,
+        key: str, before: float, intended_delta: float, permit: ExecutionPermit | None,
     ) -> tuple[verification.VerificationResult, bool]:
         """Verification disagreed with the tool. Reconcile first, retry once
         with the same idempotency key only when nothing moved, verify again.
@@ -371,7 +410,9 @@ class RefundWorker:
             return result, False
         try:
             trace.span("recover.retry", idempotency_key=key)
-            tool_result = connector.apply(task_class, order, request.amount, idempotency_key=key)
+            tool_result = connector.apply(
+                task_class, order, request.amount, idempotency_key=key, permit=permit,
+            )
             trace.span("tool.result", ok=tool_result.ok, message=tool_result.message,
                        reference=tool_result.reference, trusted=False, attempt=2)
         except ConnectorError as refusal:
@@ -412,7 +453,8 @@ class RefundWorker:
 
     def _persist_run(
         self, *, request, task_class, state_level, authorized, status, executed,
-        result, idempotency_key, actor, effects, trace, plan, recovered=False, ticket_id=None,
+        result, idempotency_key, actor, effects, trace, plan, policy_version,
+        recovered=False, ticket_id=None,
     ) -> int:
         return insert_run(
             self._conn,
@@ -429,6 +471,7 @@ class RefundWorker:
                 idempotency_key=idempotency_key,
                 actor_id=actor.actor_id,
                 actor_role=actor.role.value,
+                policy_version=policy_version,
                 fault_mode=effects.mode.value,
                 trace_id=trace.trace_id,
                 notes=plan.rationale,
@@ -438,7 +481,7 @@ class RefundWorker:
         )
 
     def _update_dial(
-        self, task_class, status, found, run_id, trace_id, actor
+        self, task_class, status, found, run_id, trace_id, actor, policy
     ) -> Transition:
         if status is RunStatus.DEMOTED:
             reason = "; ".join(d.message for d in found)
@@ -446,8 +489,15 @@ class RefundWorker:
                 task_class, run_id=run_id, trace_id=trace_id, reason=reason, actor=actor
             )
         if status is RunStatus.CLEAN:
+            evaluation = self._policy_service.evaluation_for(
+                task_class, policy=policy
+            )
             return self._licenses.apply_clean_run(
-                task_class, run_id=run_id, trace_id=trace_id, actor=actor
+                task_class,
+                run_id=run_id,
+                trace_id=trace_id,
+                actor=actor,
+                evaluation=evaluation,
             )
         # Suggestions and pending approvals do not move the dial.
         state = self._licenses.get_or_create(task_class)

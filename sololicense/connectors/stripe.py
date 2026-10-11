@@ -15,11 +15,14 @@ Only test-mode keys are accepted unless ``allow_live`` is set explicitly.
 from __future__ import annotations
 
 import re
+import sqlite3
 from datetime import datetime, timezone
 
 import httpx
 
 from sololicense.connectors.base import ConnectorError, OrderRecord, ToolResult
+from sololicense.domain.models import ExecutionPermit
+from sololicense.services.policy_gate import PolicyGate, PermitRejected
 
 _KEY_RE = re.compile(r"^(sk|rk)_(test|live)_[A-Za-z0-9]+$")
 
@@ -51,6 +54,7 @@ class StripeConnector:
         *,
         api_base: str = "https://api.stripe.com",
         allow_live: bool = False,
+        conn: sqlite3.Connection | None = None,
         client: httpx.Client | None = None,
         timeout: float = 20.0,
     ) -> None:
@@ -63,6 +67,7 @@ class StripeConnector:
         self._client = client or httpx.Client(timeout=timeout)
         self._base = api_base.rstrip("/")
         self._headers = {"Authorization": f"Bearer {secret_key.strip()}", "Stripe-Version": "2024-06-20"}
+        self._conn = conn
 
     # --- HTTP ------------------------------------------------------------
 
@@ -115,11 +120,18 @@ class StripeConnector:
     # --- side effects -----------------------------------------------------
 
     def apply(
-        self, task_class: str, order: dict, amount: float, *, idempotency_key: str, suppress_write: bool = False
+        self, task_class: str, order: dict, amount: float, *, idempotency_key: str,
+        suppress_write: bool = False, permit: ExecutionPermit | None = None,
     ) -> ToolResult:
         if suppress_write:
             # Fault switch: pretend the call worked without calling Stripe.
             return ToolResult(ok=True, message="Processed (reported).")
+        if permit is None or self._conn is None:
+            raise ConnectorError("A server-issued execution permit is required for Stripe writes.")
+        try:
+            PolicyGate(self._conn).consume_for_write(permit)
+        except PermitRejected as error:
+            raise ConnectorError(str(error)) from error
         metadata = {"metadata[order_id]": order["order_id"], "metadata[source]": "solo-license"}
         if task_class == "refund":
             refund = self._request(

@@ -49,6 +49,8 @@ class Config:
     llm_timeout_seconds: float
     llm_max_retries: int
     l2_auto_credit_ceiling: float = 75.0
+    # Bootstrap-only default for the first immutable policy version.
+    promotion_clean_runs: int = 3
     alert_webhook_url: str = ""
     demo_mode: bool = False
     neatlogs_endpoint: str = "https://ingest.neatlogs.com"
@@ -168,6 +170,7 @@ def load_config() -> Config:
         llm_timeout_seconds=max(1.0, float(_get("LLM_TIMEOUT_SECONDS", "15"))),
         llm_max_retries=max(0, int(_get("LLM_MAX_RETRIES", "2"))),
         l2_auto_credit_ceiling=float(_get("L2_AUTO_CREDIT_CEILING", "75")),
+        promotion_clean_runs=max(1, int(_get("PROMOTION_CLEAN_RUNS", "3"))),
         alert_webhook_url=_get("SOLO_ALERT_WEBHOOK_URL", ""),
         demo_mode=_truthy(_get("SOLO_DEMO_MODE", "0")),
         neatlogs_endpoint=_get("NEATLOGS_ENDPOINT", "https://ingest.neatlogs.com"),

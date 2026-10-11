@@ -25,6 +25,7 @@ from sololicense.services import economics
 from sololicense.services.alerts import AlertNotifier
 from sololicense.services.git_ledger import GitLedger
 from sololicense.services.license_service import LicenseService
+from sololicense.services.policy_service import PolicyService
 
 
 @dataclass
@@ -36,6 +37,7 @@ class AppContext:
     neatlogs: NeatlogsClient
     worker: RefundWorker
     license_service: LicenseService
+    policy_service: PolicyService
     fault_injector: FaultInjector
     alerts: AlertNotifier | None = None
     warnings: list[str] = field(default_factory=list)
@@ -97,6 +99,8 @@ def build_app(
         ladder=economics.trust_ladder(revealed, config.trust_confidence),
         on_transition=alerts.notify,
     )
+    policy_service = PolicyService(conn, config)
+    policy_service.ensure_default_policy()
     fault_injector = FaultInjector(conn)
     planner = Planner(config)
     connectors = Connectors(conn, config)
@@ -105,6 +109,7 @@ def build_app(
         config,
         tracer=tracer,
         license_service=license_service,
+        policy_service=policy_service,
         fault_injector=fault_injector,
         planner=planner,
         connectors=connectors,
@@ -117,6 +122,7 @@ def build_app(
         neatlogs=neatlogs,
         worker=worker,
         license_service=license_service,
+        policy_service=policy_service,
         fault_injector=fault_injector,
         alerts=alerts,
         warnings=warnings,
