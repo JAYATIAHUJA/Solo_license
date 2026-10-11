@@ -189,7 +189,13 @@ def test_cline_scripts_single_quote_their_paths(tmp_path):
     repo.mkdir()
     install(repo, "http://127.0.0.1:8000", "cline")
     script = (repo / ".clinerules" / "hooks" / "PreToolUse").read_text()
-    assert "exec '" in script and "my repo/.solo-license/hook.py'" in script.replace("\\", "/")
+    exec_line = next(line for line in script.splitlines() if line.startswith("exec "))
+    # Parsed the way /bin/sh will: exactly python, hook path, agent, event -
+    # the space in "my repo" stays inside one argument.
+    import shlex as _shlex
+
+    args = _shlex.split(exec_line)[1:]
+    assert args == [sys.executable, str(repo / ".solo-license" / "hook.py"), "cline", "PreToolUse"]
 
 
 @pytest.mark.parametrize("url", ["http://x/${process.exit(1)}", "javascript:alert(1)", "http://a`b`", 'http://a"+x+"'])
