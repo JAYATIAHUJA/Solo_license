@@ -370,3 +370,16 @@ CREATE TABLE IF NOT EXISTS agent_remediations (
     delivered_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_agent_remediations_session ON agent_remediations (session_id, delivered_at);
+
+-- A person said a decision or a turn was wrong. Its classes went back to L0
+-- and the session's next prompt carries the remediation.
+CREATE TABLE IF NOT EXISTS agent_flags (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id    INTEGER,
+    turn_id        INTEGER,
+    actor_id       TEXT NOT NULL,
+    reason         TEXT NOT NULL,
+    remediation_id INTEGER,                      -- the queued message for the agent
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    delivered_at   TEXT
+);

@@ -58,6 +58,13 @@ def test_a_flag_tells_the_agent_to_revert_before_continuing():
     assert "before continuing" in r.text and "db/001.sql" in r.text and "git stash push" in r.text
 
 
+def test_a_flagged_decision_names_its_command_and_revert():
+    r = compose("flagged", reason="not this package", action_class="install-dep", command="npm install left-pad",
+                classes=("install-dep",))
+    assert "Revert what `npm install left-pad` changed (`git checkout -- package.json package-lock.json`)" in r.text
+    assert "install-dep is back to asking" in r.text
+
+
 def test_repeated_denials_tell_the_agent_to_stop():
     r = compose("denied", reason="Blocked: force-pushes are never allowed.", attempts=3)
     assert "3 blocked attempts this turn" in r.text and "ask the user" in r.text
