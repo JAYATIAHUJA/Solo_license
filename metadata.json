@@ -1,0 +1,16 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4PAZ4KYN65E9NVRNMA7MCH2",
+  "strategy": "manual-commit",
+  "branch": "feat/agent-events",
+  "checkpoints_count": 20,
+  "files_touched": [
+    "scripts/coding_demo.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "prompt": "/0/prompt.txt"
+    }
+  ]
+}
