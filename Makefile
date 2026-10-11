@@ -32,7 +32,8 @@ taubench:           ## Score the policies on tau-bench retail -> evidence/benchm
 charts:             ## Redraw README charts from the latest benchmark
 	$(PYTHON) -m scripts.readme_charts
 
-cfo:                ## Print the cfo.ai financial model
+cfo:                ## Print the cfo.ai financial models (coding agent, then refunds)
+	$(PYTHON) -m planning.cfo.coding_model
 	$(PYTHON) -m planning.cfo.model
 
 clean:              ## Remove the runtime database
