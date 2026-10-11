@@ -43,6 +43,8 @@ DIAGNOSTIC = {"read", "test-run", "lint-format", "build"}
 GATE_ACTOR = "system:coding-gate"
 # Denied attempts in one turn after which the agent is stopped, not just refused.
 INTERRUPT_AFTER_DENIALS = 3
+# Decisions whose action actually ran, so a flagged turn holds them to account.
+FLAGGABLE_OUTCOMES = ("ran", "verified", "observed", "failed")
 
 
 def turn_reason(conn: sqlite3.Connection, turn_id: int) -> str | None:
@@ -329,6 +331,55 @@ class CodingGate:
         self.conn.commit()
         return level
 
+    def flag(self, *, decision_id: int | None = None, turn_id: int | None = None, actor_id: str,
+             reason: str) -> dict:
+        """A person says a decision (or a whole turn) was wrong: its classes go
+        back to L0 (a hard reset, not one failure's worth of evidence), approved
+        command families are forgotten, and the session's next prompt is told
+        what to revert."""
+        command, action_class, files = "", "", ()
+        if decision_id is not None:
+            decision = agent_repo.get_decision(self.conn, decision_id)
+            if decision is None:
+                raise LookupError(f"No decision {decision_id}.")
+            repo, session, turn_id = decision["repo"], decision["session_id"], decision["turn_id"]
+            classes = [decision["action_class"]]
+            command, action_class = decision["command"], decision["action_class"]
+            prefix = f"{decision['tool_name']} "
+            if action_class == "file-edit" and command.startswith(prefix):
+                files = (command[len(prefix):],)
+            turn = agent_repo.get_turn(self.conn, turn_id) if turn_id else None
+        elif turn_id is not None:
+            turn = agent_repo.get_turn(self.conn, turn_id)
+            if turn is None:
+                raise LookupError(f"No turn {turn_id}.")
+            repo, session = turn["repo"], turn["session_id"]
+            ran = {d["action_class"] for d in agent_repo.decisions_for_turn(self.conn, turn_id)
+                   if d["outcome"] in FLAGGABLE_OUTCOMES}
+            # Edits Claude Code already allows never reach the gate; a turn is still its edits.
+            classes = sorted(ran) or ["file-edit"]
+            files = tuple(self._turn_files(turn))
+        else:
+            raise ValueError("Flag a decision or a turn.")
+
+        trace = self.tracer.start_trace("coding.flag", repo=repo)
+        for key in classes:
+            lic = agent_repo.get_license(self.conn, repo, key)
+            self._change(repo, key, "flag", lic["level"], 0, f"{actor_id}: {reason}", trace, actor_id=actor_id)
+            agent_repo.forget_patterns(self.conn, repo, key)
+        fix = remediation.compose("flagged", reason=reason, action_class=action_class, command=command,
+                                  files=files, classes=classes, base_ref=turn["base_ref"] if turn else None,
+                                  checkpoint=turn["entire_checkpoint"] if turn else None)
+        remediation_id = agent_repo.queue_remediation(self.conn, session_id=session, turn_id=turn_id,
+                                                      kind="flagged", text=fix.text)
+        flag_id = agent_repo.insert_flag(self.conn, decision_id=decision_id, turn_id=turn_id, actor_id=actor_id,
+                                         reason=reason, remediation_id=remediation_id)
+        trace.span("turn.flagged", status="error", flag=flag_id, decision_id=decision_id or 0, turn=turn_id or 0,
+                   classes=classes, actor_id=actor_id, reason=reason)
+        trace.flush(self.conn, None)
+        self.conn.commit()
+        return {"flag_id": flag_id, "repo": repo, "classes": classes, "session_id": session, "text": fix.text}
+
     def record_policy(self, repo: str, summary: str, actor_id: str) -> str | None:
         """A policy change on this machine: an event and a ledger commit."""
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class="policy", kind="policy",
@@ -340,13 +391,14 @@ class CodingGate:
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
                 actor_id: str = GATE_ACTOR) -> None:
-        agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if kind == "demote" else None)
+        lost = kind in ("demote", "flag")
+        agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if lost else None)
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class=key, kind=kind,
                                            from_level=old, to_level=new, reason=reason, actor_id=actor_id)
         sha = self.ledger.record(LedgerEntry(f"{key}@{repo}", kind, old, new, reason, None, trace.trace_id))
         if sha:
             agent_repo.set_event_sha(self.conn, event_id, sha)
-        trace.span(f"license.{kind}", status="error" if kind == "demote" else "ok", action_class=key,
+        trace.span(f"license.{kind}", status="error" if lost else "ok", action_class=key,
                    repo=repo, from_level=old, to_level=new, reason=reason, git_sha=sha or "")
 
     # --- helpers -----------------------------------------------------------
