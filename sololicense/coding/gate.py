@@ -33,7 +33,6 @@ from sololicense.coding import policy as policy_mod
 from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe
 from sololicense.coding.ladder import CodingLadder
 from sololicense.db.repositories import agent as agent_repo
-from sololicense.db.repositories import events as events_repo
 from sololicense.observability.tracer import Trace, Tracer
 from sololicense.services.git_ledger import GitLedger, LedgerEntry
 
@@ -278,25 +277,21 @@ class CodingGate:
 
     def record_policy(self, repo: str, summary: str, actor_id: str) -> str | None:
         """A policy change on this machine: an event and a ledger commit."""
-        label = f"policy@{repo}"
-        event_id = events_repo.insert_event(self.conn, task_class=label, kind="policy", from_level=0, to_level=0,
-                                            reason=summary, run_id=None, actor_id=actor_id, actor_role="admin")
-        sha = self.ledger.record(LedgerEntry(label, "policy", 0, 0, summary, None, None))
+        event_id = agent_repo.insert_event(self.conn, repo=repo, action_class="policy", kind="policy",
+                                           from_level=0, to_level=0, reason=summary, actor_id=actor_id)
+        sha = self.ledger.record(LedgerEntry(f"policy@{repo}", "policy", 0, 0, summary, None, None))
         if sha:
-            events_repo.set_git_sha(self.conn, event_id, sha)
+            agent_repo.set_event_sha(self.conn, event_id, sha)
         return sha
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
                 actor_id: str = GATE_ACTOR) -> None:
         agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if kind == "demote" else None)
-        label = f"{key}@{repo}"
-        event_id = events_repo.insert_event(
-            self.conn, task_class=label, kind=kind, from_level=old, to_level=new,
-            reason=reason, run_id=None, actor_id=actor_id, actor_role="admin",
-        )
-        sha = self.ledger.record(LedgerEntry(label, kind, old, new, reason, None, trace.trace_id))
+        event_id = agent_repo.insert_event(self.conn, repo=repo, action_class=key, kind=kind,
+                                           from_level=old, to_level=new, reason=reason, actor_id=actor_id)
+        sha = self.ledger.record(LedgerEntry(f"{key}@{repo}", kind, old, new, reason, None, trace.trace_id))
         if sha:
-            events_repo.set_git_sha(self.conn, event_id, sha)
+            agent_repo.set_event_sha(self.conn, event_id, sha)
         trace.span(f"license.{kind}", status="error" if kind == "demote" else "ok", action_class=key,
                    repo=repo, from_level=old, to_level=new, reason=reason, git_sha=sha or "")
 

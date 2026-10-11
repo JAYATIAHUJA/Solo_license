@@ -126,7 +126,7 @@ def test_a_failed_turn_points_at_the_entire_checkpoint_and_can_be_rewound(gate):
 
     turn = agent_repo.current_turn(gate.conn, "s")
     assert turn["entire_checkpoint"] == "abc123def4567890"
-    event = gate.conn.execute("SELECT reason FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    event = gate.conn.execute("SELECT reason FROM agent_events ORDER BY id DESC LIMIT 1").fetchone()
     assert event is None or "entire checkpoint explain abc123def456" in event["reason"]
 
     result = entire.rewind(str(gate.project), turn["base_ref"], "solo-license: rewind turn 1")

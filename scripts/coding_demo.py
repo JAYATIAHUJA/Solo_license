@@ -205,7 +205,8 @@ def benchmark() -> dict:
         licenses = [dict(r) for r in ctx.conn.execute(
             "SELECT action_class, level, successes, failures FROM agent_licenses ORDER BY action_class")]
         events = [dict(r) for r in ctx.conn.execute(
-            "SELECT task_class, kind, from_level, to_level, git_sha FROM license_events ORDER BY id")]
+            "SELECT action_class || '@' || repo AS task_class, kind, from_level, to_level, git_sha "
+            "FROM agent_events ORDER BY id")]
         traces = [r["trace_id"] for r in ctx.conn.execute("SELECT trace_id FROM agent_turns ORDER BY id")]
         ctx.neatlogs.shutdown()
         ctx.conn.close()

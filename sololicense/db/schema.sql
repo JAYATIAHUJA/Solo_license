@@ -340,3 +340,20 @@ CREATE TABLE IF NOT EXISTS agent_policies (
     body        TEXT NOT NULL,                  -- JSON: classes / deny / freeze
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Every change to a coding agent's license (promote | demote | restore | policy),
+-- per repository and principal. Each row is also a commit in the license ledger.
+CREATE TABLE IF NOT EXISTS agent_events (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo          TEXT NOT NULL,
+    principal     TEXT NOT NULL DEFAULT 'main',  -- main | subagent:<type>
+    action_class  TEXT NOT NULL,                 -- or 'policy' for a policy change
+    kind          TEXT NOT NULL,
+    from_level    INTEGER NOT NULL,
+    to_level      INTEGER NOT NULL,
+    reason        TEXT NOT NULL,
+    actor_id      TEXT NOT NULL,
+    git_sha       TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_events_repo ON agent_events (repo, id DESC);

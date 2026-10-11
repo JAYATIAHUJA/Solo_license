@@ -210,8 +210,21 @@ def test_a_person_resumes_a_paused_class_within_its_ceiling(gate):
 
     assert gate.restore("shop-api", "install-dep", 2, actor_id="human:jayati", reason="flaky registry") == 2
     assert gate.restore("shop-api", "git-remote", 2, actor_id="human:jayati", reason="x") == 1  # capped
-    event = gate.conn.execute("SELECT * FROM license_events ORDER BY id DESC LIMIT 1").fetchone()
+    event = gate.conn.execute("SELECT * FROM agent_events ORDER BY id DESC LIMIT 1").fetchone()
     assert event["kind"] == "restore" and event["actor_id"] == "human:jayati"
+
+
+def test_every_license_change_is_an_agent_event_with_its_commit(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    for _ in range(3):
+        _approve_and_run(gate, "npm test")
+    event = gate.conn.execute("SELECT * FROM agent_events ORDER BY id DESC LIMIT 1").fetchone()
+    assert (event["repo"], event["principal"], event["action_class"], event["kind"]) == \
+        ("shop-api", "main", "test-run", "promote")
+    assert (event["from_level"], event["to_level"]) == (0, 1)
+    assert event["actor_id"] == "system:coding-gate" and event["git_sha"]
+    assert gate.conn.execute(
+        "SELECT COUNT(*) FROM license_events WHERE task_class LIKE '%@%'").fetchone()[0] == 0
 
 
 def test_a_tool_that_ran_after_the_prompt_is_recorded_as_the_persons_approval(gate):
