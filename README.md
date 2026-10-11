@@ -244,6 +244,7 @@ entire graph impact --repo . --symbol _recover         # what the recovery path 
 | cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](evidence/assets/screens/cfo-scorecard.png) + [`planning/cfo/`](planning/cfo) |
 | A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
 | Scores on a standard dataset | [`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) - τ-bench retail, two frontier models |
+| Prompt-injection resistance | [`evidence/benchmarks/injection.md`](evidence/benchmarks/injection.md) - 30 attacks, 0 changed an order; each stopped at intake, order lookup, policy, licence, or (with the model assumed fooled) the permit boundary |
 | Commits during the hackathon | `git log --since=2026-10-10` |
 | Tests | `python -m pytest` - 160+ tests |
 
