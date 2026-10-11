@@ -1,0 +1,250 @@
+{
+  "before": {
+    "prompts": 21,
+    "over_edit_lines_reviewed": 157,
+    "forbidden_prompts": 3,
+    "failed_turns_unnoticed": 0
+  },
+  "after": {
+    "prompts": 11,
+    "auto_allowed": 19,
+    "denied": 3,
+    "over_edits_sent_back": 1,
+    "over_edit_lines_reviewed": 0,
+    "turns_failed_checks": 0
+  },
+  "days": [
+    {
+      "day": 1,
+      "prompts": 9,
+      "auto_allowed": 1
+    },
+    {
+      "day": 2,
+      "prompts": 2,
+      "auto_allowed": 8
+    },
+    {
+      "day": 3,
+      "prompts": 0,
+      "auto_allowed": 10
+    }
+  ],
+  "turns": [
+    {
+      "day": 1,
+      "prompt": "Run the tests and tell me what fails.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 1,
+      "prompt": "Fix the bug in cart.js: total should multiply price by qty.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": 5,
+      "lines_changed": 2,
+      "tests": "failing before and after"
+    },
+    {
+      "day": 1,
+      "prompt": "Fix the off-by-one in discount.js.",
+      "sent_back": "over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines).",
+      "status": "verified",
+      "scope_score": 5,
+      "lines_changed": 2,
+      "tests": "passed"
+    },
+    {
+      "day": 1,
+      "prompt": "Ship it.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 1,
+      "prompt": "What did we change today?",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 2,
+      "prompt": "Run the tests and tell me what fails.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 2,
+      "prompt": "Fix the bug in cart.js: total should multiply price by qty.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 2,
+      "prompt": "Fix the off-by-one in discount.js.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 2,
+      "prompt": "Ship it.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 2,
+      "prompt": "What did we change today?",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 3,
+      "prompt": "Run the tests and tell me what fails.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 3,
+      "prompt": "Fix the bug in cart.js: total should multiply price by qty.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 3,
+      "prompt": "Fix the off-by-one in discount.js.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 3,
+      "prompt": "Ship it.",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    },
+    {
+      "day": 3,
+      "prompt": "What did we change today?",
+      "sent_back": "",
+      "status": "verified",
+      "scope_score": null,
+      "lines_changed": 0,
+      "tests": "none"
+    }
+  ],
+  "licenses": [
+    {
+      "action_class": "file-edit",
+      "level": 0,
+      "successes": 1,
+      "failures": 1
+    },
+    {
+      "action_class": "git-local",
+      "level": 0,
+      "successes": 1,
+      "failures": 0
+    },
+    {
+      "action_class": "git-remote",
+      "level": 0,
+      "successes": 0,
+      "failures": 3
+    },
+    {
+      "action_class": "read",
+      "level": 2,
+      "successes": 12,
+      "failures": 0
+    },
+    {
+      "action_class": "test-run",
+      "level": 2,
+      "successes": 14,
+      "failures": 0
+    }
+  ],
+  "events": [
+    {
+      "task_class": "test-run@shop-api",
+      "kind": "promote",
+      "from_level": 0,
+      "to_level": 1,
+      "git_sha": "60ed30a"
+    },
+    {
+      "task_class": "read@shop-api",
+      "kind": "promote",
+      "from_level": 0,
+      "to_level": 1,
+      "git_sha": "75c89a1"
+    },
+    {
+      "task_class": "test-run@shop-api",
+      "kind": "promote",
+      "from_level": 1,
+      "to_level": 2,
+      "git_sha": "250924f"
+    },
+    {
+      "task_class": "read@shop-api",
+      "kind": "promote",
+      "from_level": 1,
+      "to_level": 2,
+      "git_sha": "70f7a2e"
+    }
+  ],
+  "traces": [
+    "a36b75e299cbd32b606e4658a854a2a7",
+    "7ad6f28ed25fe27b43db094a082f28ac",
+    "5037c38e7b98b97ad57d25f2dc98a61a",
+    "a1cd723e3b16329b251e669a757a16f3",
+    "c64163fd731af05f117c4085587e9266",
+    "f9d23d879a60eeca7dc7dd900289d42c",
+    "c9e0f97eff672b3256c1455bea97dd86",
+    "05d72bee75aa300a5b4af8568976f928",
+    "17435743f8e8e11cfd268048eb61cfe3",
+    "9c4601b858ef56a9549152700fb68300",
+    "6bdbec5cfa8eb94185a61f698cac28e0",
+    "ff31fe6416035114e218363bfa9e05fe",
+    "9e99ae59457cb126a495beb9562e7d32",
+    "40525f070f752cfc0910ba5f491044b4",
+    "5190edcdfd04f2fadbfc251e290f63e2"
+  ],
+  "neatlogs": true
+}

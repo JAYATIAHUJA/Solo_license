@@ -3,7 +3,7 @@
 
 PYTHON ?= python
 
-.PHONY: install seed run-api web test evidence benchmark taubench charts cfo clean
+.PHONY: install seed run-api web test evidence benchmark coding-benchmark coding-demo taubench charts cfo clean
 
 install:            ## Install runtime dependencies
 	$(PYTHON) -m pip install -r requirements.txt
@@ -22,6 +22,12 @@ test:               ## Run the test suite
 
 evidence:           ## Generate the before/after evidence artifact
 	$(PYTHON) -m scripts.generate_evidence
+
+coding-benchmark:   ## Coding agent before/after replay -> evidence/benchmarks/coding_before_after.md
+	$(PYTHON) -m scripts.coding_demo benchmark
+
+coding-demo:        ## Copy demo/shop-api to ../shop-api-demo with the hooks installed
+	$(PYTHON) -m scripts.coding_demo setup ../shop-api-demo
 
 benchmark:          ## 50-run before/after benchmark -> evidence/benchmarks/benchmark.md
 	$(PYTHON) -m scripts.benchmark
