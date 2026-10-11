@@ -138,6 +138,13 @@ def compose(kind: str, *, action_class: str = "", command: str = "", reason: str
     changed = f" This turn changed: {', '.join(list(files)[:MAX_FILES])}." if files else ""
     how = (f"put a file back as it was before the turn with `{restore}` (delete files the turn created), "
            f"or set the whole turn aside with `{STASH}`")
+    if kind == "flagged" and command:
+        commands = revert_commands(action_class, command, files)
+        undo = f" ({_commands(commands)})" if commands else ""
+        text = (f"Solo License: Your last turn was flagged by the user: {reason}.{_classes(classes)} "
+                f"Revert what `{command}` changed{undo} before continuing, then ask the user what they want "
+                f"instead.{_checkpoint(checkpoint)}")
+        return Remediation(text, commands)
     if kind == "flagged":
         text = (f"Solo License: Your last turn was flagged by the user: {reason}.{_classes(classes)}{changed} "
                 f"Revert that turn's changes before continuing: {how}. Then ask the user what they want "
