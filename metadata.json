@@ -1,0 +1,21 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4PCG9TWVE58ZR1E8ZSWB946",
+  "strategy": "manual-commit",
+  "branch": "chore/scrap-payments-backend",
+  "checkpoints_count": 20,
+  "files_touched": [
+    "sololicense/agent/intake.py",
+    "sololicense/agent/loop.py",
+    "sololicense/agent/worker.py",
+    "sololicense/db/repositories/permits.py",
+    "sololicense/domain/models.py",
+    "sololicense/services/policy_gate.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
