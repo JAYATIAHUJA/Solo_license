@@ -3,7 +3,7 @@
   "checkpoint_id": "01M4PCBQHJ81QWQBNGJ3HD6H4N",
   "strategy": "manual-commit",
   "branch": "chore/scrap-payments-backend",
-  "checkpoints_count": 23,
+  "checkpoints_count": 24,
   "files_touched": [
     "sololicense/observability/neatlogs_client.py",
     "tests/unit/test_intake.py"
@@ -26,13 +26,20 @@
     {
       "metadata": "/2/metadata.json",
       "prompt": ""
+    },
+    {
+      "metadata": "/3/metadata.json",
+      "transcript": "/3/full.jsonl",
+      "compact_transcript": "/3/transcript.jsonl",
+      "content_hash": "/3/content_hash.txt",
+      "prompt": "/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 46,
-    "cache_creation_tokens": 141594,
-    "cache_read_tokens": 2217430,
-    "output_tokens": 7419,
-    "api_call_count": 26
+    "input_tokens": 60,
+    "cache_creation_tokens": 236383,
+    "cache_read_tokens": 2972450,
+    "output_tokens": 9368,
+    "api_call_count": 34
   }
 }
