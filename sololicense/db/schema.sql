@@ -354,6 +354,8 @@ CREATE TABLE IF NOT EXISTS agent_events (
     reason        TEXT NOT NULL,
     actor_id      TEXT NOT NULL,
     git_sha       TEXT,
+    trace_id      TEXT,                          -- the neatlogs trace that recorded the change
+    entire_checkpoint TEXT,                      -- the agent's last Entire checkpoint, when known
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_agent_events_repo ON agent_events (repo, id DESC);
