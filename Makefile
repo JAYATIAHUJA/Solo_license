@@ -3,7 +3,7 @@
 
 PYTHON ?= python
 
-.PHONY: install seed run-api web test evidence benchmark charts cfo clean
+.PHONY: install seed run-api web test evidence benchmark taubench charts cfo clean
 
 install:            ## Install runtime dependencies
 	$(PYTHON) -m pip install -r requirements.txt
@@ -25,6 +25,9 @@ evidence:           ## Generate the before/after evidence artifact
 
 benchmark:          ## 50-run before/after benchmark -> artifacts/benchmark.md
 	$(PYTHON) -m scripts.benchmark
+
+taubench:           ## Score the policies on tau-bench retail -> artifacts/taubench.md
+	$(PYTHON) -m scripts.taubench_eval
 
 charts:             ## Redraw README charts from the latest benchmark
 	$(PYTHON) -m scripts.readme_charts

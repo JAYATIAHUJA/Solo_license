@@ -92,12 +92,59 @@ def supervision_chart() -> str:
     return _svg(w, h, body, "Supervision cost by autonomy level")
 
 
+TAU_POLICIES = (
+    ("full_auto", "Agent acts alone"),
+    ("fixed_ladder", "Fixed ladder (3 clean)"),
+    ("guards_only", "Policy guards only"),
+    ("approve_all", "Person approves all"),
+    ("solo_license", "Solo License"),
+)
+
+
+def taubench_chart(report: dict) -> str:
+    """Wrong writes reaching customers on τ-bench, plus worst-case regret."""
+    models = list(report["models"].items())
+    w, h = 760, 150 + 150 * len(models)
+    incident = report["settings"]["costs"]["incident"]
+    body = [
+        _text(32, 44, "τ-bench retail: wrong database writes that reach a customer", 20, weight=600),
+        _text(32, 68, f"Recorded GPT-4o and Claude runs replayed through five policies · ${incident:.0f} per incident · "
+                      f"{report['settings']['arrival_orders']} arrival orders", 13, MUTED),
+    ]
+    y = 96
+    for model, m in models:
+        top = max(v["harmful"] for v in m["policies"].values()) or 1
+        body.append(_text(32, y + 14, f"{model} — {m['wrong_writes']} of {m['writes']} writes wrong", 14, INK, 600))
+        y += 24
+        for key, label in TAU_POLICIES:
+            v = m["policies"][key]
+            solo = key == "solo_license"
+            color = GREEN if solo else (RED if v["harmful"] > 0 else INK)
+            width = 0 if v["harmful"] == 0 else max(4, v["harmful"] / top * 250)
+            body.append(_text(32, y + 13, label, 13, INK, 600 if solo else 400))
+            body.append(f'<rect x="210" y="{y}" width="250" height="16" fill="#f3f1ec"/>')
+            if width:
+                body.append(f'<rect x="210" y="{y}" width="{width:.1f}" height="16" fill="{color}"/>')
+            body.append(_text(210 + width + 8, y + 13, f"{v['harmful']:.0f}", 13, color, 600))
+            body.append(_text(728, y + 13, f"{v['automation_rate']:.0%} automated · regret ${m['worst_case_regret'][key]:,.0f}",
+                              12, MUTED, 400, "end"))
+            y += 22
+        y += 18
+    body.append(_text(32, h - 20, "Regret = most a policy ever costs above the best one, across incident costs $1–$1,000.", 13, GREEN, 600))
+    return _svg(w, h, body, "Solo License on tau-bench")
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     report = json.loads((ROOT / "artifacts" / "benchmark.json").read_text(encoding="utf-8"))
     (OUT / "benchmark.svg").write_text(benchmark_chart(report), encoding="utf-8")
     (OUT / "supervision.svg").write_text(supervision_chart(), encoding="utf-8")
-    print(f"Wrote {OUT / 'benchmark.svg'} and {OUT / 'supervision.svg'}")
+    tau = ROOT / "artifacts" / "taubench.json"
+    if tau.exists():
+        (OUT / "taubench.svg").write_text(
+            taubench_chart(json.loads(tau.read_text(encoding="utf-8"))), encoding="utf-8"
+        )
+    print(f"Wrote charts to {OUT}")
 
 
 if __name__ == "__main__":
