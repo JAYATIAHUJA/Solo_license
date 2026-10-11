@@ -40,6 +40,7 @@ from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
 from sololicense.domain.policy import PolicyImpact, PolicyRule, PolicyVersion
 from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
 from sololicense.coding.actions import ACTION_CLASSES
+from sololicense.observability.links import event_payload
 from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 from sololicense.services import economics
@@ -585,7 +586,8 @@ def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -
         orders.append(order)
     events = [dict(e) for e in context.conn.execute(
         "SELECT * FROM license_events WHERE task_class NOT LIKE '%@%' ORDER BY id DESC LIMIT 60")]
-    events += [{**dict(e), "id": f"agent-{e['id']}", "task_class": f"{e['action_class']}@{e['repo']}"}
+    events += [{**event_payload(e, context.config), "id": f"agent-{e['id']}",
+                "task_class": f"{e['action_class']}@{e['repo']}"}
                for e in agent_repo.list_events(context.conn, limit=60)]
     events = sorted(events, key=lambda e: e["created_at"], reverse=True)[:60]
     armed = {key: context.fault_injector.peek(key).value for key in TASK_CLASSES}
@@ -1496,7 +1498,8 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "licenses": licenses,
         "decisions": decisions,
         "turns": turns,
-        "events": [dict(r) for r in agent_repo.list_events(context.conn, repo, 60)],
+        "events": [event_payload(r, getattr(context, "config", None))
+                   for r in agent_repo.list_events(context.conn, repo, 60)],
         "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30)],
         "flags": [dict(r) for r in agent_repo.list_flags(context.conn, 30)],
         "counts": counts,
