@@ -24,6 +24,8 @@ import re
 import sqlite3
 from dataclasses import dataclass
 
+from sololicense.coding.actions import edited_path
+
 WINDOW = 20             # distinct calls remembered per session
 WARN_AT = 3
 STOP_AT = 5
@@ -53,8 +55,8 @@ def fingerprint(tool: str, tool_input: dict) -> str:
     if tool in _SHELL:
         key = str(tool_input.get("command", ""))
     elif tool in _EDITS:
-        key = "\n".join(str(tool_input.get(k, "")) for k in ("file_path", "old_string", "new_string", "content",
-                                                             "edits"))
+        key = "\n".join([edited_path(tool_input), *(str(tool_input.get(k, "")) for k in (
+            "old_string", "new_string", "content", "edits", "cell_id", "new_source", "cell_type", "edit_mode"))])
     else:  # descriptions and timeouts vary between otherwise identical calls
         key = json.dumps({k: v for k, v in tool_input.items() if k not in ("description", "timeout")},
                          sort_keys=True, default=str)
