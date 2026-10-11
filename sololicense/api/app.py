@@ -1477,3 +1477,23 @@ def set_coding_test_command(
         agent_repo.set_test_command(context.conn, payload.repo, payload.test_command.strip() or None)
         context.conn.commit()
         return coding_payload(context)
+
+
+@app.post("/api/coding/turns/{turn_id}/rewind")
+def rewind_coding_turn(turn_id: int, actor: Actor = Depends(require_role(Role.APPROVER))) -> dict:
+    """A person puts the repository back to how it was before a failed turn.
+    The turn's changes are stashed, never deleted."""
+    from sololicense.coding import entire
+
+    with _lock:
+        context = get_context()
+        turn = agent_repo.get_turn(context.conn, turn_id)
+        if turn is None:
+            raise HTTPException(status_code=404, detail="No such turn.")
+        result = entire.rewind(turn["cwd"], turn["base_ref"], f"solo-license: rewind turn {turn_id}")
+        if not result["ok"]:
+            raise HTTPException(status_code=409, detail=result.get("error") or "Could not rewind.")
+        agent_repo.close_turn(context.conn, turn_id, status="rewound",
+                              reason=f"Rewound by {actor.actor_id}; changes kept in `git stash list`.")
+        context.conn.commit()
+        return {"rewind": result, **coding_payload(context)}

@@ -59,6 +59,9 @@ _ADDED_COLUMNS = {
     "tickets": (
         ("follows_ticket_id", "INTEGER"),          # the earlier message this one answers
     ),
+    "agent_turns": (
+        ("entire_checkpoint", "TEXT"),             # last Entire checkpoint before a failure
+    ),
 }
 
 

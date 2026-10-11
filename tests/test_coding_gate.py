@@ -26,7 +26,7 @@ def _git_init(path):
 def gate(harness, tmp_path):
     project = _git_init(tmp_path / "shop-api")
     gate = CodingGate(harness.conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
-                      jev_client=JevClient())
+                      jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
     gate.project = project
     return gate
 
@@ -149,7 +149,7 @@ def test_hook_endpoint_round_trip(gate, harness, tmp_path, monkeypatch):
 
     # The API serves from worker threads.
     conn = init_db(tmp_path / "api.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient())
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
         coding_gate = threaded
@@ -185,7 +185,7 @@ def test_coding_dashboard_lists_licenses_with_progress(gate, harness, tmp_path, 
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "dash.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient())
+    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
         coding_gate = threaded
