@@ -102,9 +102,9 @@ def record(conn: sqlite3.Connection, session_id: str, fp: str, *, failed: bool, 
     )
     conn.execute(
         """
-        DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint NOT LIKE 'edit:%'
+        DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint NOT GLOB 'edit:*'
            AND fingerprint NOT IN (SELECT fingerprint FROM agent_fingerprints
-                                    WHERE session_id = ? AND fingerprint NOT LIKE 'edit:%'
+                                    WHERE session_id = ? AND fingerprint NOT GLOB 'edit:*'
                                     ORDER BY seq DESC LIMIT ?)
         """,
         (session_id, session_id, WINDOW),
@@ -114,7 +114,7 @@ def record(conn: sqlite3.Connection, session_id: str, fp: str, *, failed: bool, 
 
 def record_edit(conn: sqlite3.Connection, session_id: str, turn_id: int | None, path: str) -> None:
     """An edit: repeat counters start over, and the file's edits this turn grow."""
-    conn.execute("DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint NOT LIKE 'edit:%'",
+    conn.execute("DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint NOT GLOB 'edit:*'",
                  (session_id,))
     if turn_id is not None and path:
         record(conn, session_id, f"edit:{turn_id}:{path}", failed=False)

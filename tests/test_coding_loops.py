@@ -129,6 +129,32 @@ def test_permission_and_post_tool_count_a_call_once(gate):
     assert row["count"] == 2
 
 
+def _fingerprints(conn, session_id):
+    return {r["fingerprint"] for r in conn.execute(
+        "SELECT fingerprint FROM agent_fingerprints WHERE session_id = ?", (session_id,))}
+
+
+def test_an_edit_clears_edit_tool_fingerprints_but_keeps_the_turn_bookkeeping(gate):
+    conn = gate.conn
+    bash = loops.fingerprint("Bash", {"command": "npm test"})
+    edit = loops.fingerprint("Edit", {"file_path": "a.py", "old_string": "x", "new_string": "y"})
+    loops.record_edit(conn, "s9", 1, "a.py")
+    loops.record(conn, "s9", bash, failed=False)
+    loops.record(conn, "s9", edit, failed=False)
+    loops.record_edit(conn, "s9", 1, "b.py")
+    assert _fingerprints(conn, "s9") == {"edit:1:a.py", "edit:1:b.py"}
+
+
+def test_the_window_caps_edit_tool_fingerprints_too(gate):
+    conn = gate.conn
+    loops.record_edit(conn, "s9", 1, "a.py")
+    for i in range(loops.WINDOW + 5):
+        loops.record(conn, "s9", loops.fingerprint("Edit", {"file_path": f"f{i}.py"}), failed=False)
+    remembered = _fingerprints(conn, "s9")
+    assert "edit:1:a.py" in remembered
+    assert len(remembered - {"edit:1:a.py"}) == loops.WINDOW
+
+
 def test_editing_the_same_file_again_and_again_sends_the_turn_back_once(gate):
     gate.user_prompt(_event(gate, prompt="fix app.py"))
     for i in range(4):
