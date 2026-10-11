@@ -129,6 +129,14 @@ def close_turn(conn: sqlite3.Connection, turn_id: int, **fields) -> None:
                  (*fields.values(), turn_id))
 
 
+def set_checkpoint(conn: sqlite3.Connection, turn_id: int, checkpoint_id: str) -> None:
+    conn.execute("UPDATE agent_turns SET entire_checkpoint = ? WHERE id = ?", (checkpoint_id, turn_id))
+
+
+def get_turn(conn: sqlite3.Connection, turn_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM agent_turns WHERE id = ?", (turn_id,)).fetchone()
+
+
 def recent_turns(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM agent_turns ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 

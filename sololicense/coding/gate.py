@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from sololicense.coding import jev
+from sololicense.coding import entire, jev
 from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe
 from sololicense.coding.ladder import CodingLadder
 from sololicense.db.repositories import agent as agent_repo
@@ -72,6 +72,8 @@ class CodingGate:
     jev_client: jev.JevClient = field(default_factory=jev.JevClient.from_env)
     # Turn checks (tests + scope); installed by verify.py. Returns (ok, reason, details).
     verifier: Callable[["CodingGate", sqlite3.Row, list[sqlite3.Row]], tuple[bool, str, dict]] | None = None
+    # Finds the Entire checkpoint a failed turn can be explained from / rewound to.
+    checkpoint_lookup: Callable[[str, str], dict | None] = entire.last_checkpoint
     _traces: dict[int, Trace] = field(default_factory=dict)
 
     # --- hooks ------------------------------------------------------------
@@ -174,8 +176,14 @@ class CodingGate:
                 agent_repo.set_outcome(self.conn, d["id"], "verified")
                 self._succeed(d["repo"], d["action_class"], trace)
         else:
+            checkpoint = self.checkpoint_lookup(turn["cwd"], session)
+            evidence = reason
+            if checkpoint and checkpoint.get("checkpoint_id"):
+                details["entire_checkpoint"] = checkpoint["checkpoint_id"]
+                agent_repo.set_checkpoint(self.conn, turn["id"], checkpoint["checkpoint_id"])
+                evidence = f"{reason}\nEntire: {entire.explain_command(checkpoint['checkpoint_id'])}"
             for key in sorted({d["action_class"] for d in changed} | set(details.get("blame", ()))):
-                self._fail(turn["repo"], key, reason, trace)
+                self._fail(turn["repo"], key, evidence, trace)
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "failed")
         measured = {k: v for k, v in details.items() if k != "blame"}
