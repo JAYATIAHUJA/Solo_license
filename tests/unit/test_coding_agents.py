@@ -138,3 +138,36 @@ def test_agent_prompt_names_the_one_liner_and_asks_before_installing_uv():
     text = agent_prompt("codex")
     assert "uv tool install git+https://github.com/JAYATIAHUJA/Solo_license" in text
     assert "solo-license init --agent codex" in text and "Ask me before" in text
+
+
+def test_the_installed_command_really_runs(tmp_path):
+    """Run the exact command string the installer writes, through a shell."""
+    repo = tmp_path / "my repo"   # a space in the path, like 'solo lincense'
+    repo.mkdir()
+    install(repo, "http://127.0.0.1:9", "codex")
+    hooks = json.loads((repo / ".codex" / "hooks.json").read_text())
+    command = hooks["hooks"]["PermissionRequest"][0]["hooks"][0]["command"]
+    assert command.count('"') == 4
+    result = subprocess.run(command.split(" #")[0], shell=True, input="{}", capture_output=True,
+                            text=True, timeout=30, env={**__import__("os").environ, "SOLO_LICENSE_URL": "http://127.0.0.1:9"})
+    assert result.returncode == 0, result.stderr
+
+
+def test_decisions_only_take_known_columns(tmp_path):
+    from sololicense.db.database import init_db
+    from sololicense.db.repositories import agent as agent_repo
+
+    conn = init_db(tmp_path / "x.db")
+    with pytest.raises(ValueError):
+        agent_repo.insert_decision(conn, session_id="s", **{"repo) VALUES (1); DROP TABLE runs; --": "x"})
+
+
+def test_hook_route_rejects_malformed_agent_and_event_names():
+    from fastapi.testclient import TestClient
+
+    from sololicense.api.app import app
+
+    client = TestClient(app)
+    assert client.post("/api/hooks/codex/..%2F..%2Fetc", json={}).status_code in (404, 422)
+    assert client.post("/api/hooks/Codex;rm/PreToolUse", json={}).status_code == 422
+    assert client.post("/api/hooks/codex/Pre Tool", json={}).status_code == 422

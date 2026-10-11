@@ -14,7 +14,9 @@ from dataclasses import replace
 from hashlib import sha256
 from threading import RLock
 
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
+from typing import Annotated
+
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -1577,8 +1579,8 @@ def test_jev(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
 
 @app.post("/api/hooks/{agent}/{native_event}")
 def agent_hook(
-    agent: str,
-    native_event: str,
+    agent: Annotated[str, Path(max_length=40, pattern=r"^[a-z0-9-]+$")],
+    native_event: Annotated[str, Path(max_length=60, pattern=r"^[A-Za-z][A-Za-z0-9_.]*$")],
     request: Request,
     body: dict = Body(default_factory=dict),
     envelope: bool = Query(default=False),
