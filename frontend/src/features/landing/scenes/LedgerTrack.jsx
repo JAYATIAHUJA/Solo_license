@@ -5,12 +5,12 @@ import { SketchRule } from '../../../components/sketch/Sketch.jsx';
 import { Pinned } from '../Pinned.jsx';
 
 const COMMITS = [
-  { sha: 'a41f09c', kind: 'issue', move: '→ L0', text: 'License issued and signed by a human.' },
-  { sha: '4f1a2c8', kind: 'promote', move: 'L0 → L1', text: '3 consecutive clean runs; earned Draft + approve.' },
-  { sha: '9c03e71', kind: 'promote', move: 'L1 → L2', text: '3 consecutive clean runs; earned Auto under ceiling.' },
-  { sha: 'e58f3b1', kind: 'promote', move: 'L2 → L3', text: '3 consecutive clean runs; earned Full auto.' },
-  { sha: '2c9d1a0', kind: 'demote', move: 'L3 → L0', text: 'state_mismatch: intended $40.00, SQLite moved $0.00.' },
-  { sha: '48a5f4c', kind: 'restore', move: 'L0 → L1', text: '“Tool bug fixed in v1.4, verified on staging.” - reviewer' },
+  { sha: 'a41f09c', kind: 'issue', move: '→ L0', text: 'shop-api connected. Every action class starts at zero trust.' },
+  { sha: '4f1a2c8', kind: 'promote', move: 'L0 → L1', text: 'test-run: 3 verified runs; “npm test” runs on its own.' },
+  { sha: '9c03e71', kind: 'promote', move: 'L1 → L2', text: 'test-run: 8 verified, 0 failed - below break-even.' },
+  { sha: 'e58f3b1', kind: 'promote', move: 'L1 → L2', text: 'file-edit: 24 verified turns; edits run on their own.' },
+  { sha: '2c9d1a0', kind: 'demote', move: 'L2 → L0', text: 'file-edit: over-editing, 210 lines in 3 files. Entire checkpoint 3f9c2a1.' },
+  { sha: '48a5f4c', kind: 'restore', move: 'L0 → L1', text: '“Reverted format.js, reviewed the turn.” - reviewer' },
 ];
 const ICON = { issue: 'flag', promote: 'arrow-up-right', demote: 'bolt', restore: 'refresh' };
 

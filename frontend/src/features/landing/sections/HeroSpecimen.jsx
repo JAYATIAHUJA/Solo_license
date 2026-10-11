@@ -3,16 +3,16 @@ import { AnimatePresence, motion } from 'motion/react';
 import { SketchBox } from '../../../components/sketch/Sketch.jsx';
 import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 
-/* A looping specimen of one task class's life: three clean runs promote it,
-   then a quiet failure is caught and the dial crashes. Illustrative only -
-   the real thing runs in the app against the API. */
+/* A looping specimen of one action class's life in one repo: approvals earn
+   it, it runs alone, then a turn breaks the tests and the dial crashes.
+   Illustrative only - the real thing runs in the app against the hooks. */
 const FRAMES = [
-  { level: 1, runs: 0, line: 'ORD-1001 · $25.00 · drafted for approval', icon: 'message' },
-  { level: 1, runs: 1, line: 'ORD-1003 · $15.00 · executed · read-back matched', icon: 'check' },
-  { level: 1, runs: 2, line: 'ORD-1002 · $40.00 · executed · read-back matched', icon: 'check' },
-  { level: 2, runs: 0, line: '3 clean runs → promoted to L2 · commit 4f1a2c', icon: 'commit' },
-  { level: 2, runs: 1, line: 'ORD-1005 · $45.00 · executed · read-back matched', icon: 'check' },
-  { level: 0, runs: 0, line: 'state_mismatch - tool said done, DB moved $0.00', icon: 'warn', alert: true },
+  { level: 0, runs: 0, line: 'npm test · Claude Code asked you · approved', icon: 'message' },
+  { level: 0, runs: 1, line: 'npm test · ran · verified', icon: 'check' },
+  { level: 0, runs: 2, line: 'npm test · ran · verified', icon: 'check' },
+  { level: 1, runs: 0, line: '3 verified runs → promoted to L1 · commit 4f1a2c', icon: 'commit' },
+  { level: 1, runs: 1, line: 'npm test · ran on its own · no prompt', icon: 'check' },
+  { level: 0, runs: 0, line: 'turn check - tests fail after the edit → L0', icon: 'warn', alert: true },
 ];
 
 export function HeroSpecimen() {
@@ -26,8 +26,8 @@ export function HeroSpecimen() {
   return (
     <SketchBox className="lp-specimen" seed={77}>
       <div className="lp-specimen-top">
-        <span className="mono">task class / refund</span>
-        <span className={`mono ${f.alert ? 'lp-alert' : ''}`}>{f.alert ? '● quarantined' : '● live'}</span>
+        <span className="mono">test-run @ shop-api</span>
+        <span className={`mono ${f.alert ? 'lp-alert' : ''}`}>{f.alert ? '● paused' : '● live'}</span>
       </div>
       <div className="lp-specimen-level">
         <AnimatePresence mode="wait" initial={false}>
@@ -43,13 +43,13 @@ export function HeroSpecimen() {
           </motion.span>
         </AnimatePresence>
         <div className="lp-specimen-rungs">
-          {[0, 1, 2, 3].map((r) => (
+          {[0, 1, 2].map((r) => (
             <motion.i key={r} animate={{ backgroundColor: r <= f.level && !f.alert ? '#0e0e0d' : 'rgba(0,0,0,0)' }} />
           ))}
         </div>
       </div>
       <div className="lp-specimen-runs">
-        <span className="mono muted">clean runs</span>
+        <span className="mono muted">verified runs</span>
         <span className="lp-ticks">
           {[0, 1, 2].map((r) => <i key={r} className={r < f.runs ? 'on' : ''} />)}
         </span>

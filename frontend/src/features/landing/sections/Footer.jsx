@@ -14,15 +14,15 @@ export function Footer({ onReplayIntro }) {
           <button className="lp-footer-link" onClick={onReplayIntro}>Replay intro</button>
         </nav>
         <nav>
-          <Link to="/onboarding">Set up</Link>
-          <Link to="/app">App</Link>
+          <Link to="/app">Dashboard</Link>
+          <Link to="/app/payments">Payments agent</Link>
           <Link to="/app/settings">Settings</Link>
         </nav>
       </div>
       <p className="lp-footer-word serif" aria-hidden="true">Solo License</p>
       <div className="lp-footer-bottom mono">
         <span>Built for the neatHack agent hackathon</span>
-        <span>Earned autonomy for refund operations</span>
+        <span>Earned autonomy for coding agents</span>
       </div>
     </footer>
   );

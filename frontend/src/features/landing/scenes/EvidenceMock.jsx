@@ -9,8 +9,8 @@ import { AppMock } from './AppMock.jsx';
    live layout, so they land on target at every screen size; a note that has
    no free space to sit in is simply not shown. */
 const NOTES = [
-  { id: 'verified', text: 'the database said no' },
-  { id: 'tool', text: 'the tool said yes' },
+  { id: 'verified', text: 'the diff said no' },
+  { id: 'tool', text: 'the agent said done' },
   { id: 'restore', text: 'you choose how much trust comes back' },
 ];
 

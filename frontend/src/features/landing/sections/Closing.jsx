@@ -13,10 +13,10 @@ export function Closing() {
         <h2 className="lp-closing-title serif">
           <MaskWords text="Let it" /> <em className="italic"><MaskWords text="earn" delay={0.1} /></em> <MaskWords text="it." delay={0.16} />
         </h2>
-        <p className="lp-copy">Three-minute setup. Bring your own orders or load samples, add a model key if you have one, and run your first refund.</p>
+        <p className="lp-copy">Two commands. Install the plugin, keep the API running, and work as usual. Every repo starts at zero trust - and the agent earns the rest.</p>
         <div className="lp-hero-cta">
-          <Magnetic><Link to="/onboarding" className="btn btn-ink">Set up your agent <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
-          <Magnetic><Link to="/app" className="btn btn-line">Open the app</Link></Magnetic>
+          <Magnetic><Link to="/app" className="btn btn-ink">Open the dashboard <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
+          <Magnetic><a href="https://github.com/JAYATIAHUJA/Solo_license" className="btn btn-line">Read the code</a></Magnetic>
         </div>
       </div>
     </section>

@@ -22,7 +22,7 @@ import { useSmoothScroll } from './useSmoothScroll.js';
 import './landing.css';
 import './scenes/scenes.css';
 
-/** Marketing site, told as one refund's story. Static sections live in
+/** Marketing site, told as one coding agent's story. Static sections live in
  *  ./sections, scroll-driven pinned scenes in ./scenes, the intro in ./gate. */
 export function LandingPage() {
   const [intro, setIntro] = useState(introPending);
