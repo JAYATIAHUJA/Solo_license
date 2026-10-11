@@ -8,7 +8,8 @@ import {
   formFromSettings, validWebhook,
 } from '../components/IntegrationFields.jsx';
 import { PolicyEditor } from '../components/PolicyEditor.jsx';
-import { jobsName, levelCopy, limitVerb, shortMoney } from '../components/words.js';
+import { levelCopy } from '../../../lib/copy.js';
+import { jobsName, limitVerb, shortMoney } from '../components/words.js';
 import '../components/plain-form.css';
 import './settings.css';
 
@@ -128,6 +129,7 @@ function SettingsForm({ data }) {
               );
             })}
           </div>
+        </Section>
         <Section
           title="Policy review"
           sub="Review the exact guardrails behind the agent’s autonomy. Policy versions are immutable and affect only future work."

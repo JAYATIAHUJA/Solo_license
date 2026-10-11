@@ -26,14 +26,8 @@ def _git_log(repo) -> str:
 
 
 def test_clean_runs_execute_verify_and_promote(harness):
-    # Two verified jobs short of the evidence L3 needs.
-    ladder = harness.license_service.ladder
-    state = _dial(harness)
-    needed = ladder.step(2).runs_needed(state.successes, state.failures)
-    license_repo.upsert_state(harness.conn, replace(state, successes=state.successes + needed - 2))
-    harness.conn.commit()
-
-    for order_id, amount in (("ORD-1001", 25.0), ("ORD-1003", 15.0)):
+    # The active policy requires three clean, verified results before L3.
+    for order_id, amount in (("ORD-1001", 25.0), ("ORD-1003", 15.0), ("ORD-1005", 45.0)):
         result = harness.worker.run_refund(RefundRequest(order_id, "x", amount, "defective"))
         assert result.status is RunStatus.CLEAN
         assert result.actual_delta == amount

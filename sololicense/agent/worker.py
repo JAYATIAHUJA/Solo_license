@@ -245,7 +245,8 @@ class RefundWorker:
         if (self.recovery_enabled and will_execute and error is None and authorised_execution
                 and not (first.verified and first.matched)):
             result, recovered = self._recover(
-                trace, connector, request, order, task_class, column, key, before, intended_delta, permit,
+                trace, connector, request, order, task_class, column, key, before, intended_delta,
+                policy, state, authorized, attempted, approved, actor,
             )
 
         # Detections judge the first attempt: a tool that lied, or a skipped
@@ -389,7 +390,8 @@ class RefundWorker:
 
     def _recover(
         self, trace, connector, request: RefundRequest, order, task_class: str, column: str,
-        key: str, before: float, intended_delta: float, permit: ExecutionPermit | None,
+        key: str, before: float, intended_delta: float, policy, state, authorized,
+        attempted, approved: bool, actor: Actor,
     ) -> tuple[verification.VerificationResult, bool]:
         """Verification disagreed with the tool. Reconcile first, retry once
         with the same idempotency key only when nothing moved, verify again.
@@ -410,8 +412,22 @@ class RefundWorker:
             return result, False
         try:
             trace.span("recover.retry", idempotency_key=key)
+            retry_permit = PolicyGate(self._conn).issue(
+                policy=policy,
+                task_class=task_class,
+                tool=task_class,
+                order_id=request.order_id,
+                amount=request.amount,
+                authorized=authorized,
+                attempted=attempted,
+                license_level=int(state.effective_level),
+                approved=approved,
+                actor=actor,
+            )
+            if isinstance(retry_permit, BlockedPermit):
+                raise ConnectorError(f"Recovery execution blocked: {retry_permit.reason}")
             tool_result = connector.apply(
-                task_class, order, request.amount, idempotency_key=key, permit=permit,
+                task_class, order, request.amount, idempotency_key=key, permit=retry_permit,
             )
             trace.span("tool.result", ok=tool_result.ok, message=tool_result.message,
                        reference=tool_result.reference, trusted=False, attempt=2)

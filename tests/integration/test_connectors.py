@@ -11,6 +11,9 @@ import pytest
 from sololicense.connectors.base import ConnectorError
 from sololicense.connectors.csv_import import orders_to_csv, parse_orders_csv
 from sololicense.connectors.stripe import StripeConnector, key_mode, order_id_for
+from sololicense.domain.license import Decision
+from sololicense.security import Actor, Role
+from sololicense.services.policy_gate import PolicyGate
 
 SHOPIFY = """Name,Email,Financial Status,Paid at,Total,Lineitem name,Billing Name
 #1001,ada@example.com,paid,2026-10-01 10:00:00 +0000,25.00,Keyboard,Ada Lovelace
@@ -108,8 +111,20 @@ class FakeStripe:
         return httpx.Response(404, json={"error": {"message": f"no route {path}"}})
 
 
-def _connector(fake):
-    return StripeConnector("sk_test_abc", client=httpx.Client(transport=httpx.MockTransport(fake.handler)))
+def _connector(fake, conn=None):
+    return StripeConnector(
+        "sk_test_abc", conn=conn,
+        client=httpx.Client(transport=httpx.MockTransport(fake.handler)),
+    )
+
+
+def _permit(harness, task_class, order_id, amount):
+    return PolicyGate(harness.conn).issue(
+        policy=harness.worker._policy_service.active(),
+        task_class=task_class, tool=task_class, order_id=order_id, amount=amount,
+        authorized=Decision.AUTO_EXECUTE, attempted=Decision.AUTO_EXECUTE,
+        license_level=2, approved=False, actor=Actor("test:stripe", Role.ADMIN),
+    )
 
 
 def test_key_checks():
@@ -128,32 +143,33 @@ def test_charges_become_orders():
     assert order_id_for({"id": "ch_3Nabcdefghijklmn", "metadata": {}}).startswith("ST-")
 
 
-def test_refund_is_verified_from_stripe_not_from_the_response():
+def test_refund_is_verified_from_stripe_not_from_the_response(harness):
     fake = FakeStripe()
-    stripe = _connector(fake)
+    stripe = _connector(fake, harness.conn)
     order = {"order_id": "ORD-77", "external_id": "ch_123ABC", "customer_ref": "cus_1", "currency": "usd"}
-    result = stripe.apply("refund", order, 10.0, idempotency_key="k1")
+    result = stripe.apply("refund", order, 10.0, idempotency_key="k1", permit=_permit(harness, "refund", "ORD-77", 10.0))
     assert result.ok and stripe.read_effect("refund", order) == 10.0
-    # A retry with the same key does not pay twice.
-    stripe.apply("refund", order, 10.0, idempotency_key="k1")
+    # A replay cannot reach Stripe without a fresh, server-issued permit.
+    with pytest.raises(ConnectorError, match="permit"):
+        stripe.apply("refund", order, 10.0, idempotency_key="k1")
     assert stripe.read_effect("refund", order) == 10.0
 
 
-def test_store_credit_is_a_customer_balance_credit():
+def test_store_credit_is_a_customer_balance_credit(harness):
     fake = FakeStripe()
-    stripe = _connector(fake)
+    stripe = _connector(fake, harness.conn)
     order = {"order_id": "ORD-77", "external_id": "ch_123ABC", "customer_ref": "cus_1", "currency": "usd"}
-    stripe.apply("store_credit", order, 7.5, idempotency_key="c1")
+    stripe.apply("store_credit", order, 7.5, idempotency_key="c1", permit=_permit(harness, "store_credit", "ORD-77", 7.5))
     assert fake.balance[0]["amount"] == -750
     assert stripe.read_effect("store_credit", order) == 7.5
 
 
-def test_stripe_errors_are_honest_refusals():
+def test_stripe_errors_are_honest_refusals(harness):
     fake = FakeStripe()
-    stripe = _connector(fake)
+    stripe = _connector(fake, harness.conn)
     order = {"order_id": "ORD-77", "external_id": "ch_123ABC", "customer_ref": "cus_1", "currency": "usd"}
     with pytest.raises(ConnectorError, match="exceeds"):
-        stripe.apply("refund", order, 999.0, idempotency_key="k2")
+        stripe.apply("refund", order, 999.0, idempotency_key="k2", permit=_permit(harness, "refund", "ORD-77", 999.0))
 
 
 def test_worker_recovers_a_lost_stripe_refund(harness):
@@ -164,7 +180,7 @@ def test_worker_recovers_a_lost_stripe_refund(harness):
     from sololicense.domain.models import RefundRequest, RunStatus
 
     fake = FakeStripe(drop_first_refund=True)
-    stripe = _connector(fake)
+    stripe = _connector(fake, harness.conn)
     orders_repo.upsert_orders(harness.conn, stripe.list_orders())
     harness.conn.commit()
 
