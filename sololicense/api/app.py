@@ -809,6 +809,7 @@ def _handle_ticket(context: AppContext, ticket_id: int, actor: Actor) -> dict:
         "task_class": outcome.task_class,
         "run_id": outcome.run_id,
         "trace_id": outcome.trace_id,
+        "follows_ticket_id": outcome.follows_ticket_id,
         "source": intake.source if intake else None,
         "confidence": intake.confidence if intake else None,
         "note": intake.note if intake else "",

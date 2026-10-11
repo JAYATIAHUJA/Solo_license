@@ -56,6 +56,9 @@ _ADDED_COLUMNS = {
         ("recovered", "INTEGER NOT NULL DEFAULT 0"),   # agent fixed a failed action
         ("ticket_id", "INTEGER"),
     ),
+    "tickets": (
+        ("follows_ticket_id", "INTEGER"),          # the earlier message this one answers
+    ),
 }
 
 

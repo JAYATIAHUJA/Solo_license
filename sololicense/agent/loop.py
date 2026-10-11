@@ -2,6 +2,7 @@
 
 Each step reads the result of the one before it and decides what to do next:
 
+    context     a reply to an open question carries the earlier message forward
     read        understand the message (LLM or rules); stop if it tries to steer the agent
     find_order  by order number, or by the sender's email when none is given
     policy      the shop's own rules (refund window, identity, what is left to pay)
@@ -23,6 +24,7 @@ from sololicense.agent.intake import Intake, parse_message
 from sololicense.agent.worker import RefundWorker, RunResult
 from sololicense.config import Config
 from sololicense.db.repositories import orders as orders_repo
+from sololicense.db.repositories import tickets as tickets_repo
 from sololicense.domain.models import RefundRequest, RunStatus
 from sololicense.domain.task_classes import get_spec
 from sololicense.observability.tracer import Tracer
@@ -55,6 +57,8 @@ class TicketOutcome:
     task_class: str | None = None
     run: RunResult | None = None
     trace_id: str | None = None
+    # The earlier ticket whose question this message answers.
+    follows_ticket_id: int | None = None
 
     @property
     def run_id(self) -> int | None:
@@ -85,8 +89,14 @@ class TicketAgent:
         actor: Actor = SYSTEM_ACTOR,
     ) -> TicketOutcome:
         trace = self._tracer.start_trace("ticket", ticket_id=ticket_id, sender=sender or "", actor=actor.actor_id)
+        # Only a stored ticket can continue a conversation; the earlier one is
+        # never re-handled, so the 409 guard on handled tickets still holds.
+        earlier = (
+            tickets_repo.open_question(self._conn, sender, exclude_id=ticket_id)
+            if sender and ticket_id is not None else None
+        )
         try:
-            outcome = self._handle(message, sender, ticket_id, idempotency_key, actor, trace)
+            outcome = self._handle(message, sender, ticket_id, idempotency_key, actor, trace, earlier)
         except Exception as error:
             trace.span("ticket.error", status="error", error_type=type(error).__name__)
             trace.flush(self._conn, None)
@@ -96,19 +106,29 @@ class TicketAgent:
         trace.flush(self._conn, outcome.run_id)
         self._conn.commit()
         outcome.trace_id = trace.trace_id
+        outcome.follows_ticket_id = earlier["id"] if earlier is not None else None
         return outcome
 
     # --- steps ---------------------------------------------------------------
 
-    def _handle(self, message, sender, ticket_id, idempotency_key, actor, trace) -> TicketOutcome:
+    def _handle(self, message, sender, ticket_id, idempotency_key, actor, trace, earlier=None) -> TicketOutcome:
         steps: list[Step] = []
 
         def step(name: str, status: str, detail: str, **attrs) -> None:
             steps.append(Step(name, status, detail))
             trace.span(f"agent.{name}", status="error" if status == "error" else "ok", detail=detail, **attrs)
 
+        # 0. context: a reply to the agent's open question ------------------------
+        text = message
+        if earlier is not None:
+            step("context", "ok",
+                 f"Continues #{earlier['id']}: the agent had asked this customer for more detail.",
+                 continues_ticket_id=earlier["id"])
+            # The reply comes first so its order number wins over the earlier text.
+            text = f"{message}\n\nEarlier message from the customer: {earlier['body']}"
+
         # 1. read -------------------------------------------------------------
-        intake = parse_message(message, self._config, self._conn)
+        intake = parse_message(text, self._config, self._conn)
         spec = get_spec(intake.task_class)
         step("read", "ok",
              f"Asks for {spec.label.lower()}" + (f" on {intake.order_id}" if intake.order_id else "")
