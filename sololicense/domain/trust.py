@@ -1,4 +1,4 @@
-"""Risk-calibrated trust — how much evidence an agent needs before it may act alone.
+"""Risk-calibrated trust - how much evidence an agent needs before it may act alone.
 
 A fixed rule such as "three clean runs in a row" ignores two things that decide
 whether autonomy is worth it: how *sure* we are about the agent's failure rate,
@@ -10,7 +10,7 @@ module replaces the fixed count with a small amount of Bayesian arithmetic.
   ``Beta(1 + f, 1 + s)``.
 * Autonomy pays when the expected cost of letting the agent act alone is lower
   than the review it replaces: ``p_fail * incident_cost < review_cost_saved``.
-  That gives a **break-even failure rate** — computed from the operator's own
+  That gives a **break-even failure rate** - computed from the operator's own
   economics, never hard-coded.
 * A job type earns the next level only when the *upper credible bound* of its
   failure rate (at the operator's confidence) is below that break-even rate.
@@ -137,7 +137,7 @@ class TrustLadder:
     ``minutes_by_level`` is the human time each action costs at L0..L3; the
     saving of a step is the difference between two rungs. Climbing to a rung
     that saves little (L2 -> L3) therefore needs far more evidence than a step
-    that saves a lot — exactly the trade-off the cfo model describes.
+    that saves a lot - exactly the trade-off the cfo model describes.
     """
 
     minutes_by_level: tuple[float, ...]

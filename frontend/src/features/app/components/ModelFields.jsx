@@ -96,7 +96,7 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
           {!provider && <option value="">Choose one</option>}
           {providers.map((p) => (
             <option key={p.key} value={p.key}>
-              {providerLabel(p)}{p.key === RECOMMENDED ? ' — Recommended' : ''}
+              {providerLabel(p)}{p.key === RECOMMENDED ? ' - Recommended' : ''}
             </option>
           ))}
         </select>
@@ -112,7 +112,7 @@ export function ModelFields({ providers = [], values, onChange, settings = {} })
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder={hint ? `Saved (ends ${hint.replace(/^•+/, '')}) — leave blank to keep` : 'Paste your key'}
+              placeholder={hint ? `Saved (ends ${hint.replace(/^•+/, '')}) - leave blank to keep` : 'Paste your key'}
               value={values[provider.key_field] || ''}
               onChange={(e) => { onChange({ [provider.key_field]: e.target.value }); setTest(null); }}
             />

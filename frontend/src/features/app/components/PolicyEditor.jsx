@@ -115,9 +115,9 @@ export function PolicyEditor({ policy, taskClasses = [], onActivated, disabled =
                 <label className="field">
                   <span>Lowest level that may act without approval</span>
                   <select className="input" value={rule.requires_approval_at_or_above ?? '2'} onChange={(event) => setRule(taskClass, { requires_approval_at_or_above: event.target.value })} disabled={disabled || working}>
-                    <option value="1">L1 — approval through suggestions only</option>
-                    <option value="2">L2 — approval through drafts</option>
-                    <option value="3">L3 — approval through capped auto-actions</option>
+                    <option value="1">L1 - approval through suggestions only</option>
+                    <option value="2">L2 - approval through drafts</option>
+                    <option value="3">L3 - approval through capped auto-actions</option>
                   </select>
                 </label>
                 <label className="field">

@@ -22,7 +22,7 @@ img, svg { display: block; }
 .hand { font-family: var(--font-hand); font-weight: 600; letter-spacing: 0; }
 .muted { color: var(--muted); }
 
-/* buttons — straight edges, ink fill or outline */
+/* buttons - straight edges, ink fill or outline */
 .btn {
   display: inline-flex; align-items: center; gap: 10px;
   height: 44px; padding: 0 20px;

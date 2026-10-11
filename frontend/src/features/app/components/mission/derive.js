@@ -8,7 +8,7 @@ export const limitOf = (n) => (Number.isInteger(Number(n)) ? moneyWhole(n) : mon
 
 const at = (ts) => toDate(ts)?.getTime() ?? 0;
 
-/** "Refunds", "Store credit" — the name of a job type as a person says it. */
+/** "Refunds", "Store credit" - the name of a job type as a person says it. */
 export function jobName(meta) {
   if (!meta) return 'Jobs';
   if (meta.key === 'refund') return 'Refunds';

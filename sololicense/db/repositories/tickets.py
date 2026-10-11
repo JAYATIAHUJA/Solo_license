@@ -1,4 +1,4 @@
-"""Tickets repository — the agent's inbox of customer messages."""
+"""Tickets repository - the agent's inbox of customer messages."""
 
 from __future__ import annotations
 

@@ -24,11 +24,11 @@ const CURRENCY = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
 const CURRENCY_WHOLE = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const CURRENCY_COMPACT = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
 
-/** $1,234.50 — every amount on screen goes through here. */
+/** $1,234.50 - every amount on screen goes through here. */
 export const money = (n) => CURRENCY.format(Number(n || 0));
-/** $22,500 — for monthly economics, where cents are noise. */
+/** $22,500 - for monthly economics, where cents are noise. */
 export const moneyWhole = (n) => CURRENCY_WHOLE.format(Math.round(Number(n || 0)));
-/** $400K — for tight spaces. */
+/** $400K - for tight spaces. */
 export const moneyCompact = (n) => CURRENCY_COMPACT.format(Number(n || 0));
 export const pct = (n) => `${Math.round(Number(n || 0) * 100)}%`;
 
@@ -49,10 +49,10 @@ export function when(ts) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/** 10 OCT 2026 — license-card style. */
+/** 10 OCT 2026 - license-card style. */
 export function stampDate(ts) {
   const date = toDate(ts);
-  if (!date) return '—';
+  if (!date) return '-';
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
 }
 
@@ -72,7 +72,7 @@ export function classKeys(data) {
 
 /** Where an LLM intake came from: "llm:gpt-4o" → "LLM · gpt-4o". */
 export function sourceLabel(source) {
-  if (!source) return '—';
+  if (!source) return '-';
   if (source.startsWith('llm:')) return `LLM · ${source.slice(4)}`;
   if (source === 'deterministic') return 'Deterministic parser';
   return humanize(source);

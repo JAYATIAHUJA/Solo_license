@@ -1,4 +1,4 @@
-"""License service — the one orchestrator allowed to change the dial.
+"""License service - the one orchestrator allowed to change the dial.
 
 It composes the pure state machine (:mod:`sololicense.domain.license`) with
 persistence, the event ledger, and the git ledger. Every transition it makes

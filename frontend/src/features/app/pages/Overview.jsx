@@ -90,7 +90,7 @@ export function Overview() {
           <div key={c.key} className="pl-alert app-alert-row" role="alert" data-tour={`paused-${c.key}`}>
             <p>
               <b>{jobIs(c.name)} paused.</b>{' '}
-              {r ? <>A problem was caught on {r.order_id} — {lcFirst(problemFor(data, r).title)}. </> : 'A problem was caught. '}
+              {r ? <>A problem was caught on {r.order_id} - {lcFirst(problemFor(data, r).title)}. </> : 'A problem was caught. '}
               Nothing will run on its own until you review it.
             </p>
             <Link to={r ? `/app/runs/${r.id}` : '/app/runs'} className="btn btn-ink btn-sm">Review and resume</Link>

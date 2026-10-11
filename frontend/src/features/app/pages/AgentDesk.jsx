@@ -24,7 +24,7 @@ function buildExamples(orders, keys) {
   if (keys.includes('refund')) {
     const o = pick(0);
     const value = Math.min(remainingOf(o), Math.max(1, round(remainingOf(o) * 0.5)));
-    out.push({ label: 'Refund request', sender: o.email, text: `Hi, order ${o.order_id} arrived damaged. Could I get ${money(value)} back to my card? — ${o.customer}` });
+    out.push({ label: 'Refund request', sender: o.email, text: `Hi, order ${o.order_id} arrived damaged. Could I get ${money(value)} back to my card? - ${o.customer}` });
     const mailed = open.find((x) => x.email && x.order_id !== o.order_id);
     if (mailed) out.push({ label: 'No order number', sender: mailed.email, text: 'Hi, I was charged for something I returned. Can you refund me please?' });
   }
@@ -63,7 +63,7 @@ function Outcome({ data, intake, packet, onNewRun }) {
     );
   }
   if (intake.needs_human) {
-    return <p className="pl-alert app-outcome">Flagged for you — this message looked unusual, so the agent did nothing.</p>;
+    return <p className="pl-alert app-outcome">Flagged for you - this message looked unusual, so the agent did nothing.</p>;
   }
   if (intake.error) {
     return <p className="pl-alert app-outcome">The agent did nothing. {intake.error}</p>;
@@ -107,7 +107,7 @@ function Outcome({ data, intake, packet, onNewRun }) {
     return (
       <div className="app-outcome">
         <span className="pl-status wait">Problem caught · customer still served</span>
-        <p><b>{p.title}.</b> The agent noticed, retried safely with the same request key and checked again — the money is there now. Because the tool could not be trusted, {name.toLowerCase()} {/s$/i.test(name) ? 'are' : 'is'} paused until you review it.</p>
+        <p><b>{p.title}.</b> The agent noticed, retried safely with the same request key and checked again - the money is there now. Because the tool could not be trusted, {name.toLowerCase()} {/s$/i.test(name) ? 'are' : 'is'} paused until you review it.</p>
         <div><Link to={`/app/runs/${r.id}`} className="btn btn-ink btn-sm">Review what happened</Link></div>
       </div>
     );

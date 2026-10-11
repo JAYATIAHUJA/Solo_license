@@ -1,13 +1,13 @@
-"""Stripe connector — real refunds and store credit, verified against Stripe.
+"""Stripe connector - real refunds and store credit, verified against Stripe.
 
 * Orders are Stripe charges. The order number is ``metadata.order_id`` when the
   shop sets one, otherwise a short id derived from the charge.
 * A refund is ``POST /v1/refunds``; verification re-reads the charge's
-  ``amount_refunded`` from Stripe — never the refund call's response.
+  ``amount_refunded`` from Stripe - never the refund call's response.
 * Store credit is a customer balance credit (``POST /v1/customers/{id}/
   balance_transactions``); verification sums the credits tagged with the order.
 * Every write carries an ``Idempotency-Key``, so a retry after a lost response
-  cannot pay twice — Stripe returns the first result instead.
+  cannot pay twice - Stripe returns the first result instead.
 
 Only test-mode keys are accepted unless ``allow_live`` is set explicitly.
 """

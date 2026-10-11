@@ -4,7 +4,7 @@ When a detection demotes a task class, a human restores it only after reading
 one packet. This assembles that packet from the sources of truth: the run and
 its before/after numbers, the detections that fired, the full trace (local
 mirror), and the git-backed license history. Recovery is a judgement made on
-this evidence — not a blind retry."""
+this evidence - not a blind retry."""
 
 from __future__ import annotations
 

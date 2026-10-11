@@ -1,4 +1,4 @@
-"""The ticket agent — one customer message, handled from start to finish.
+"""The ticket agent - one customer message, handled from start to finish.
 
 Each step reads the result of the one before it and decides what to do next:
 
@@ -227,20 +227,20 @@ class TicketAgent:
         else:
             what = f"a refund of {_money(amount)} has been issued to your original payment method"
         return (f"Hi {order['customer'].split()[0]}, thanks for getting in touch. For order {order['order_id']}, "
-                f"{what}. Card refunds usually show within 5–10 business days. — {self._shop()}")
+                f"{what}. Card refunds usually show within 5–10 business days. - {self._shop()}")
 
     def _reply_waiting(self, order, task_class: str, amount: float) -> str:
         what = "store credit" if task_class == "store_credit" else "refund"
         return (f"Hi {order['customer'].split()[0]}, thanks for reaching out about order {order['order_id']}. "
-                f"We've prepared a {what} of {_money(amount)} and a teammate will confirm it shortly. — {self._shop()}")
+                f"We've prepared a {what} of {_money(amount)} and a teammate will confirm it shortly. - {self._shop()}")
 
     def _reply_declined(self, order, reasons: list[str]) -> str:
         return (f"Hi {order['customer'].split()[0]}, thanks for your message about order {order['order_id']}. "
-                f"{' '.join(reasons)} Reply here if you'd like us to arrange that. — {self._shop()}")
+                f"{' '.join(reasons)} Reply here if you'd like us to arrange that. - {self._shop()}")
 
     def _reply_ask_order(self) -> str:
         return (f"Thanks for getting in touch! Could you send the order number (it's in your receipt email) "
-                f"so we can sort this out right away? — {self._shop()}")
+                f"so we can sort this out right away? - {self._shop()}")
 
     def _reply_needs_human(self) -> str:
-        return f"Thanks for your message. A member of our team will look at this personally and reply soon. — {self._shop()}"
+        return f"Thanks for your message. A member of our team will look at this personally and reply soon. - {self._shop()}"

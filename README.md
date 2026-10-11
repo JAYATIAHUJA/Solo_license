@@ -30,7 +30,7 @@ revoked the instant a check fails, and priced by your own economics.**
 |---|---|
 | **Starts cautious** | Every job type (refunds, store credit) begins at *Suggests only* or *Needs your OK*. |
 | **Checks, never trusts** | After every action the agent re-reads the database. The tool's "success" message is ignored. |
-| **Earns freedom** | After the current policy's required double-checked jobs, that job type moves up one level — automatically. |
+| **Earns freedom** | After the current policy's required double-checked jobs, that job type moves up one level - automatically. |
 | **Stops instantly** | Any caught problem pauses that job type at once. Other job types keep their own level. |
 | **A person decides** | One evidence page shows what was meant, what happened and why it stopped. A person resumes it at a level they choose. |
 | **Everything is recorded** | Every permission change is a git commit (explainable with Entire); every run is a neatlogs trace. |
@@ -194,7 +194,7 @@ Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Se
 Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
 
 *The model proposes, the policy and license decide, the database proves.* The LLM only reads the
-message and writes a plan — it never decides what is allowed or writes directly to customer data.
+message and writes a plan - it never decides what is allowed or writes directly to customer data.
 
 Problems the safety checks catch:
 

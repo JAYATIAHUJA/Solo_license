@@ -3,7 +3,7 @@
 These are the load-bearing checks that make autonomy *earned*: each one, when
 it fires, demotes the task class. They are pure functions over observed facts
 so they can be unit-tested and so the same logic both (a) emits a neatlogs
-detection event and (b) is mirrored as a local rule — the documented mapping
+detection event and (b) is mirrored as a local rule - the documented mapping
 when a live neatlogs key is absent.
 
 Three rules, matching the spec:

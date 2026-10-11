@@ -1,4 +1,4 @@
-"""Detections repository — rule firings surfaced as incidents in the UI."""
+"""Detections repository - rule firings surfaced as incidents in the UI."""
 
 from __future__ import annotations
 

@@ -20,7 +20,7 @@ export function Hero() {
       <div className="lp-hero-grid">
         <div className="lp-hero-copy">
           <motion.p className="mono lp-kicker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            (001) — Earned-autonomy agents
+            (001) - Earned-autonomy agents
           </motion.p>
           <h1 className="lp-h1 serif">
             <MaskWords text="Autonomy" animateOnMount />
@@ -36,7 +36,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.8 }}
           >
-            An AI agent that answers refund emails end to end — and has to <b>earn</b> the right to
+            An AI agent that answers refund emails end to end - and has to <b>earn</b> the right to
             pay out alone. Every refund is checked in Stripe; one bad result drops it to zero.
           </motion.p>
           <motion.div className="lp-hero-cta" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.8 }}>

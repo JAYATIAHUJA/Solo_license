@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Paths } from '../sketch/Paths.jsx';
 import { roughPath } from '../sketch/rough.js';
 
-/** Mark: four stacked rungs, the top one inked — a license being earned. */
+/** Mark: four stacked rungs, the top one inked - a license being earned. */
 export function Logo({ size = 22 }) {
   const paths = useMemo(() => [
     ...roughPath('M4 40 L44 40', { seed: 3, roughness: 0.6, strokeWidth: 2 }),

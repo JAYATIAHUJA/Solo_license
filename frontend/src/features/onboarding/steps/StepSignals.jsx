@@ -4,7 +4,7 @@ export function StepSignals({ form, set, data }) {
   return (
     <>
       <h1 className="ob-title">Connections</h1>
-      <p className="ob-sub">All optional — skip this step if you like. Everything the agent does is still recorded in the app.</p>
+      <p className="ob-sub">All optional - skip this step if you like. Everything the agent does is still recorded in the app.</p>
       <section className="ob-section">
         <h2>Customer messages</h2>
         <p className="ob-section-sub">Paste messages into the app any time. To have them arrive by themselves, send them from your helpdesk or email to this address.</p>

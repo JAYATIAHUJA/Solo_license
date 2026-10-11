@@ -48,7 +48,7 @@ export function Orders() {
       <header className="pl-head">
         <div>
           <h1>Orders</h1>
-          <p>The orders the agent can refund or credit{stripe ? ' — Stripe orders are refunded in Stripe and checked there.' : '.'}</p>
+          <p>The orders the agent can refund or credit{stripe ? ' - Stripe orders are refunded in Stripe and checked there.' : '.'}</p>
         </div>
         <div className="pl-actions">
           <input ref={file} type="file" accept=".csv,text/csv" hidden onChange={importFile} />
@@ -106,11 +106,11 @@ export function Orders() {
                   <tr key={o.order_id}>
                     <td className="ord-id">{o.order_id}</td>
                     <td>{o.customer}{o.email && <div className="pl-small pl-muted">{o.email}</div>}</td>
-                    <td>{o.ordered_at || <span className="pl-muted">—</span>}</td>
+                    <td>{o.ordered_at || <span className="pl-muted">-</span>}</td>
                     <td>{SOURCE[o.source] || o.source}</td>
                     <td className="num">{money(o.amount)}</td>
-                    <td className="num">{refunded ? money(refunded) : <span className="pl-muted">—</span>}</td>
-                    <td className="num">{credit ? money(credit) : <span className="pl-muted">—</span>}</td>
+                    <td className="num">{refunded ? money(refunded) : <span className="pl-muted">-</span>}</td>
+                    <td className="num">{credit ? money(credit) : <span className="pl-muted">-</span>}</td>
                     <td className="num">{money(left)}</td>
                     <td className="num">
                       {!used.has(o.order_id) && (

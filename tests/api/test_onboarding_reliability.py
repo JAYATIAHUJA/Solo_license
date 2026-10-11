@@ -3,7 +3,7 @@
 Regression guards from the reliability audit:
 
 1. ``complete_onboarding`` validates everything (CSV contents, manual order
-   ids) BEFORE persisting ``onboarded=1`` — a bad payload must never leave
+   ids) BEFORE persisting ``onboarded=1`` - a bad payload must never leave
    a half-onboarded workspace the UI would treat as set up.
 2. Handling an already-handled ticket is rejected instead of re-running the
    agent, which would flag a duplicate action and demote the license.

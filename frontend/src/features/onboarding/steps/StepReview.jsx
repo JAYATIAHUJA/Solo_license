@@ -28,7 +28,7 @@ export function StepReview({ form, data, goTo }) {
     }),
     ['More freedom when', `the track record proves it with ${sure}% confidence`, STEP.rules],
     ['Refund window', Number(form.refund_window_days) > 0 ? `${form.refund_window_days} days, then store credit` : 'No limit', STEP.rules],
-    ['Activity recording', filled(form, settings, 'neatlogs_api_key') ? 'On (neatlogs)' : 'Off — kept in the app only', STEP.signals],
+    ['Activity recording', filled(form, settings, 'neatlogs_api_key') ? 'On (neatlogs)' : 'Off - kept in the app only', STEP.signals],
     ['Pause alerts', filled(form, settings, 'alert_webhook_url') ? 'On' : 'Off', STEP.signals],
     ['Orders', orderParts.join(' + ') || 'None', STEP.data],
   ];

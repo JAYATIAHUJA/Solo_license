@@ -2,7 +2,7 @@
 
 The one rule the whole system is built on: a tool's return value is never
 evidence that something happened. To know whether a refund landed we read the
-amount back from the system of record — Stripe, or the local store — through
+amount back from the system of record - Stripe, or the local store - through
 the order's connector, and compare the measured change with what was intended."""
 
 from __future__ import annotations

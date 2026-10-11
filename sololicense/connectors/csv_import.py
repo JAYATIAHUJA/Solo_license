@@ -1,4 +1,4 @@
-"""Order import/export as CSV — the zero-setup connector.
+"""Order import/export as CSV - the zero-setup connector.
 
 Any shop can export orders from Shopify, WooCommerce, Gumroad, a spreadsheet or
 its own database as CSV. Column names are matched loosely ("Order #", "Total",

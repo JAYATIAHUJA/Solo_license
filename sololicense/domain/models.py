@@ -1,6 +1,6 @@
 """Value objects that travel through the refund loop.
 
-These are plain, immutable carriers of data — no behaviour, no I/O. They give
+These are plain, immutable carriers of data - no behaviour, no I/O. They give
 the rest of the system a shared vocabulary (a ``RefundRequest`` means the same
 thing to the agent, the verifier, and the UI)."""
 

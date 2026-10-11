@@ -1,18 +1,18 @@
-"""The refund worker — the end-to-end task loop.
+"""The refund worker - the end-to-end task loop.
 
 One run does exactly this, in order, tracing every step:
 
     1. read the license for the task class;
     2. decide what is *authorised* (pure license logic);
     3. plan around that decision;
-    4. execute only what is authorised (a fault may push it beyond — on
+    4. execute only what is authorised (a fault may push it beyond - on
        purpose, to be caught);
     5. verify the side effect by reading it back from the system of record
-       (Stripe or the local store) — never trusting the tool's response;
+       (Stripe or the local store) - never trusting the tool's response;
     6. recover when verification disagrees: reconcile (read again), then retry
        once with the *same* idempotency key, then verify again;
-    7. run the detections; any hit demotes — even when recovery saved the
-       customer, because the tool lied or a step was skipped — otherwise a clean
+    7. run the detections; any hit demotes - even when recovery saved the
+       customer, because the tool lied or a step was skipped - otherwise a clean
        executed run adds verified evidence;
     8. persist the run, its spans, its detections, and the dial change.
 

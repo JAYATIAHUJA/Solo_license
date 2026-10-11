@@ -2,7 +2,7 @@
 
 A *task class* is one kind of side effect the agent can be licensed for. Each
 class earns and loses autonomy on its own ladder, and each names the single
-``orders`` column that is the authority on whether its side effect landed —
+``orders`` column that is the authority on whether its side effect landed -
 the verifier reads exactly that column back after every execution.
 
 Adding a class means adding one entry here (plus the column in the schema);
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 class TaskClassSpec:
     key: str
     label: str            # "Refund"
-    verb: str             # "refund" — used in sentences ("refund $25 on ORD-1")
+    verb: str             # "refund" - used in sentences ("refund $25 on ORD-1")
     description: str      # what the action does, for prompts and the UI
     effect_column: str    # orders.<column> that proves the side effect
     keywords: tuple[str, ...] = ()  # deterministic intake hints

@@ -10,7 +10,7 @@ export function StepRules({ form, set, data }) {
     <>
       <h1 className="ob-title">Your rules</h1>
       <p className="ob-sub">
-        Each job type earns freedom on its own, from double-checked results — not from a fixed count.
+        Each job type earns freedom on its own, from double-checked results - not from a fixed count.
         The more a mistake would cost you, the more proof the agent needs. One problem and it is paused until you check.
       </p>
 

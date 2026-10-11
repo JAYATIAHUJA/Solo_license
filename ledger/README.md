@@ -1,6 +1,6 @@
 # License ledger
 
-`license_ledger.jsonl` is written and committed **by the running app** — one
+`license_ledger.jsonl` is written and committed **by the running app** - one
 line and one git commit per autonomy change (promote / demote / restore).
 
 That commit history is the Entire-compatible checkpoint trail: each commit

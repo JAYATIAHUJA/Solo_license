@@ -32,7 +32,7 @@ function classInfo(data, key) {
 }
 
 /** The 1-minute demo: a narrated, real run of the whole product loop against
- *  the live API. Nothing is simulated — every step calls the same endpoints a
+ *  the live API. Nothing is simulated - every step calls the same endpoints a
  *  person would, so history and numbers are genuine. Practice problems are
  *  labelled as practice in the run record. */
 function buildScript(primary) {
@@ -45,7 +45,7 @@ function buildScript(primary) {
       say: (d) => {
         const { state, ceiling } = classInfo(d, primary);
         const now = state.quarantined ? 'paused' : `set to “${levelCopy(state.effective_level, limitOf(ceiling)).short}”`;
-        return `Your agent handles ${nameOf(d).toLowerCase()} for the shop. Right now it is ${now}. Each kind of job earns its own freedom from double-checked results — and loses it the moment something goes wrong.`;
+        return `Your agent handles ${nameOf(d).toLowerCase()} for the shop. Right now it is ${now}. Each kind of job earns its own freedom from double-checked results - and loses it the moment something goes wrong.`;
       },
     },
     {
@@ -87,7 +87,7 @@ function buildScript(primary) {
         const p = state.progress || {};
         const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
         const why = p.target_rate != null && d.trust
-          ? ` To move up it needs ${p.runs_needed} more: a mistake costs about $${Math.round(d.trust.incident_cost)}, so the next level only pays if fewer than ${pct(p.target_rate)} of jobs go wrong — and the record has to prove it.`
+          ? ` To move up it needs ${p.runs_needed} more: a mistake costs about $${Math.round(d.trust.incident_cost)}, so the next level only pays if fewer than ${pct(p.target_rate)} of jobs go wrong - and the record has to prove it.`
           : '';
         return `The agent now handles three real jobs. After each one we re-read the order to check the money actually moved. Only double-checked jobs count as evidence.${why}`;
       },
@@ -112,7 +112,7 @@ function buildScript(primary) {
       id: 'fault',
       title: 'Something goes wrong',
       where: () => ({ route: '/app', target: `[data-tour="paused-${primary}"]` }),
-      say: () => 'We made the payment tool say “done” while changing nothing. The agent re-read the order, saw no money had moved, retried once with the same request key and checked again — so the customer still got their refund. But the tool could not be trusted, so this job type was paused at once.',
+      say: () => 'We made the payment tool say “done” while changing nothing. The agent re-read the order, saw no money had moved, retried once with the same request key and checked again - so the customer still got their refund. But the tool could not be trusted, so this job type was paused at once.',
       run: async (ctx) => {
         const { spec, ceiling } = classInfo(ctx.data(), primary);
         ctx.mem.savedBefore = ctx.data().economics.net_saved_month;
@@ -154,7 +154,7 @@ function buildScript(primary) {
       id: 'restore',
       title: 'A person resumes it',
       where: () => ({ route: '/app/ledger', target: '[data-tour="history"]' }),
-      say: () => 'Resumed with limited freedom. Every change — who made it, when and why — is written into Permission history and into your code repository.',
+      say: () => 'Resumed with limited freedom. Every change - who made it, when and why - is written into Permission history and into your code repository.',
       run: async (ctx) => {
         const { spec } = classInfo(ctx.data(), primary);
         await ctx.call(() => api.restore(
@@ -223,7 +223,7 @@ export function Autopilot() {
         go: (path) => navigate(path),
         call: async (fn) => {
           const result = await run(fn);
-          if (!result) throw new Error('A step failed — see the message above.');
+          if (!result) throw new Error('A step failed - see the message above.');
           latest.current = result;
           return result;
         },

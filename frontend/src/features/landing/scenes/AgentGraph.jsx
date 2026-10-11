@@ -10,7 +10,7 @@ const NODES = [
   { x: 110, y: 120, icon: 'message', title: 'Customer message', out: '“ORD-1002 arrived broken, refund $40”', body: 'A plain-language message comes in from email or chat.' },
   { x: 400, y: 120, icon: 'spark', title: 'Intake', out: 'order=ORD-1002 · amount=40.00', body: 'The model (or built-in parser) pulls out the order, amount and reason.' },
   { x: 690, y: 120, icon: 'key', title: 'License check', out: 'L2 · ceiling $50 → AUTO_EXECUTE', body: 'The license decides what is allowed. The model never does.' },
-  { x: 690, y: 400, icon: 'play', title: 'Refund tool', out: 'tool says: “Refund processed.”', body: 'The tool runs — and its answer is written down, but not believed.' },
+  { x: 690, y: 400, icon: 'play', title: 'Refund tool', out: 'tool says: “Refund processed.”', body: 'The tool runs - and its answer is written down, but not believed.' },
   { x: 400, y: 400, icon: 'eye', title: 'Read-back', out: 'refunded_amount 0.00 → 40.00 ✓', body: 'The database is read again. Only this counts as proof.' },
   { x: 110, y: 400, icon: 'dial', title: 'Move the dial', out: 'clean run 2 of 3 → toward L3', body: 'Clean: credit toward the next rung. Mismatch: straight to L0.' },
 ];

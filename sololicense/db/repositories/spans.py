@@ -1,4 +1,4 @@
-"""Spans repository — a local mirror of observability spans so the evidence
+"""Spans repository - a local mirror of observability spans so the evidence
 packet and before/after comparison work even without a neatlogs key."""
 
 from __future__ import annotations

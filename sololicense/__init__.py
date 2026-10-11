@@ -1,4 +1,4 @@
-"""Solo License — an operations agent that earns unattended autonomy.
+"""Solo License - an operations agent that earns unattended autonomy.
 
 The package is layered so dependencies only point inward:
 

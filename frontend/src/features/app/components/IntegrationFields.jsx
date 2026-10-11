@@ -20,7 +20,7 @@ export const ECON_FIELDS = [
 
 const SECRET_FIELDS = ['neatlogs_api_key', 'alert_webhook_url', 'stripe_secret_key'];
 
-/** "How sure must the evidence be?" — the choices offered for trust_confidence. */
+/** "How sure must the evidence be?" - the choices offered for trust_confidence. */
 export const CONFIDENCE_CHOICES = [
   { value: 0.8, label: 'Fairly sure (80%)', note: 'Freedom comes sooner. Fine for small amounts.' },
   { value: 0.9, label: 'Very sure (90%)', note: 'A good balance for most shops.' },
@@ -65,7 +65,7 @@ export function SecretInput({ label, field, values, onChange, settings, placehol
         type={type}
         autoComplete="off"
         spellCheck={false}
-        placeholder={hint ? 'Saved — leave blank to keep' : placeholder}
+        placeholder={hint ? 'Saved - leave blank to keep' : placeholder}
         value={values[field] || ''}
         onChange={(e) => onChange({ [field]: e.target.value })}
       />
@@ -125,7 +125,7 @@ export function NeatlogsFields({ values, onChange, settings = {} }) {
         <label className="field">
           <span>Project ID</span>
           <input className="input" spellCheck={false} value={values.neatlogs_project || ''} onChange={(e) => onChange({ neatlogs_project: e.target.value })} />
-          <small>A label that groups this workspace's traces in neatlogs. The Test button checks your key by sending one diagnostic trace and reading it back — it works with any Project ID.</small>
+          <small>A label that groups this workspace's traces in neatlogs. The Test button checks your key by sending one diagnostic trace and reading it back - it works with any Project ID.</small>
         </label>
       </div>
       <TestRow
@@ -156,7 +156,7 @@ export function AlertFields({ values, onChange, settings = {} }) {
       />
       <TestRow
         label="Send a test message"
-        okText="Sent — check your channel."
+        okText="Sent - check your channel."
         disabled={!ok || !has(values, settings, 'alert_webhook_url')}
         onTest={() => api.testAlert({ alert_webhook_url: values.alert_webhook_url })}
       />

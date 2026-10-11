@@ -2,7 +2,7 @@
 
 Running this resets all *dynamic* tables (runs, detections, events, spans,
 armed faults, tickets) and installs a small sample store: orders with real-looking
-emails and dates, and an inbox of customer messages that exercise every path —
+emails and dates, and an inbox of customer messages that exercise every path -
 a clean refund, a lookup by email, a refund outside the window, a store-credit
 request and a message that tries to steer the agent.
 
@@ -47,12 +47,12 @@ SEED_ORDERS: tuple[SeedOrder, ...] = (
     SeedOrder("ORD-1008", "Barbara Liskov", 64.00, "barbara@example.com", 3),
 )
 
-# (sender, subject, body) — the demo inbox.
+# (sender, subject, body) - the demo inbox.
 SEED_TICKETS: tuple[tuple[str, str, str], ...] = (
     ("ada@example.com", "Broken keyboard",
      "Hi, my keyboard from order ORD-1001 arrived with two dead keys. Can I get my money back please?"),
     ("alan@example.com", "Refund",
-     "Hello — I was charged for something I cancelled the same day. Please refund me."),
+     "Hello - I was charged for something I cancelled the same day. Please refund me."),
     ("margaret@example.com", "Return",
      "Hi, I'd like a refund for ORD-1006, it never really fit."),
     ("edsger@example.com", "Store credit instead?",

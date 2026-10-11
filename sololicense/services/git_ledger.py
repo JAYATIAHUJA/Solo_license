@@ -10,7 +10,7 @@ earned and lost its license, and each message explains the change.
 
 Commits are scoped to the ledger file so running the app never sweeps up
 unrelated working-tree edits. If git is unavailable the ledger line is still
-written and the caller simply gets ``None`` for the sha — the app keeps working.
+written and the caller simply gets ``None`` for the sha - the app keeps working.
 """
 
 from __future__ import annotations

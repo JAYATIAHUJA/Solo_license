@@ -6,7 +6,7 @@ import './activity.css';
 
 /** Why a held job can't be approved right now (plain words), or null if it can. */
 export function approveBlocker(data, r, taskClass = r.task_class || 'refund') {
-  if (data.licenses?.[taskClass]?.quarantined) return `${pausedNow(data, taskClass)} — resume first`;
+  if (data.licenses?.[taskClass]?.quarantined) return `${pausedNow(data, taskClass)} - resume first`;
   const order = data.orders.find((o) => o.order_id === r.order_id);
   const left = order ? (order.remaining ?? order.amount - order.refunded_amount - (order.credit_issued || 0)) : 0;
   if (left + 1e-9 < r.requested_amount) return `Only ${money(left)} left on this order`;
@@ -15,7 +15,7 @@ export function approveBlocker(data, r, taskClass = r.task_class || 'refund') {
 
 function resultText(res) {
   const status = res?.runs?.[0]?.status;
-  if (status === 'demoted') return 'A problem was caught — see what happened.';
+  if (status === 'demoted') return 'A problem was caught - see what happened.';
   return 'Done and double-checked.';
 }
 
@@ -47,7 +47,7 @@ export function ApproveBar({ run: r, taskClass, onDone, compact = false }) {
       <p>
         {held
           ? 'The agent prepared this and is waiting for your OK.'
-          : 'The agent suggests this. If you agree, do it now — each double-checked job is evidence toward more freedom.'}
+          : 'The agent suggests this. If you agree, do it now - each double-checked job is evidence toward more freedom.'}
         {' '}If it is wrong, reject it: that counts against the job type.
       </p>
       <div className="pl-actions">
