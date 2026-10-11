@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shlex
 import shutil
 import stat
 import sys
@@ -61,12 +63,44 @@ def _shim(repo: Path) -> Path:
     return target
 
 
+# Hook commands are run by the agent through a shell. Inside double quotes a
+# POSIX shell still expands $(...), `...` and $VAR, and cmd.exe expands %VAR%,
+# so a path holding any of these is refused rather than written into a command.
+_UNSAFE_PATH_CHARS = set('$`"\'!%;&|<>\n\r')
+_SAFE_URL = re.compile(r"^https?://[A-Za-z0-9.\-]+(:\d{1,5})?(/[A-Za-z0-9._~/-]*)?$")
+
+
+def _safe_path(path: str, what: str) -> str:
+    bad = sorted(set(path) & _UNSAFE_PATH_CHARS)
+    if bad:
+        raise SystemExit(
+            f"Refusing to write a hook command: the {what} path contains shell characters {bad!r}: {path}\n"
+            "Move the repository (or Python) to a path without them and run init again."
+        )
+    return path
+
+
+def validate_url(url: str) -> str:
+    """The gate URL is written into configs and a TypeScript plugin: plain
+    http(s)://host[:port][/path] only."""
+    url = url.strip().rstrip("/")
+    if not _SAFE_URL.match(url):
+        raise SystemExit(f"Not a plain http(s) URL for the gate: {url!r} (expected e.g. http://127.0.0.1:8000)")
+    return url
+
+
+def _paths(repo: Path) -> tuple[str, str]:
+    python = _safe_path(str(sys.executable), "Python")
+    hook = _safe_path(str(repo / ".solo-license" / "hook.py"), "repository")
+    return python, hook
+
+
 def _command(repo: Path, agent: str, event: str) -> str:
-    """``"<python>" "<repo>/.solo-license/hook.py" <agent> <event>``, both
-    paths quoted (they may contain spaces). The trailing comment marks the
-    entry as ours so a re-install replaces it."""
-    python = str(sys.executable)
-    hook = str(repo / ".solo-license" / "hook.py")
+    """``"<python>" "<repo>/.solo-license/hook.py" <agent> <event>``. Paths are
+    double-quoted for spaces (accepted by sh, bash, PowerShell and cmd) and
+    checked to hold nothing a shell would expand. The trailing comment marks
+    the entry as ours so a re-install replaces it."""
+    python, hook = _paths(repo)
     return '"' + python + '" "' + hook + '" ' + agent + " " + event + " # " + MARK
 
 
@@ -206,7 +240,9 @@ def _cline(repo: Path, url: str) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     for event in ("UserPromptSubmit", "PreToolUse", "PostToolUse", "TaskComplete"):
         script = folder / event
-        script.write_text(f"#!/bin/sh\n# {MARK}\nexec {_command(repo, 'cline', event).split(' #')[0]}\n",
+        python, hook = _paths(repo)
+        # A POSIX script: single-quote each path so nothing in it is expanded.
+        script.write_text(f"#!/bin/sh\n# {MARK}\nexec {shlex.quote(python)} {shlex.quote(hook)} cline {event}\n",
                           encoding="utf-8")
         script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return folder
@@ -215,7 +251,7 @@ def _cline(repo: Path, url: str) -> Path:
 OPENCODE_PLUGIN = """// solo-license: earned autonomy for OpenCode (any model: Groq, GLM, Claude, ...)
 import type { Plugin } from "@opencode-ai/plugin"
 
-const BASE = process.env.SOLO_LICENSE_URL ?? "__URL__"
+const BASE: string = process.env.SOLO_LICENSE_URL ?? __URL__
 
 async function gate(event: string, body: unknown): Promise<any> {
   try {
@@ -246,7 +282,8 @@ export const SoloLicense: Plugin = async ({ directory }) => ({
 def _opencode(repo: Path, url: str) -> Path:
     path = repo / ".opencode" / "plugins" / "solo-license.ts"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(OPENCODE_PLUGIN.replace("__URL__", url), encoding="utf-8")
+    # The URL goes in as a JSON string literal, never into a template literal.
+    path.write_text(OPENCODE_PLUGIN.replace("__URL__", json.dumps(validate_url(url))), encoding="utf-8")
     return path
 
 
@@ -278,7 +315,7 @@ def detect(repo: Path) -> list[str]:
 
 def install(repo: Path, base_url: str = DEFAULT_URL, agent: str = "claude-code") -> Path:
     spec: AgentSpec = resolve(agent)
-    url = base_url.rstrip("/")
+    url = validate_url(base_url)
     if spec.transport == "command":
         _shim(repo)
     return WRITERS[spec.key](repo, url)
