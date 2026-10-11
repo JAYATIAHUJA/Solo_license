@@ -392,7 +392,7 @@ def test_remediation_through_the_claude_and_codex_routes(gate, harness, tmp_path
     from sololicense.db.database import init_db
 
     conn = init_db(tmp_path / "remedy.db", check_same_thread=False)
-    threaded = CodingGate(conn, harness.worker._tracer, GitLedger(repo_root=harness.repo),
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
                           jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
 
     class Ctx:
