@@ -169,3 +169,15 @@ def test_a_policy_denial_demotes_the_class_like_a_hard_deny(gate):
     assert _decision(gate.permission(_bash(gate, "npm install lodash"))) == "defer"
     by = gate.conn.execute("SELECT decided_by FROM agent_decisions WHERE command = 'npm install left-pad'").fetchone()
     assert by["decided_by"] == "policy"
+
+
+@pytest.mark.parametrize("target", ["../other-repo/.env", "../../x/infra/prod/main.tf", "sub/../.env", "/etc/app/.env"])
+def test_path_traversal_cannot_dodge_a_deny_rule(gate, target):
+    """Trail #31: paths outside the repo (or with ..) are normalised and still matched."""
+    rules = policy.Policy(deny_paths=(".env", "infra/prod/**"))
+    assert policy.denied(rules, "Edit", {"file_path": target}, gate.project)
+
+
+def test_unrelated_paths_outside_the_repo_are_not_denied(gate):
+    rules = policy.Policy(deny_paths=(".env",))
+    assert not policy.denied(rules, "Edit", {"file_path": "../notes/todo.md"}, gate.project)

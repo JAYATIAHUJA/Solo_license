@@ -28,6 +28,7 @@ A policy never grants anything: it only lowers ceilings and adds denials.
 from __future__ import annotations
 
 import fnmatch
+import os
 import hashlib
 import json
 import sqlite3
@@ -171,14 +172,31 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
                 return f"this repo's policy forbids touching '{pattern}'"
     path = str(tool_input.get("file_path", "") or "")
     if path:
-        try:
-            rel = Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
-        except (ValueError, OSError):
-            rel = path.replace("\\", "/")
-        for pattern in policy.deny_paths:
-            if fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(Path(rel).name, pattern):
-                return f"this repo's policy forbids editing '{pattern}'"
+        for candidate in _path_forms(path, root):
+            for pattern in policy.deny_paths:
+                if fnmatch.fnmatch(candidate, pattern):
+                    return f"this repo's policy forbids editing '{pattern}'"
     return ""
+
+
+def _path_forms(path: str, root: str | Path) -> list[str]:
+    """Every form a deny pattern is matched against. The path is always
+    normalised first (``..`` resolved against the repo root), so traversal
+    cannot dodge a rule. Inside the repo: the repo-relative path and its file
+    name. Outside it (e.g. ``../../other-repo/.env``): every trailing part of
+    the absolute path, so ``.env`` or ``infra/prod/**`` still match."""
+    raw = Path(path)
+    base = Path(root)
+    target = raw if raw.is_absolute() else base / raw
+    norm = Path(os.path.normpath(str(target)))
+    try:
+        norm = norm.resolve()
+        rel = norm.relative_to(base.resolve())
+        parts = rel.parts
+        return [Path(*parts).as_posix(), parts[-1]] if parts else []
+    except (ValueError, OSError):
+        parts = [p for p in norm.as_posix().split("/") if p and not p.endswith(":")]
+        return ["/".join(parts[i:]) for i in range(len(parts))]
 
 
 def write_starter(root: str | Path) -> Path:
