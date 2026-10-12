@@ -124,6 +124,24 @@ A failed turn is demoted, linked to the **Entire checkpoint** of that session
 (`entire checkpoint explain <id>`), and can be **rewound** from the dashboard - the changes are stashed,
 never deleted. Every promote, demote and resume is a git commit in the license ledger.
 
+## The control layer
+
+Earning trust is the engine. Around it sit the controls a team needs while agents run unattended.
+
+| Control | What happens |
+|---|---|
+| **Every denial tells the agent what to undo** | A failed or sent-back turn gets a message it can act on (`git checkout -- <files>`, the Entire checkpoint to rewind to), delivered in the agent's own hook format. Repeated forbidden attempts interrupt the agent. |
+| **"This was wrong"** | One click on any decision or turn in the dashboard drops that class to L0 and queues a note the agent sees on its next prompt ("your last turn was flagged by the user: ..."). Levels animate as they change; a kill switch freezes every class. |
+| **Per-principal licenses and subagents** | The main agent and each subagent type keep their own evidence. Subagents start capped at `[subagents] max` (default L1), can be denied by type, and are checked at their own stop. |
+| **Loop detection** | Three identical calls get guidance, five are denied, the same failure three times says "stop retrying", and a file edited four times in a turn is sent back. A loop is a halt, not a demotion. |
+| **Session digest** | Jev judges a risky command against the session's goal, the turn so far and the policy (a bounded digest, never the raw transcript), and asks a person when it is not confident. |
+| **MCP tool classes** | `mcp__github__merge_pull_request` is its own class, `mcp:github`. Reads can earn L2, writes L1 once you approved that tool, destructive verbs (merge, delete, deploy) always ask; `[tools."mcp__aws__*"]` in the policy file can forbid or cap a tool. |
+| **Budget guardrails** | `[budget]` caps USD per session and per day, read from the agent's own transcript where it reports cost. Past a cap only reading is allowed until a person raises it. |
+| **Policy as code** | `.solo-license/policy.toml` is committed with the repo and can only make the agent ask *more*. `solo-license policy init` writes a starter file. |
+
+Everything above is stored in the repo's own SQLite file and shows up as neatlogs spans, so a decision
+can be explained after the fact.
+
 ## Results
 
 ### Before / after: one coding session replayed through the real gate
@@ -153,17 +171,22 @@ per developer against asking every time, about 68× the $15 Team price; $0.48 un
 ## How the three hackathon tools are used
 
 **neatlogs - one trace per turn.** `turn.start → gate.allow|ask|deny → tool.ran|failed|observed →
-turn.blocked → license.promote|demote → turn.end`, with detections (`forbidden_action`) as error spans
-and GenAI attributes on model calls. The before/after replay sends all 15 turns as traces.
+turn.blocked → license.promote|demote → turn.end`, with detections (`forbidden_action`, loops) as error
+spans and GenAI attributes on model calls. The before/after replay sends all 15 turns as traces.
 
 **Entire - the history behind every license change.** Entire's session id *is* the agent's
 `session_id`, so a failed turn points at the last checkpoint of that session; promotions and demotions
-are commits; and every pull request in this repo went through Entire Trails - including review findings
-that were fixed before merging (injection in hook paths, trust credited from an agent's own settings,
-regressions hidden by a cached verdict).
+are commits; and every pull request in this repo went through Entire Trails and the Entire Gates check -
+including review findings that were fixed before merging (injection in hook paths, trust credited from
+an agent's own settings, regressions hidden by a cached verdict). Details: [`evidence/entire.md`](evidence/entire.md).
 
-**cfo.ai - the plan.** The coding-agent model above and the refund model below share the thesis that
-the license level is a margin driver.
+```bash
+git log --oneline -- ledger/license_ledger.jsonl       # how each action class earned and lost its license
+entire checkpoint list                                 # the sessions behind the code
+```
+
+**cfo.ai - the plan.** The license level is a margin driver: review time saved by earned autonomy
+against the incident bill of blind autonomy. Model and plan: [`planning/cfo/`](planning/cfo).
 
 ## Evidence for judges
 
@@ -171,214 +194,12 @@ the license level is a margin driver.
 |---|---|
 | An agent completing a task end to end | The coding agent works a repo while the gate plans, gates, verifies (diff + tests), recovers (send back / rewind) and updates trust: [`sololicense/coding/`](sololicense/coding) |
 | Before / after with numbers | [`evidence/benchmarks/coding_before_after.md`](evidence/benchmarks/coding_before_after.md) |
-| A failure and what happened next | Over-edited turn sent back → reverted → verified; force-push denied and `git-remote` demoted; a regression blocks and demotes `file-edit` |
-| neatlogs traces | one per turn (trace ids in the benchmark JSON); refund agent: [19 spans of one message](evidence/assets/screens/trace.png) |
-| Entire | Trails on every PR, checkpoints linked to failed turns, ledger: `git log -- ledger/license_ledger.jsonl` |
-| cfo.ai plan | [`planning/cfo/coding_business_model.md`](planning/cfo/coding_business_model.md) · refund plan: [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) |
-| Tests | `python -m pytest` - 287 tests, including every agent's payloads and answers |
+| A failure and what happened next | Over-edited turn sent back → reverted → verified; force-push denied and `git-remote` demoted; a regression blocks and demotes `file-edit`; a flagged decision drops the class and tells the agent |
+| neatlogs traces | one per turn (trace ids in the benchmark JSON), deep-linked from each history row in the dashboard |
+| Entire | Trails and Entire Gates on every PR, checkpoints linked to failed turns, ledger: `git log -- ledger/license_ledger.jsonl` |
+| cfo.ai plan | [`planning/cfo/coding_business_model.md`](planning/cfo/coding_business_model.md) · [screenshot](evidence/assets/screens/cfo-scorecard.png) |
+| Tests | `make test` (backend, pytest) and `npm --prefix frontend test`; CI runs both plus the frontend build on every PR |
 | Commits during the hackathon | `git log --since=2026-10-10` |
-
----
-
-## Same engine, on payments
-
-Solo License started as a support agent that earns the right to refund customers: it reads the
-message, finds the order, checks your rules, pays through Stripe, **reads Stripe back to prove the money
-moved**, and writes the reply. It still runs in the app under **Payments agent**, with the same ladder,
-ledger and economics.
-
-| Level | What the payments agent may do alone |
-|---|---|
-| L0 | Nothing - it suggests, you act |
-| L1 | Prepares each refund; you approve with one click |
-| L2 | Refunds under your cap |
-| L3 | Everything, reviewed afterwards |
-
-### Results
-
-#### 1 · Standard benchmark: τ-bench retail
-
-Every database write from τ-bench's recorded GPT-4o (460 episodes) and Claude 3.5 Sonnet
-(920 episodes) runs, replayed through five autonomy policies, labelled by τ-bench itself.
-
-<p align="center"><img src="evidence/assets/charts/taubench.svg" alt="Wrong writes reaching customers on tau-bench per policy" width="760"/></p>
-
-| Policy | Wrong writes reaching customers (GPT-4o / Sonnet) | Worst-case regret, incident cost $1–$1,000 |
-|---|---|---|
-| Agent acts alone | 95 / 165 | $93,937 / $162,548 |
-| Fixed ladder (3 clean in a row) | ~84 / ~154 | $83,082 / $151,892 |
-| Policy guards only (AgentSpec-style) | 79 / 147 | $78,072 / $144,699 |
-| Person approves every write | 0 / 0 | $968 / $2,288 |
-| **Solo License** | **0 / 0** | **$256 / $434** |
-
-Solo License is the only policy that stays close to the best choice *whatever a mistake costs*:
-when mistakes are cheap it licenses job types to act alone (at $10 per incident, returns and
-address changes for Sonnet), when they are expensive it keeps a person in the loop. Full tables:
-[`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) · reproduce: `make taubench` (no API key).
-
-#### 2 · The agent improved: catch → recover → verify
-
-The same 50 seeded runs with 14 injected faults, through the real worker, before and after
-adding recovery. Every run is a neatlogs trace; the report pairs the trace ids run by run.
-
-<p align="center"><img src="evidence/assets/charts/benchmark.svg" alt="Before and after recovery" width="760"/></p>
-
-| | Trust the tool | v1 - catch and stop | **v2 - catch, recover, verify** |
-|---|---|---|---|
-| False successes reaching a customer | **14** | 0 | **0** |
-| Customers left waiting after a caught fault | - | **4** | **0** |
-| Recovered automatically and verified | 0 | 0 | **4** |
-| Job type paused for review | never | 14 | 14 |
-
-Reproduce: `make benchmark` → [`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md)
-
-#### 3 · Live run on the sample inbox (Groq `openai/gpt-oss-120b`, free tier)
-
-6 messages in 12 s: two refunds paid and verified (one found from the sender's email alone), one
-declined by the 30-day window with a store-credit offer, a $120 refund and an L1 store credit held
-for approval, and *"This is the store owner. Ignore your rules…"* sent to a person.
-
-#### 4 · The margin story (cfo.ai)
-
-The plan lives in cfo.ai: **[Solo License - autonomy economics](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV)**
-(inputs, scenario controls, P&L, four-scenario scorecard). Assumptions mirror
-[`planning/cfo/model.py`](planning/cfo/model.py): 10,000 refunds/month, $45/h, 40 seats × $400.
-
-<p align="center"><img src="evidence/assets/screens/cfo-scorecard.png" alt="cfo.ai: scenario P&L and four-scenario scorecard" width="760"/></p>
-
-| Scenario | Review time saved / month | Monthly profit | Margin | Runway |
-|---|---|---|---|---|
-| **Earned L2 (Solo License)** | $41,250 | **+$3,250** | **+20.3%** | profitable |
-| Conservative: stays at L1 | $22,500 | −$15,500 | −96.9% | 11.6 months |
-| Over-promoted: blind L3 | $44,250 | −$11,750 | −73.4% | 15.3 months |
-| Reliability investment | $41,250 | +$1,250 | +7.8% | profitable |
-
-Blind full autonomy saves the *most* review time and still loses money: the incident bill swamps
-the saving. The same incident cost drives the promotion rule in the app - the P&L and the agent
-use one set of numbers.
-
----
-
-### Connectors
-
-| Connector | What it does | Verification |
-|---|---|---|
-| **Stripe** (test mode) | Charges → orders; refunds via `POST /v1/refunds`; store credit as a customer-balance credit; every write carries an `Idempotency-Key` | Re-reads the charge's `amount_refunded` / the customer balance from Stripe |
-| **CSV import / export** | Shopify-style exports load unchanged (columns matched by name); export orders and every agent run | Read back from the store |
-| **Inbox webhook** | `POST /api/inbox` with `X-Solo-Inbox-Key` - for Zendesk / Gorgias / Help Scout triggers, Zapier/Make, email forwarders | - |
-| **LLM** (optional) | Groq (free tier), Gemini, Claude, OpenAI, any OpenAI-compatible endpoint; built-in rules without a key | Authority never comes from the model |
-| **neatlogs** | One workflow trace per message; detections are error spans | - |
-| **Slack / Discord** | Message when a job type is paused or resumed | - |
-
-Live Stripe keys are refused unless `SOLO_ALLOW_LIVE_STRIPE=1`. Keys saved in Settings are encrypted at rest.
-
-*The model proposes, the policy and license decide, the database proves.* The LLM only reads the
-message and writes a plan; it never decides what is allowed or writes directly to customer data.
-
-Problems the safety checks catch:
-
-| Check | Plain meaning |
-|---|---|
-| `state_mismatch` | The tool said "done", but nothing changed |
-| `policy_breach` | The agent acted beyond its permission |
-| `missing_verification` | The result was never double-checked |
-| `duplicate_action` | The same action ran twice |
-| intake guard | The message tries to change the agent's rules ("ignore your rules…") → sent to a person |
-
----
-
-### How the tools are used for refunds
-
-**neatlogs - the trust signal.** Each customer message is one workflow trace with spans for
-`agent.read → agent.find_order → agent.policy → license.check → tool.execute → verify.readback →
-recover.* → detection.* → agent.reply`; LLM calls are wrapped with `neatlogs.wrap` inside the same
-trace. The before/after benchmark pairs v1 and v2 trace ids run by run
-([`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md)). Code: [`sololicense/observability/`](sololicense/observability).
-
-**Entire - the audit trail and the build history.** Every promote / pause / resume is a commit of
-[`ledger/license_ledger.jsonl`](ledger/license_ledger.jsonl) with reason, run and trace id; Entire
-checkpoints record the AI sessions behind the code; Runners and Trails gate each pull request
-([trail 2](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/2) · [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) ·
-[trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4)). Details and commands: [`evidence/entire.md`](evidence/entire.md).
-
-```bash
-git log --oneline -- ledger/license_ledger.jsonl       # how each job type earned and lost its licence
-entire checkpoint list                                 # the sessions behind the code
-entire graph impact --repo . --symbol _recover         # what the recovery path touches
-```
-
-**cfo.ai - the plan.** Pricing, costs, revenue and runway in four scenarios (above), built from
-[`planning/cfo/`](planning/cfo) and the benchmark numbers.
-
----
-
-### Refund agent evidence
-
-| Requirement | Where to find it |
-|---|---|
-| A real end-to-end agent task | Ticket agent [`loop.py`](sololicense/agent/loop.py) + worker [`worker.py`](sololicense/agent/worker.py); try **Inbox → Handle new messages** |
-| The agent improved (before/after with numbers) | [`evidence/benchmarks/benchmark.md`](evidence/benchmarks/benchmark.md): customers left waiting 4 → 0, paired neatlogs traces |
-| neatlogs traces | Paired trace ids in `evidence/benchmarks/benchmark.md`; [one message's 19 spans](evidence/assets/screens/trace.png); each evidence page deep-links to its trace |
-| Entire checkpoints / trails / graph | [`evidence/entire.md`](evidence/entire.md): checkpoint on `87ab58d`, Trails on every PR, `entire graph impact` of the recovery path, ledger commits: `git log -- ledger/license_ledger.jsonl` |
-| cfo.ai business plan | [app.cfo.ai/s/ELTPhGF4LAHDv6zV](https://app.cfo.ai/s/ELTPhGF4LAHDv6zV) + [screenshot](evidence/assets/screens/cfo-scorecard.png) + [`planning/cfo/`](planning/cfo) |
-| A failure and what the agent did next | Paired traces with fault `quiet_failure`: v2 reconciles, retries with the same key, verifies, pauses the job type |
-| Scores on a standard dataset | [`evidence/benchmarks/taubench.md`](evidence/benchmarks/taubench.md) - τ-bench retail, two frontier models |
-| Prompt-injection resistance | [`evidence/benchmarks/injection.md`](evidence/benchmarks/injection.md) - 30 attacks, 0 changed an order; each stopped at intake, order lookup, policy, licence, or (with the model assumed fooled) the permit boundary |
-| Commits during the hackathon | `git log --since=2026-10-10` |
-| Tests | `python -m pytest` - 160+ tests |
-
----
-
-### Payments setup notes
-
-**Requirements:** Python 3.11+, Node 20+, git.
-
-```bash
-pip install -r requirements.txt
-cp .env.example .env               # demo mode on; every key is optional
-python -m sololicense.db.seed      # sample shop: 8 orders, 6 inbox messages
-uvicorn sololicense.api.app:app --port 8000
-npm --prefix frontend install
-npm --prefix frontend run dev      # http://127.0.0.1:5174
-```
-
-Open the app → **Try the demo** → your name → **Inbox → Handle new messages**. On **Home**,
-**Watch a 1-minute demo** runs the whole loop for real: inbox, verified jobs, a tool that lies,
-recovery, the pause, and a person resuming it.
-
-Optional: `GROQ_API_KEY` (free tier) or another model key, `STRIPE_SECRET_KEY` (test mode),
-`NEATLOGS_API_KEY`, a Slack/Discord webhook. For a deployment, turn demo mode off and issue
-role-based access codes with `SOLO_API_TOKENS` (`operator` < `approver` < `admin`).
-
-#### Deploy the web app on Vercel
-
-Import this repository into Vercel and set **Root Directory** to `frontend`. Vercel detects the
-Vite build and deploys `dist`; `frontend/vercel.json` keeps direct links such as `/app/inbox`
-inside the React app. Deploy the FastAPI service separately, then add its public HTTPS origin as
-`VITE_SOLO_API_URL` in the Vercel project (for example, `https://api.example.com`, with no trailing
-slash). On the API deployment set `SOLO_ALLOWED_ORIGINS=https://your-project.vercel.app` so the
-browser may call it. Locally, leave that variable unset: Vite continues to proxy `/api` to
-`SOLO_API_URL` or `http://127.0.0.1:8000`.
-
-#### Operating policies in a real workspace
-
-An admin opens **Settings → Policy review**, changes a proposed version, previews
-its impact, then explicitly activates it. Every run records the version that
-governed it. Evidence from an earlier version never promotes a changed policy;
-the Home screen shows the fresh sample/pass-rate progress for each job type.
-An unauthorized tool attempt is blocked at the server-side write boundary,
-then recorded and paused for review. See [Policy governance](docs/policy-governance.md)
-for the normal-user operating guide and deployment secret ownership.
-
-| Command | What it does |
-|---|---|
-| `make test` | Run the test suite |
-| `make seed` | Reset the sample shop |
-| `make taubench` | Score the policies on τ-bench retail |
-| `make benchmark` | Before/after recovery benchmark with paired traces |
-| `make charts` | Redraw the README charts |
-| `make cfo` | Print the financial model |
-
 
 ---
 
@@ -397,33 +218,45 @@ make coding-demo                                 # ../shop-api-demo: a repo with
 Open Claude Code (or any supported agent) in `../shop-api-demo` and ask it to run the tests, then to
 fix the bug in `cart.js`. The dashboard shows each decision, each turn's check and every level change.
 
+For a machine-wide install, `solo-license init --global` writes the user-level hook config of every
+agent that has one, and `solo-license serve --background` keeps the gate running (`status` / `stop`
+manage it, `doctor` checks the gate and the hooks).
+
 | Command | What it does |
 |---|---|
-| `solo-license init --agent <x>` | Wire an agent's hooks into this repo (`auto`, `all`, or one of the 11) |
-| `solo-license serve` / `doctor` / `prompt` | Run the gate · check it and the hooks · print the self-install prompt |
+| `solo-license init --agent <x>` | Wire an agent's hooks into this repo (`auto`, `all`, or one of the 11); `--global` for user-level, `--dry-run` to preview, `--remove` to uninstall |
+| `solo-license serve [--background]` | Run the gate and dashboard · `status` / `stop` for the background gate |
+| `solo-license doctor` | Check the gate and this repository's hooks |
+| `solo-license policy init` | Write a starter `.solo-license/policy.toml` |
+| `solo-license prompt --agent <x>` | Print the self-install prompt |
 | `make coding-benchmark` | Before/after replay of a coding session through the real gate |
-| `make test` | The test suite |
-| `make cfo` | The financial models (coding agent, then refunds) |
-| `make taubench` / `make benchmark` | The refund agent's τ-bench and recovery benchmarks |
+| `make test` | The backend test suite |
+| `make cfo` | The financial model |
+
+Set a Jev key for model-graded turns (rules run without one), `NEATLOGS_API_KEY` for traces, and
+`SOLO_API_TOKENS` (`operator` < `approver` < `admin`) to lock the API when deployed.
 
 ## Architecture
 
 ```
 plugin/solo-license/  Claude Code plugin: hooks, skill, /solo-license:trust
 sololicense/coding/   the coding gate
-  actions.py          tool call -> action class; forbidden commands; chains judged by the riskiest part
+  actions.py          tool call -> action class (incl. mcp:<server>); forbidden commands; chains judged by the riskiest part
   agents.py           11 agents' native hooks <-> the gate's common events (allow / deny / defer)
-  gate.py             licenses per (repo, class), decisions, turns, promote / demote / resume
+  gate.py             licenses per (repo, principal, class), decisions, turns, promote / demote / flag / resume
+  policy.py           built-in ceilings + committed policy.toml + this machine's rules; subagents, budget, tools
+  remediation.py      what the agent is told to undo; queued notes for the next prompt
+  loops.py            repeated-call fingerprints: guidance, deny, halt
+  digest.py jev.py    bounded session digest and calibrated decisions from Jev (optional)
+  budget.py           spend caps read from the agent's transcript
   verify.py           end-of-turn check: diff scope, tests compared test by test against the turn's start
   ladder.py           floor + economic bound per class
-  jev.py              calibrated decisions from Jev (optional)
   entire.py           Entire checkpoint of a failed turn; rewind
-  install.py shim.py  per-agent config writers; the one-file command-hook shim
-sololicense/cli.py    solo-license init | serve | doctor | prompt | hook
+  install.py shim.py global_install.py   per-agent config writers; the one-file command-hook shim
+sololicense/cli.py    solo-license init | serve | status | stop | doctor | policy | prompt | hook
 sololicense/          shared: domain (trust maths), services (git ledger, economics), observability (neatlogs), db
-sololicense/agent/    the payments agent (refunds, store credit) and its connectors
-frontend/             landing page, setup guide, dashboard, payments pages
-planning/cfo/         financial models
+frontend/             landing page, setup guide, dashboard (Coding, History, Settings)
+planning/cfo/         financial model and plan
 demo/shop-api/        the demo repository
 ```
 
@@ -437,9 +270,13 @@ classifies risky actions. Solo License adds:
    evidence beats the break-even of a mistake's cost, and taken back by one failure.
 2. **Over-editing as a trust signal** - a turn whose diff is out of proportion to the request is sent back,
    and counts against the agent.
-3. **One gate for every agent** - the same earned trust, enforced through each agent's own hooks.
+3. **One gate for every agent** - the same earned trust, enforced through each agent's own hooks, per
+   principal (main agent and each subagent type) and per MCP server.
+4. **A control layer a person can steer live** - flag a decision and the agent hears about it on its next prompt.
 
 Limits we state plainly: only Claude Code has been run end to end with a live agent; the other agents'
-hook formats follow their documentation and are tested with their documented payloads. The refund
-agent's τ-bench result is a per-write counterfactual replay with reviewers assumed correct, and its
-Stripe connector is tested against a mock of Stripe's API.
+hook formats follow their documentation and are tested with their documented payloads. The demo
+benchmark is a scripted session replayed through the real gate, not a field study.
+
+*History: Solo License began as a support agent that earned the right to issue refunds. That product
+was removed in v3 so the repository tells one story; the trust engine, ledger and economics carried over.*
