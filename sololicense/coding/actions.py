@@ -142,6 +142,8 @@ HARD_DENY: tuple[tuple[str, re.Pattern], ...] = (
      re.compile(r"\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba|z|da)?sh\b")),
     ("force-pushes a protected branch",
      re.compile(r"\bgit\s+push\b(?=.*(--force\b|-f\b|--force-with-lease))(?=.*\b(main|master)\b)")),
+    ("force-pushes a protected branch",
+     re.compile(r"\bgit\s+push\b[^|;&]*\s\+(refs/heads/)?(main|master)(\s|$|:)")),
     ("runs as root", re.compile(r"(^|\s)sudo\s")),
     ("formats or overwrites a disk", re.compile(r"\b(mkfs(\.\w+)?|dd\s+if=.*\bof=/dev/)")),
     ("drops a database", re.compile(r"\bdrop\s+(database|schema)\b", re.I)),
@@ -205,6 +207,25 @@ def hard_deny_reason(command: str) -> str:
     return ""
 
 
+def _has_redirect(part: str) -> bool:
+    """True when the part writes through a shell redirect (> >> &> 2>...).
+
+    Quote-aware, so ``grep "a>b"`` stays a read while ``echo x > hosts``
+    does not. Deliberately over-matches fd shuffles like ``2>&1``: when a
+    command moves output around, treating it as a write is the safe side.
+    """
+    quote = ""
+    for ch in part:
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == ">":
+            return True
+    return False
+
+
 def classify_command(command: str) -> Classification:
     """Classify a shell command by rules. The riskiest part of a chain decides."""
     denied = hard_deny_reason(command)
@@ -214,6 +235,10 @@ def classify_command(command: str) -> Classification:
         if not part or part == "cd":
             continue
         key = next((c for c, rx in _RULES if rx.search(part)), "unknown")
+        # A redirect turns any command into a write: `echo x > hosts` is a
+        # file edit even though `echo` reads as risk 0.
+        if _has_redirect(part) and ACTION_CLASSES[key].risk < ACTION_CLASSES["file-edit"].risk:
+            key = "file-edit"
         spec = ACTION_CLASSES[key]
         if best is None or spec.risk > best[0].risk:
             best = (spec, _pattern(part))

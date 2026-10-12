@@ -147,3 +147,48 @@ def test_jev_network_failure_is_none(monkeypatch):
 
     monkeypatch.setattr(jev.urllib.request, "urlopen", boom)
     assert jev.classify_command(jev.JevClient(api_key="k"), "x", "/") is None
+
+
+# --- a redirect is a write, not a read ---------------------------------------
+
+def test_a_redirect_makes_a_read_command_a_write():
+    result = classify_command("echo pwned >> ~/.ssh/authorized_keys")
+    assert result.action_class == "file-edit"
+
+
+def test_redirecting_test_output_is_a_file_edit():
+    assert classify_command("npm test > out.log").action_class == "file-edit"
+
+
+def test_appending_to_a_config_file_is_a_file_edit():
+    assert classify_command("cat header.txt >> prod.env").action_class == "file-edit"
+
+
+def test_a_greater_than_inside_quotes_is_not_a_redirect():
+    assert classify_command('grep "a>b" notes.md').action_class == "read"
+
+
+def test_redirect_risk_outranks_a_plain_read_in_a_chain():
+    assert classify_command("ls && echo x > /etc/hosts").action_class == "file-edit"
+
+
+def test_a_part_that_already_outranks_file_edit_keeps_its_class():
+    assert classify_command("git push origin main > push.log").action_class == "git-remote"
+
+
+# --- a refspec force-push is a force-push -----------------------------------
+
+def test_refspec_force_push_to_a_protected_branch_is_denied():
+    assert classify_command("git push origin +main").hard_deny == "force-pushes a protected branch"
+
+
+def test_refspec_force_push_with_full_ref_is_denied():
+    assert classify_command("git push origin +refs/heads/master").hard_deny
+
+
+def test_refspec_force_push_with_dst_ref_is_denied():
+    assert classify_command("git push origin +main:main").hard_deny
+
+
+def test_a_plain_push_is_not_denied():
+    assert not classify_command("git push origin main").hard_deny
