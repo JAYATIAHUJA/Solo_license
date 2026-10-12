@@ -334,3 +334,23 @@
 .lp-install-lead { padding-bottom: 0 !important; }
 .lp-install-lead .lp-h2 { margin: 0 0 20px; }
 .lp-install-onboard { font-family: var(--font-mono); margin: 0 0 18px; padding: 16px 18px; background: var(--ink); color: var(--paper); font-size: clamp(12px, 1.2vw, 15px); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- phone: one light column ---------- */
+.lp { overflow-x: clip; }
+.ph-section { padding-top: 48px !important; padding-bottom: 48px !important; }
+.ph-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--ink); }
+.ph-steps li { display: grid; grid-template-columns: 32px 1fr; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--hair); }
+.ph-steps .mono { color: var(--muted); font-size: 12px; padding-top: 3px; }
+.ph-steps b { font-size: 17px; }
+.ph-steps p { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+.ph-cards { display: grid; gap: 10px; }
+.ph-card { border: 1px solid var(--ink); background: var(--sheet); padding: 14px; display: grid; gap: 6px; }
+.ph-card b { font-size: 17px; }
+.ph-card code { justify-self: start; font: 500 12px var(--font-mono); padding: 1px 6px; background: var(--ink); color: var(--paper); }
+.ph-card p { margin: 0; color: var(--ink-2); font-size: 14.5px; line-height: 1.5; }
+.ph-cta { margin-top: 18px; width: 100%; justify-content: center; }
+.lp-phone .lp-hero-shader, .lp-phone .lp-note, .lp-phone .lp-closing-shader { display: none; }
+.lp-phone .lp-hero { height: auto !important; padding-bottom: 32px; }
+.lp-phone .lp-hero-visual { min-height: 440px; border-color: var(--hair); }
+.lp-phone .lp-closing { height: auto; min-height: 0; padding: 40px 0; }
+.lp-phone .lp-closing-inner { margin: 0 var(--gutter); }

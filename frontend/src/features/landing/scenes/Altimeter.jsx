@@ -8,6 +8,8 @@ const STOPS = [
   ['journey', 'Earning'],
   ['agent', 'The loop'],
   ['crash', 'The crash'],
+  ['detections', 'Detections'],
+  ['fixes', 'Remediation'],
   ['tour', 'Product'],
   ['ledger', 'Ledger'],
   ['faq', 'FAQ'],

@@ -8,7 +8,7 @@ import { Pinned } from '../Pinned.jsx';
    and the CLI that ties a turn's story together. As you scroll through a
    chapter the screen zooms onto the part that matters and marks it.
    Illustrative mockups of the real screens and commands. */
-const CHAPTERS = [
+export const CHAPTERS = [
   { key: 'onboard', kind: 'term', title: 'One command to set up', cmd: 'solo-license onboard',
     text: 'Finds your agents, writes their hooks, makes a local admin, starts the gate and opens the dashboard signed in.' },
   { key: 'levels', kind: 'app', title: 'Watch trust move, live', cmd: 'Dashboard · Coding agent',
