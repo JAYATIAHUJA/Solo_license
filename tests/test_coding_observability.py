@@ -247,6 +247,18 @@ def test_a_loop_stop_is_an_incident_and_guidance_is_not(gate, sdk):
     assert sdk.incidents().count("detection.loop") == 1
 
 
+def test_a_loop_stopped_after_the_run_is_an_incident_too(gate, sdk):
+    gate.user_prompt(_event(gate, prompt="read it again", _agent="cursor"))
+    for _ in range(5):  # never asked the gate: the agent's settings let it run
+        answer = gate.tool_result(_bash(gate, "cat app.py"), failed=False)
+
+    assert answer["continue"] is False
+    stop = _spans(gate, "detection.loop")[-1].attributes
+    assert stop["kind"] == "loop-stop" and stop["interrupt"] is True and stop["incident"] is True
+    assert (stop["repo"], stop["agent"]) == ("shop-api", "cursor")
+    assert sdk.incidents().count("detection.loop") == 1
+
+
 def test_a_failed_turn_links_its_demotions_to_the_checkpoint(gate, sdk):
     gate.verifier = lambda g, turn, decisions: (False, "tests fail after the change.", {"tests": "failed"})
     gate.user_prompt(_event(gate, prompt="fix"))
