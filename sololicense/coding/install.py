@@ -211,6 +211,7 @@ def _commander(hook: Path, agent: str) -> Command:
 def _claude(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
     def http(event: str, timeout: int = 10) -> dict:
         return {"type": "http", "url": f"{url}/api/hooks/{event}", "timeout": timeout,
+                "onFailure": "continue",  # gate down: the agent's own settings apply (defer)
                 "headers": {"X-Solo-Hook-Key": "$SOLO_HOOK_KEY"}, "allowedEnvVars": ["SOLO_HOOK_KEY"]}
 
     ours = {

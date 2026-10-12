@@ -1,7 +1,7 @@
 # Solo License — common workflows. Windows users: the raw commands each
 # target runs are listed in the README under "Setup".
 
-PYTHON ?= python
+PYTHON ?= python3
 
 .PHONY: install run-api web test coding-benchmark coding-demo cfo clean
 
