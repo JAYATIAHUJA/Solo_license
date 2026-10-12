@@ -86,6 +86,18 @@ def integrations(settings: dict | None) -> list[str]:
     ]
 
 
+def _start_gate(start) -> tuple[str, dict]:
+    from sololicense import background
+
+    port = background.default_port()
+    for _ in range(8):
+        state = start("127.0.0.1", port)
+        if state["status"] != "failed":
+            return f"http://127.0.0.1:{port}", state
+        port += 1
+    return f"http://127.0.0.1:{port - 1}", state
+
+
 def run(args, *, get: Callable[[str], dict | None]) -> int:
     from sololicense import background, credentials
     from sololicense.coding import install
@@ -95,52 +107,82 @@ def run(args, *, get: Callable[[str], dict | None]) -> int:
     url = args.url.rstrip("/")
 
     found = install.detect(repo)
-    agents = (found or ["claude-code"]) if args.agent == "auto" else [args.agent]
-    labels = ", ".join(resolve(a).label for a in agents)
-    _say(1, f"Agents: {labels}" + ("" if found or args.agent != "auto" else " (none found; Claude Code by default)"))
-
-    changes = [c for a in agents for c in install.plan(repo, url, a)]
-    if any(resolve(a).transport == "command" for a in agents):
-        changes = install.shim_changes(install._repo_hook(repo)) + changes
-    _say(2, f"Hooks for {repo}:")
-    print(install.diff(changes) or "  already installed, nothing to change")
-    if changes and not _confirm("Write these hook changes?", args.yes):
-        print("Stopped; nothing was written.")
-        return 1
-    for a in agents:
-        install.install(repo, url, resolve(a).key)
+    labels = ", ".join(resolve(a).label for a in found) if found else "none found"
+    _say(1, f"Agents on this machine: {labels}")
 
     creds, where = credentials.ensure()
     credentials.apply_env(creds)
-    _say(3, f"Local admin '{creds['admin_id']}' and settings key kept in {where}")
+    _say(2, f"Local admin '{creds['admin_id']}' and settings key kept in {where}")
 
-    port = background.default_port()
-    state = background.start("127.0.0.1", port)
+    url, state = _start_gate(background.start)
     if state["status"] == "failed":
-        print(f"The gate exited at once; see {state['log']}")
+        print(f"The gate would not start; see {state['log']}")
         return 1
     if state["status"] == "external":
-        _say(4, f"A gate already answers at {state['url']} (started elsewhere); using it. "
+        _say(3, f"A gate already answers at {state['url']} (started elsewhere); using it. "
                 "Restart it with `solo-license stop` + `solo-license serve --background` to load the new admin key.")
     else:
-        _say(4, f"Gate running at {state['url']} (pid {state.get('pid')}); log {state.get('log')}")
+        _say(3, f"Gate running at {state['url']} (pid {state.get('pid')}); log {state.get('log')}")
 
     ok, how = verify_gate(url, repo)
-    _say(5, ("OK: " if ok else "Not yet: ") + how)
+    _say(4, ("OK: " if ok else "Not yet: ") + how)
 
-    web, served = dashboard_url(url, get)
-    link = f"{web}/access?next=%2Fonboarding#token={creds['admin_token']}"
-    _say(6, "Dashboard: " + (f"{web}/onboarding" if served else
-                             f"{web}/onboarding (start it with: npm --prefix frontend run dev; "
-                             "or build it once with npm --prefix frontend run build and the gate serves it)"))
-    dashboard = _get_as(f"{url}/api/dashboard", creds["admin_token"])
-    for line in integrations((dashboard or {}).get("settings")):
-        print(f"      - {line}")
-    if not args.no_browser:
-        webbrowser.open(link)
-        print("      Opened your browser, signed in as the local admin.")
-    else:
+    if getattr(args, "no_browser", False):
+        # headless: install for every agent found, exactly as before
+        agents = (found or ["claude-code"]) if args.agent == "auto" else [args.agent]
+        for a in agents:
+            install.install(repo, url, resolve(a).key)
+        _say(5, f"Hooks written for {', '.join(resolve(a).label for a in agents)}")
+        link = f"{url}/onboarding#token={creds['admin_token']}"
         print(f"      Sign-in link (keep it private): {link}")
+        return 0 if ok else 1
+
+    # the browser chooses: register the wizard, open it, and wait for the pick
+    req = urllib.request.Request(
+        f"{url}/api/wizard/start",
+        data=json.dumps({"repo": str(repo), "url": url}).encode(),
+        method="POST", headers={"content-type": "application/json",
+                                "authorization": f"Bearer {creds['admin_token']}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            json.load(resp)
+    except Exception:
+        print("The gate did not accept the wizard setup; continuing headless.")
+        return run_headless(args, repo, url, found, creds, ok)
+    link = f"{url}/onboarding?wizard=1#token={creds['admin_token']}"
+    webbrowser.open(link)
+    _say(5, "Choose the agents (and connect neatlogs + Jev) in the browser that just opened.")
+    print(f"      Waiting here: {link}")
+    chosen: dict = {}
+    deadline = time.time() + 900
+    while time.time() < deadline:
+        time.sleep(2)
+        state_now = get(f"{url}/api/wizard")
+        if state_now and state_now.get("status") == "installed":
+            chosen = state_now
+            break
+    if not chosen:
+        print("      No selection after 15 minutes; nothing was installed.")
+        return 1
+    names = ", ".join(resolve(a).label for a in chosen.get("installed", []))
+    _say(5, f"Hooks written for: {names or 'nothing'}")
+    for agent, error in (chosen.get("errors") or {}).items():
+        print(f"      {agent}: {error}")
+    ok2, how2 = verify_gate(url, repo)
+    _say(6, ("OK: " if ok2 else "Not yet: ") + how2)
     print("\nNow open your agent in this repository and ask it to run the tests. "
           "`solo-license doctor` checks the wiring, `solo-license budget` shows spend.")
+    return 0 if ok2 else 1
+
+
+def run_headless(args, repo: Path, url: str, found, creds, ok: bool) -> int:
+    from sololicense.coding import install
+    from sololicense.coding.agents import resolve
+
+    agents = (found or ["claude-code"]) if args.agent == "auto" else [args.agent]
+    for a in agents:
+        install.install(repo, url, resolve(a).key)
+    print(f"      Hooks written for {', '.join(resolve(a).label for a in agents)}")
+    print(f"      Sign-in link (keep it private): {url}/onboarding#token={creds['admin_token']}")
     return 0 if ok else 1

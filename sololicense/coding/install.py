@@ -193,13 +193,29 @@ def validate_url(url: str) -> str:
     return url
 
 
+def _stable_interpreter() -> str:
+    """A python that outlives this run: never uvx's cache (its bin dir sits
+    first on PATH when the CLI itself runs from uvx), which is deleted and
+    rebuilt on the next uvx invocation."""
+    for name in ("python3", "python"):
+        for folder in os.environ.get("PATH", "").split(os.pathsep):
+            cand = shutil.which(name, path=folder)
+            if not cand:
+                continue
+            if "uv" in Path(cand).resolve().parts:
+                continue
+            return cand
+    for fallback in ("/usr/bin/python3", "/usr/local/bin/python3"):
+        if Path(fallback).is_file():
+            return fallback
+    return str(sys.executable)
+
+
 def _paths(hook: Path) -> tuple[str, str]:
     # The shim is standard-library only, so any python3 may run it; the
     # current interpreter can be uvx's transient cache path, which dies on
     # the next uvx run.
-    stable = shutil.which("python3") or shutil.which("python")
-    interpreter = stable if stable else str(sys.executable)
-    return _safe_path(interpreter, "Python"), _safe_path(str(hook), "hook")
+    return _safe_path(_stable_interpreter(), "Python"), _safe_path(str(hook), "hook")
 
 
 Command = Callable[[str], str]
