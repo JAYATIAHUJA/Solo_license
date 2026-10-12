@@ -1,7 +1,7 @@
 /** Pure helpers for the live coding page: level changes between polls and
  *  the "This was wrong" flag request. */
 
-export const licenseKey = (lic) => `${lic.repo}:${lic.action_class}`;
+export const licenseKey = (lic) => `${lic.repo}:${lic.principal || 'main'}:${lic.action_class}`;
 
 /** { "repo:class": level } for one poll's licenses. */
 export function levelsOf(licenses) {

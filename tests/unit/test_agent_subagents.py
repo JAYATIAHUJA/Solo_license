@@ -78,6 +78,22 @@ def test_subagent_stop_reuses_turn_verification_and_sends_back_failures(harness,
     assert "subagent changed files" in answer["reason"]
 
 
+def test_subagent_stop_rejects_files_outside_native_modified_file_list(harness, tmp_path):
+    project = tmp_path / "shop-api"
+    project.mkdir()
+    gate = _gate(harness, project)
+    gate.subagent_start({"session_id": "sub", "cwd": str(project), "_agent": "cursor",
+                         "_principal": "subagent:researcher", "subagent_type": "researcher"})
+    gate._turn_files = lambda _turn: ["src/parent-change.py"]
+
+    answer = gate.subagent_stop({"session_id": "sub", "cwd": str(project),
+                                 "_principal": "subagent:researcher",
+                                 "modified_files": ["src/agent-change.py"]})
+
+    assert answer["decision"] == "block"
+    assert "src/parent-change.py" in answer["reason"]
+
+
 def test_install_registers_subagent_lifecycle_hooks(tmp_path):
     install(tmp_path, "http://127.0.0.1:8000", "claude-code")
     install(tmp_path, "http://127.0.0.1:8000", "codex")

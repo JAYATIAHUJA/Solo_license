@@ -113,3 +113,30 @@ def test_subagent_failure_demotes_only_its_own_license(harness, tmp_path):
     assert agent_repo.get_license(harness.conn, "shop-api", "install-dep", principal="main")["level"] == 2
     event = harness.conn.execute("SELECT principal, kind FROM agent_events ORDER BY id DESC LIMIT 1").fetchone()
     assert tuple(event) == ("subagent:Explore", "demote")
+
+
+def test_turn_lookup_keeps_interleaved_principals_separate(harness):
+    agent_repo.open_turn(harness.conn, session_id="shared", repo="shop-api", cwd=".", prompt="main",
+                         base_ref=None, trace_id=None, principal="main")
+    agent_repo.open_turn(harness.conn, session_id="shared", repo="shop-api", cwd=".", prompt="sub",
+                         base_ref=None, trace_id=None, principal="subagent:Explore")
+
+    assert agent_repo.current_turn(harness.conn, "shared", principal="main")["prompt"] == "main"
+    assert agent_repo.current_turn(harness.conn, "shared", principal="subagent:Explore")["prompt"] == "sub"
+
+
+def test_restore_can_resume_only_the_selected_subagent(harness, tmp_path):
+    project = tmp_path / "shop-api"
+    project.mkdir()
+    gate = CodingGate(harness.conn, harness.tracer, GitLedger(repo_root=harness.repo), jev_client=JevClient())
+    agent_repo.get_license(harness.conn, "shop-api", "install-dep", principal="subagent:Explore")
+    agent_repo.set_level(harness.conn, "shop-api", "install-dep", 0, demoted_from=2,
+                         principal="subagent:Explore")
+
+    gate.restore("shop-api", "install-dep", 2, actor_id="person:test", reason="reviewed",
+                 principal="subagent:Explore")
+
+    sub = agent_repo.get_license(harness.conn, "shop-api", "install-dep", principal="subagent:Explore")
+    main = agent_repo.get_license(harness.conn, "shop-api", "install-dep", principal="main")
+    assert sub["level"] == 1  # default subagent ceiling
+    assert main["level"] == 0

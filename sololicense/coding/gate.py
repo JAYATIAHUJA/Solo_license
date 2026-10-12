@@ -305,13 +305,14 @@ class CodingGate:
     def tool_result(self, event: dict, *, failed: bool) -> dict:
         session = str(event.get("session_id", ""))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
-        loop_note, halt = self._watch_loops(session, tool, tool_input, event, failed)
+        principal = _principal(event)
+        loop_note, halt = self._watch_loops(session, tool, tool_input, event, failed, principal=principal)
         row = agent_repo.pending_decision(self.conn, session, tool, describe(tool, tool_input),
-                                          principal=_principal(event))
+                                          principal=principal)
         if row is None:  # never went through the gate (already allowed by settings)
             self.conn.commit()
             return self._with_loop_note({}, loop_note, halt, failed)
-        turn = agent_repo.current_turn(self.conn, session)
+        turn = agent_repo.current_turn(self.conn, session, principal=principal)
         trace = self._trace(turn)
         repo, key = row["repo"], row["action_class"]
         # Trust only grows from a person's yes or from the gate's own earned
@@ -348,11 +349,11 @@ class CodingGate:
         return self._with_loop_note(answer, loop_note, halt, failed)
 
     def _watch_loops(self, session: str, tool: str, tool_input: dict, event: dict,
-                     failed: bool) -> tuple[str, bool]:
+                     failed: bool, *, principal: str = "main") -> tuple[str, bool]:
         """Count a call that ran; (guidance for the agent or "", halt it)."""
         if event.get("is_interrupt"):
             return "", False
-        turn = agent_repo.current_turn(self.conn, session)
+        turn = agent_repo.current_turn(self.conn, session, principal=principal)
         if loops.is_edit(tool):
             loops.record_edit(self.conn, session, turn["id"] if turn else None, edited_path(tool_input))
         seen = loops.record(self.conn, session, loops.fingerprint(tool, tool_input), failed=failed,
@@ -409,8 +410,9 @@ class CodingGate:
 
     def stop(self, event: dict) -> dict:
         session = str(event.get("session_id", ""))
+        principal = _principal(event)
         loops.clear_halt(self.conn, session)
-        turn = agent_repo.current_turn(self.conn, session)
+        turn = agent_repo.current_turn(self.conn, session, principal=principal)
         if turn is None or turn["status"] != "open":
             self.conn.commit()
             return {}
@@ -419,11 +421,24 @@ class CodingGate:
         ok, reason, details = (True, "", {})
         if self.verifier is not None:
             ok, reason, details = self.verifier(self, turn, decisions)
+        # Cursor reports the files changed by a subagent.  Treat any repository
+        # diff outside that declaration as an over-edit, so a parent turn's
+        # concurrent changes cannot be credited to the subagent.  Agents that
+        # do not provide this field retain the normal snapshot-based check.
+        declared_files = event.get("modified_files")
+        if principal != "main" and isinstance(declared_files, (list, tuple)):
+            declared = {str(path).replace("\\", "/").lstrip("./") for path in declared_files if str(path).strip()}
+            actual = {str(path).replace("\\", "/").lstrip("./") for path in self._turn_files(turn)}
+            unexpected = sorted(actual - declared)
+            if unexpected:
+                ok = False
+                reason = (f"subagent changed files outside its declared scope: {', '.join(unexpected[:8])}")
+                details = {**details, "blame": ["file-edit"], "unexpected_files": unexpected}
         retrying = bool(event.get("stop_hook_active"))
         changed = [d for d in decisions if d["outcome"] == "ran"]
         demoted: list[str] = []
         checkpoint_id = None
-        principal = str(turn["principal"] or "main") if turn else "main"
+        principal = str(turn["principal"] or principal) if turn else principal
         if ok:
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "verified")
@@ -517,13 +532,18 @@ class CodingGate:
         agent_repo.forget_patterns(self.conn, repo, key)
         return int(lic["level"])
 
-    def restore(self, repo: str, key: str, level: int, *, actor_id: str, reason: str) -> int:
+    def restore(self, repo: str, key: str, level: int, *, actor_id: str, reason: str,
+                principal: str = "main") -> int:
         """A person resumes a paused class at a level they choose (up to its
-        ceiling under the policy). Recorded like every other change."""
-        level = max(0, min(level, self.ceiling(repo, key)))
-        lic = agent_repo.get_license(self.conn, repo, key)
-        trace = self.tracer.start_trace("coding.restore", defaults=_who(repo), action_class=key)
-        self._change(repo, key, "restore", lic["level"], level, f"{actor_id}: {reason}", trace, actor_id=actor_id)
+        principal-aware ceiling under the policy). Recorded like every other
+        change."""
+        ceiling = self._subagent_ceiling(repo, principal, key)
+        level = max(0, min(level, ceiling))
+        lic = agent_repo.get_license(self.conn, repo, key, principal=principal)
+        trace = self.tracer.start_trace("coding.restore", defaults=_who(repo, principal=principal),
+                                        action_class=key, principal=principal)
+        self._change(repo, key, "restore", lic["level"], level, f"{actor_id}: {reason}", trace,
+                     actor_id=actor_id, principal=principal)
         trace.flush(self.conn, None)
         self.conn.commit()
         return level
@@ -638,6 +658,10 @@ class CodingGate:
         rules = policy_mod.effective(self.conn, repo, row["path"] if row else ".")
         return rules.ceilings[key]
 
+    def ceiling_for(self, repo: str, key: str, principal: str = "main") -> int:
+        """The policy ceiling for one action and principal."""
+        return self._subagent_ceiling(repo, principal, key)
+
     def _subagent_ceiling(self, repo: str, principal: str, key: str | None = None) -> int:
         """Return the effective ceiling for one principal and action class."""
         row = self.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
@@ -686,12 +710,12 @@ class CodingGate:
         return [c.path for c in changed_files(turn["cwd"], turn["base_ref"], since=started)]
 
     def _turn(self, session: str, repo: str, root: str, *, principal: str = "main") -> sqlite3.Row:
-        turn = agent_repo.current_turn(self.conn, session)
+        turn = agent_repo.current_turn(self.conn, session, principal=principal)
         if turn is None or turn["status"] != "open":
             self.user_prompt({"session_id": session, "cwd": root, "prompt": "", "_agent": self._agent,
                               "_principal": principal,
                               "_implicit": True})
-            turn = agent_repo.current_turn(self.conn, session)
+            turn = agent_repo.current_turn(self.conn, session, principal=principal)
         return turn
 
     def _trace(self, turn: sqlite3.Row | None) -> Trace:

@@ -177,9 +177,22 @@ def open_turn(conn: sqlite3.Connection, *, session_id: str, repo: str, cwd: str,
     return int(cur.lastrowid)
 
 
-def current_turn(conn: sqlite3.Connection, session_id: str) -> sqlite3.Row | None:
+def current_turn(conn: sqlite3.Connection, session_id: str, *, principal: str | None = None) -> sqlite3.Row | None:
+    """Return the latest open turn for a session, optionally scoped to a principal.
+
+    Claude gives subagents their own identity while Codex may share a session,
+    so session-only lookup can accidentally attach a stop or tool result to the
+    parent turn.  The optional argument preserves callers that only have a
+    session while allowing hook paths with trusted principal metadata to stay
+    isolated.
+    """
+    if principal is None:
+        return conn.execute(
+            "SELECT * FROM agent_turns WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,)
+        ).fetchone()
     return conn.execute(
-        "SELECT * FROM agent_turns WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,)
+        "SELECT * FROM agent_turns WHERE session_id = ? AND principal = ? ORDER BY id DESC LIMIT 1",
+        (session_id, principal),
     ).fetchone()
 
 
