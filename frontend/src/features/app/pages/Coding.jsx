@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole, toDate, when } from '../../../lib/format.js';
-import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey } from '../../../lib/coding-live.js';
+import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey, pauseCause } from '../../../lib/coding-live.js';
+import { byTurn, loopBadge, remediationView } from '../../../lib/coding-guidance.js';
+import { personName } from '../../../lib/ledger-words.js';
 import { classLabel, isMcpClass } from '../../../lib/action-classes.js';
 import './coding.css';
 
@@ -105,6 +107,23 @@ function FlagBox({ target, onDone, onCancel }) {
   );
 }
 
+/** What the agent was told (or will be told at its next prompt) during one turn. */
+function Told({ remediations }) {
+  return remediations.map((r) => {
+    const view = remediationView(r);
+    return (
+      <div key={r.id} className="cd-told">
+        <span className="cd-told-head">
+          <b>{r.delivered_at ? 'Agent was told:' : 'Agent will be told:'}</b>
+          <span className={`pl-status ${view.status.tone}`}>{view.status.label}</span>
+          <small>{when(r.delivered_at || r.created_at)}</small>
+        </span>
+        <pre className="cd-reason cd-told-text">{view.text}</pre>
+      </div>
+    );
+  });
+}
+
 /** Flag state for one decision or turn row: the side button, and the box and result below it. */
 function flagRow({ id, target, flagged, flag, busy }) {
   const status = flagged ? <span className="pl-status bad">Flagged as wrong</span> : null;
@@ -115,7 +134,7 @@ function flagRow({ id, target, flagged, flag, busy }) {
   );
   const below = (
     <>
-      {flag.open === id && (
+      {flag.open === id && !flagged && (
         <FlagBox target={target} onDone={(body) => flag.done(id, body)} onCancel={() => flag.setOpen(null)} />
       )}
       {flag.result?.id === id && <p className="cd-flag-done" role="status">{flag.result.text}</p>}
@@ -167,7 +186,13 @@ function Setup({ open }) {
   );
 }
 
-function LicenseCard({ lic, onResume, busy, flash }) {
+/** "Jayati flagged it as wrong", or "" when the class was paused by a failure. */
+function flaggedBy(events, lic) {
+  const cause = pauseCause(events, lic);
+  return cause.flagged ? `${personName(cause.actorId) || 'A person'} flagged it as wrong` : '';
+}
+
+function LicenseCard({ lic, onResume, busy, flash, flagged }) {
   const paused = lic.demoted_from != null && lic.level === 0;
   const total = lic.successes + (lic.runs_needed || 0);
   const share = lic.runs_needed ? Math.min(1, lic.successes / Math.max(1, total)) : 1;
@@ -181,7 +206,9 @@ function LicenseCard({ lic, onResume, busy, flash }) {
           L{lic.level} · {paused ? 'Paused' : words.short}
         </span>
       </div>
-      <p>{paused ? `Lost L${lic.demoted_from} after a failure. It asks you again until it earns it back.` : words.long}</p>
+      <p>{!paused ? words.long : flagged
+        ? `${flagged}, so it lost L${lic.demoted_from}. It asks you again until it earns it back.`
+        : `Lost L${lic.demoted_from} after a failure. It asks you again until it earns it back.`}</p>
       {!lic.always_asks && lic.next_level != null && (
         <div className="app-evidence" role="img" aria-label={nextSentence(lic)}><i style={{ width: `${share * 100}%` }} /></div>
       )}
@@ -227,6 +254,8 @@ export function Coding() {
   const [flagResult, setFlagResult] = useState(null);
   const flash = useLevelFlash(coding?.licenses);
   const flagged = useMemo(() => flaggedTargets(coding?.flags), [coding]);
+  const told = useMemo(() => byTurn(coding?.remediations), [coding]);
+  const looped = useMemo(() => byTurn(coding?.loops), [coding]);
   const flag = {
     open: flagOpen,
     setOpen: (id) => { setFlagOpen(id); setFlagResult(null); },
@@ -301,7 +330,7 @@ export function Coding() {
 
       {paused.map((l) => (
         <div key={licenseKey(l)} className="pl-alert app-alert-row" role="alert">
-          <p><b>{l.label} paused in {l.repo}.</b> It failed a check, so it asks you again before every action of this kind.</p>
+          <p><b>{l.label} paused in {l.repo}.</b> {flaggedBy(coding?.events, l) || 'It failed a check'}, so it asks you again before every action of this kind.</p>
           <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => resume(l, l.demoted_from)}>Resume at L{l.demoted_from}</button>
         </div>
       ))}
@@ -316,7 +345,8 @@ export function Coding() {
         ) : (
           <div className="pl-grid">
             {licenses.map((l) => (
-              <LicenseCard key={licenseKey(l)} lic={l} onResume={resume} busy={busy} flash={flash[licenseKey(l)]} />
+              <LicenseCard key={licenseKey(l)} lic={l} onResume={resume} busy={busy} flash={flash[licenseKey(l)]}
+                flagged={flaggedBy(coding?.events, l)} />
             ))}
           </div>
         )}
@@ -333,6 +363,7 @@ export function Coding() {
                 : (TURN[t.status] || TURN.open);
               const date = toDate(t.created_at);
               const row = flagRow({ id: `t${t.id}`, target: { turn_id: t.id }, flagged: flagged.turns.has(t.id), flag, busy });
+              const loop = loopBadge(looped.get(t.id));
               return (
                 <li key={t.id} className="pl-row cd-turn">
                   <span className="pl-row-main">
@@ -347,8 +378,10 @@ export function Coding() {
                     {t.entire_checkpoint && (
                       <span className="cd-cmds"><CopyLine cmd={`entire checkpoint explain ${t.entire_checkpoint.slice(0, 12)}`} /></span>
                     )}
+                    <Told remediations={told.get(t.id) || []} />
                   </span>
                   <span className="pl-row-side">
+                    {loop && <span className={`pl-status ${loop.tone}`} title={loop.title}>{loop.label}</span>}
                     <span className={`pl-status ${s.tone}`}>{s.label}</span>
                     {(t.status === 'failed' || t.status === 'blocked') && (
                       <button type="button" className="btn btn-line btn-sm" disabled={busy} onClick={() => rewind(t)}>Rewind</button>

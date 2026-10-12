@@ -492,7 +492,8 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         "turns": turns,
         "events": [event_payload(r, getattr(context, "config", None))
                    for r in agent_repo.list_events(context.conn, repo, 60)],
-        "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30)],
+        "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30, repo)],
+        "loops": agent_repo.loop_events(context.conn, repo, 30),
         "flags": [dict(r) for r in agent_repo.list_flags(context.conn, 30)],
         "counts": counts,
         "savings": savings,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 
@@ -283,8 +284,64 @@ def take_remediations(conn: sqlite3.Connection, session_id: str) -> list[sqlite3
     return rows
 
 
-def recent_remediations(conn: sqlite3.Connection, limit: int = 30) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM agent_remediations ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+def recent_remediations(conn: sqlite3.Connection, limit: int = 30, repo: str | None = None) -> list[sqlite3.Row]:
+    """What agents were told (delivered_at set) or will be told at their next prompt, newest first."""
+    return conn.execute(
+        "SELECT r.*, t.repo FROM agent_remediations r LEFT JOIN agent_turns t ON t.id = r.turn_id "
+        "WHERE ? IS NULL OR t.repo = ? ORDER BY r.id DESC LIMIT ?",
+        (repo, repo, limit),
+    ).fetchall()
+
+
+# --- loops ------------------------------------------------------------------------
+
+def loop_events(conn: sqlite3.Connection, repo: str | None = None, limit: int = 30) -> list[dict]:
+    """Loop warnings and stops, newest first: calls the gate refused at the
+    prompt, sessions halted right now, and the warnings in recorded turn traces.
+    severity is "warning" (guidance only) or "stop" (the agent was stopped)."""
+    events: list[dict] = []
+    for d in conn.execute(
+        "SELECT * FROM agent_decisions WHERE decided_by = 'loop-guard' AND (? IS NULL OR repo = ?) "
+        "ORDER BY id DESC LIMIT ?", (repo, repo, limit),
+    ):
+        events.append({"id": f"decision-{d['id']}", "kind": "loop-stop", "severity": "stop",
+                       "session_id": d["session_id"], "turn_id": d["turn_id"], "repo": d["repo"],
+                       "command": d["command"], "reason": d["reason"], "created_at": d["created_at"]})
+    # 'halt' is loops._HALT: the session is refused every call until its turn ends or the person prompts.
+    for h in conn.execute(
+        """
+        SELECT f.session_id, f.last_error, f.updated_at, t.id AS turn_id, t.repo
+          FROM agent_fingerprints f
+          LEFT JOIN agent_turns t ON t.id = (SELECT MAX(id) FROM agent_turns WHERE session_id = f.session_id)
+         WHERE f.fingerprint = 'halt' AND (? IS NULL OR t.repo = ?)
+        """, (repo, repo),
+    ):
+        events.append({"id": f"halt-{h['session_id']}", "kind": "halt", "severity": "stop",
+                       "session_id": h["session_id"], "turn_id": h["turn_id"], "repo": h["repo"], "command": "",
+                       "reason": (h["last_error"] or "").removeprefix("Solo License: "),
+                       "created_at": h["updated_at"]})
+    # Turn traces reach the spans table when the turn ends. A stop at the prompt
+    # is already listed from its decision; only spans from a call that ran
+    # (they count failures) and edit thrash are added.
+    for s in conn.execute(
+        """
+        SELECT s.id, s.attributes, s.created_at, t.id AS turn_id, t.session_id, t.repo
+          FROM spans s JOIN agent_turns t ON t.trace_id = s.trace_id
+         WHERE (s.name = 'detection.edit_thrash'
+                OR (s.name = 'detection.loop' AND json_extract(s.attributes, '$.failures') IS NOT NULL))
+           AND (? IS NULL OR t.repo = ?)
+         ORDER BY s.id DESC LIMIT ?
+        """, (repo, repo, limit),
+    ):
+        attrs = json.loads(s["attributes"] or "{}")
+        files = attrs.get("files") or []
+        events.append({"id": f"span-{s['id']}", "kind": attrs.get("kind") or "repeat",
+                       "severity": "stop" if attrs.get("severity") == "critical" else "warning",
+                       "session_id": s["session_id"], "turn_id": s["turn_id"], "repo": s["repo"],
+                       "command": attrs.get("command") or ", ".join(map(str, files)),
+                       "reason": attrs.get("reason") or "", "created_at": s["created_at"]})
+    events.sort(key=lambda e: e["created_at"] or "", reverse=True)
+    return events[:limit]
 
 
 # --- flags --------------------------------------------------------------------

@@ -19,6 +19,16 @@
 .cd-flag input { height: 34px; padding: 0 10px; border: 1px solid var(--line); background: var(--card); font: 14px var(--font-sans); color: var(--ink); }
 .cd-flag-error { margin: 0; color: var(--bad); font-size: 13px; }
 .cd-flag-done { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--ink-2); }
+@media (max-width: 640px) {
+  .cd-flag input { font-size: 16px; } /* below 16px iOS Safari zooms in on focus */
+}
+
+/* What the agent was told during a turn. */
+.cd-told { display: grid; gap: 4px; margin-top: 6px; }
+.cd-told-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.cd-told-head b { font-weight: 500; }
+.cd-told-head small { color: var(--muted); }
+.cd-told-text { margin: 0; border-left-color: var(--ink); overflow-wrap: anywhere; }
 
 /* A level that moved since the last poll flashes once. */
 .cd-level { transition: background-color 0.4s var(--ease), color 0.4s var(--ease); }
