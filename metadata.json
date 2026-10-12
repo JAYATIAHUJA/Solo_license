@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R6NDGMA5MQ8EAWH7DSDJP0",
+  "strategy": "manual-commit",
+  "branch": "fix/landing-restore-scenes",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/features/landing/LandingPage.jsx",
+    "frontend/src/features/landing/scenes/AgentGraph.jsx",
+    "frontend/src/features/landing/scenes/Altimeter.jsx",
+    "frontend/src/features/landing/scenes/Crash.jsx",
+    "frontend/src/features/landing/scenes/Journey.jsx",
+    "frontend/src/features/landing/scenes/LedgerTrack.jsx",
+    "frontend/src/features/landing/scenes/Problem.jsx",
+    "frontend/src/features/landing/scenes/ProductTour.jsx",
+    "frontend/src/features/landing/scenes/Terminal.jsx",
+    "frontend/src/features/landing/sections/Footer.jsx",
+    "frontend/src/features/landing/sections/Nav.jsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 7884,
+    "cache_read_tokens": 3044825,
+    "output_tokens": 5476,
+    "api_call_count": 6
+  }
+}
