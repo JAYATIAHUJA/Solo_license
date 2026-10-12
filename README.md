@@ -20,7 +20,7 @@ Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · u
 </div>
 
 <p align="center">
-  <a href="https://solo-license.vercel.app/"><img src="evidence/assets/screens/home.png" alt="Solo License website" width="920" /></a>
+  <a href="https://solo-license.vercel.app/"><img src="evidence/assets/screens/product-tour/coding-agent-dashboard.jpg" alt="Solo License website" width="920" /></a>
 </p>
 
 > **The simple promise:** stop approving the same safe action repeatedly without giving an agent blanket access.
