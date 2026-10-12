@@ -15,7 +15,7 @@ uvx --refresh --from 'git+https://github.com/JAYATIAHUJA/Solo_license@main' solo
 
 [Live website](https://solo-license.vercel.app/) · [One-command setup](#one-command-install) · [Architecture](#architecture-at-a-glance) · [Hackathon evidence](#product-tour--evidence-from-a-real-run)
 
-Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · uses **neatlogs**, **Entire** and **cfo.ai** · by [@JAYATIAHUJA](https://github.com/JAYATIAHUJA)
+Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · uses **neatlogs**, **Entire** and **cfo.ai** · by [@JAYATIAHUJA](https://github.com/JAYATIAHUJA), [@VanshNagpal10](https://github.com/VanshNagpal10) & [@areycruzer](https://github.com/areycruzer)
 
 </div>
 
