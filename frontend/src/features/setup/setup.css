@@ -28,3 +28,16 @@
 .su-wait { padding: 12px 14px; background: var(--wait-bg); margin: 0; }
 .su-foot { text-align: center; padding-top: 8px; }
 @media (max-width: 560px) { .su-copy { flex-direction: column; align-items: stretch; } }
+
+/* wizard-mode badges and states */
+.su-agent .su-found {
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ink, #111);
+  color: var(--paper, #fff);
+}

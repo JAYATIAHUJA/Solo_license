@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useStore } from '../../lib/store.jsx';
 import { when } from '../../lib/format.js';
@@ -42,8 +42,13 @@ function Step({ n, title, children, done }) {
  *  install itself), optional keys, then watch the first hook arrive. */
 export function CodingSetup() {
   const { data, setToast } = useStore();
+  const [params] = useSearchParams();
+  const wizard = params.get('wizard') === '1';
   const [agents, setAgents] = useState([]);
   const [agent, setAgent] = useState('claude-code');
+  const [picked, setPicked] = useState(null); // wizard: agent keys chosen in the browser
+  const [installing, setInstalling] = useState(false);
+  const [installed, setInstalled] = useState(null);
   const [install, setInstall] = useState(null);
   const [tab, setTab] = useState('terminal');
   const [seen, setSeen] = useState([]);
@@ -59,10 +64,36 @@ export function CodingSetup() {
     return () => window.clearInterval(t);
   }, []);
   useEffect(() => { if (tab === 'plugin' && agent !== 'claude-code') setTab('terminal'); }, [agent, tab]);
+  const [wiz, setWiz] = useState(null);
+  useEffect(() => {
+    if (!wizard) return undefined;
+    const poll = () => api.wizard().then(setWiz).catch(() => {});
+    poll();
+    const t = window.setInterval(poll, 2000);
+    return () => window.clearInterval(t);
+  }, [wizard]);
+  useEffect(() => {
+    if (picked === null && wiz) setPicked((wiz.agents || []).filter((a) => a.found).map((a) => a.key));
+  }, [wiz, picked]);
 
   const spec = agents.find((a) => a.key === agent);
   const connected = useMemo(() => seen.find((s) => s.agent === agent), [seen, agent]);
   const settings = data?.settings || {};
+
+  const keysReady = Boolean(settings.jev_enabled && settings.neatlogs_enabled);
+
+  async function installPicked() {
+    setInstalling(true);
+    try {
+      const r = await api.wizardSelect(picked);
+      setInstalled(r);
+      setToast({ kind: r.errors && Object.keys(r.errors).length ? 'error' : 'ok', text: 'Hooks installed.', at: Date.now() });
+    } catch (cause) {
+      setToast({ kind: 'error', text: cause.message, at: Date.now() });
+    } finally {
+      setInstalling(false);
+    }
+  }
 
   async function saveKeys() {
     const values = Object.fromEntries(Object.entries(keys).filter(([, v]) => String(v).trim()));
@@ -96,26 +127,59 @@ export function CodingSetup() {
         </p>
       </div>
 
-      <Step n="1" title="Which agent do you use?" done={Boolean(agent)}>
-        <div className="su-agents" role="radiogroup" aria-label="Coding agent">
-          {agents.map((a) => (
-            <button
-              key={a.key}
-              type="button"
-              role="radio"
-              aria-checked={a.key === agent}
-              className={`su-agent ${a.key === agent ? 'is-on' : ''}`}
-              onClick={() => setAgent(a.key)}
-            >
-              <b>{a.label}</b>
-              <small>{TRANSPORT[a.transport] || a.transport}{a.can_send_back ? ' · sends turns back' : ' · records turns'}</small>
-              {seen.some((s) => s.agent === a.key) && <i className="su-dot" aria-label="connected" />}
-            </button>
-          ))}
+      <Step n="1" title={wizard ? 'Which agents should get hooks?' : 'Which agent do you use?'} done={wizard ? Boolean(picked?.length) : Boolean(agent)}>
+        <div className="su-agents" role={wizard ? 'group' : 'radiogroup'} aria-label={wizard ? 'Agents to install' : 'Coding agent'}>
+          {agents.map((a) => {
+            const found = (wiz?.agents || []).some((w) => w.key === a.key && w.found);
+            const on = wizard ? picked?.includes(a.key) : a.key === agent;
+            const toggle = () => (wizard
+              ? setPicked((p) => (p || []).includes(a.key) ? p.filter((k) => k !== a.key) : [...(p || []), a.key])
+              : setAgent(a.key));
+            return (
+              <button
+                key={a.key}
+                type="button"
+                role={wizard ? 'checkbox' : 'radio'}
+                aria-checked={Boolean(on)}
+                className={`su-agent ${on ? 'is-on' : ''}`}
+                onClick={toggle}
+              >
+                <b>{a.label}{wizard && found && <i className="su-found" aria-label="detected on this machine">detected</i>}</b>
+                <small>{TRANSPORT[a.transport] || a.transport}{a.can_send_back ? ' · sends turns back' : ' · records turns'}</small>
+                {seen.some((s) => s.agent === a.key) && <i className="su-dot" aria-label="connected" />}
+              </button>
+            );
+          })}
         </div>
-        {spec?.notes && <p className="pl-small pl-muted">{spec.notes}</p>}
+        {wizard
+          ? <p className="pl-small pl-muted">Only the agents you tick get hooks, nothing else is touched. The ones marked <b>detected</b> were found on this machine.</p>
+          : spec?.notes && <p className="pl-small pl-muted">{spec.notes}</p>}
       </Step>
 
+      {wizard ? (
+        <Step n="2" title="Install the hooks" done={Boolean(installed?.installed?.length)}>
+          <div className="su-body">
+            <p><b>{picked?.length || 0} agent{picked?.length === 1 ? '' : 's'} selected.</b> The gate writes each agent&apos;s own hook settings and a small shim in <code>.solo-license/</code>. Undo any time with <code>solo-license init --remove</code>.</p>
+            <div className="su-actions">
+              <button type="button" className="btn btn-ink" disabled={installing || !picked?.length || !keysReady} onClick={installPicked}>
+                {installing ? 'Installing…' : `Install hooks for ${picked?.length || 0} agent${picked?.length === 1 ? '' : 's'}`}
+              </button>
+              {!keysReady && <span className="pl-test-bad" role="status">Connect neatlogs and Jev below first - they are required.</span>}
+            </div>
+            {installed && (
+              <div className="su-body">
+                {installed.installed?.length > 0 && (
+                  <p className="su-ok"><b>Installed for:</b> {installed.installed.map((k) => (agents.find((a) => a.key === k) || {}).label || k).join(', ')}. Your terminal is continuing.</p>
+                )}
+                {Object.entries(installed.errors || {}).map(([k, e]) => (
+                  <p key={k} className="pl-test-bad">{(agents.find((a) => a.key === k) || {}).label || k}: {e}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        </Step>
+      ) : null}
+      {!wizard && (
       <Step n="2" title={`Install it for ${spec?.label || agent}`} done={Boolean(connected)}>
         <div className="su-tabs" role="tablist">
           {TABS.filter((t) => !t.only || t.only === agent).map((t) => (
@@ -174,8 +238,9 @@ export function CodingSetup() {
           already there. If the gate is not running, your agent behaves exactly as before - Solo License never allows anything on its own.
         </p>
       </Step>
+      )}
 
-      <Step n="3" title="Optional: connect neatlogs, Jev and Entire" done={settings.jev_enabled && settings.neatlogs_enabled}>
+      <Step n="3" title={wizard ? 'Connect neatlogs and Jev (required)' : 'Optional: connect neatlogs, Jev and Entire'} done={settings.jev_enabled && settings.neatlogs_enabled}>
         <div className="pl-fields su-keys">
           <SecretInput label="TypeSafe API key (Jev)" field="typesafe_api_key" values={keys} settings={settings}
             onChange={(p) => setKeys((k) => ({ ...k, ...p }))} placeholder="ts_…"
