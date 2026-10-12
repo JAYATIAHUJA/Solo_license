@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R1TMHGFAAGTADDEE7AX76V",
+  "strategy": "manual-commit",
+  "branch": "feat/mcp-tool-classes",
+  "checkpoints_count": 22,
+  "files_touched": [
+    "frontend/src/features/app/pages/Coding.jsx",
+    "sololicense/api/app.py",
+    "sololicense/coding/agents.py",
+    "sololicense/coding/gate.py",
+    "sololicense/coding/install.py",
+    "sololicense/coding/policy.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1005583,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 57317376,
+    "output_tokens": 112766,
+    "api_call_count": 425,
+    "subagent_tokens": {
+      "input_tokens": 284310,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 6707200,
+      "output_tokens": 21169,
+      "api_call_count": 83
+    },
+    "subagent_tokens_complete": true
+  }
+}
