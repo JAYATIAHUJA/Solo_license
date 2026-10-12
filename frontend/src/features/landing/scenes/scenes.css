@@ -1,5 +1,9 @@
 /* ---------- pinned stage ---------- */
 .pin { position: relative; }
+/* A stage's content ends well above the bottom of its viewport-tall box, so the
+   next scene would start after a blank half screen. Pull the next one up by
+   the blank part (only these three end high enough to spare it). */
+#terminal.pin, #journey.pin, #agent.pin { margin-bottom: -14svh; }
 .pin-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
 .sc-wrap { max-width: var(--max); height: 100%; margin: 0 auto; padding: calc(68px + clamp(12px, 3vh, 36px)) var(--gutter) clamp(20px, 4vh, 48px); display: flex; flex-direction: column; }
 .sc-head { display: flex; gap: 16px; align-items: baseline; padding-bottom: 12px; border-bottom: 1px solid currentColor; margin-bottom: clamp(14px, 3vh, 32px); }
