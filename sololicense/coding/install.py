@@ -20,6 +20,7 @@ import os
 import re
 import shlex
 import stat
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -193,7 +194,12 @@ def validate_url(url: str) -> str:
 
 
 def _paths(hook: Path) -> tuple[str, str]:
-    return _safe_path(str(sys.executable), "Python"), _safe_path(str(hook), "hook")
+    # The shim is standard-library only, so any python3 may run it; the
+    # current interpreter can be uvx's transient cache path, which dies on
+    # the next uvx run.
+    stable = shutil.which("python3") or shutil.which("python")
+    interpreter = stable if stable else str(sys.executable)
+    return _safe_path(interpreter, "Python"), _safe_path(str(hook), "hook")
 
 
 Command = Callable[[str], str]

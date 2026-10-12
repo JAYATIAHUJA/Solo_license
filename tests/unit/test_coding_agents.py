@@ -275,7 +275,12 @@ def test_cline_scripts_single_quote_their_paths(tmp_path):
     import shlex as _shlex
 
     args = _shlex.split(exec_line)[1:]
-    assert args == [sys.executable, str(repo / ".solo-license" / "hook.py"), "cline", "PreToolUse"]
+    # The shim runs on PATH python3 (stable), never uvx's transient cache
+    # interpreter, and the space in "my repo" stays inside one argument.
+    import shutil as _shutil
+
+    stable = _shutil.which("python3") or _shutil.which("python") or sys.executable
+    assert args == [stable, str(repo / ".solo-license" / "hook.py"), "cline", "PreToolUse"]
 
 
 @pytest.mark.parametrize("url", ["http://x/${process.exit(1)}", "javascript:alert(1)", "http://a`b`", 'http://a"+x+"'])
