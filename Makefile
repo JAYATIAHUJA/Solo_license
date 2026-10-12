@@ -8,8 +8,8 @@ PYTHON ?= python
 install:            ## Install runtime dependencies
 	$(PYTHON) -m pip install -r requirements.txt
 
-run-api:            ## Launch the API on :8000
-	$(PYTHON) -m uvicorn sololicense.api.app:app --port 8000
+run-api:            ## Launch the API on :8000 (demo sign-in enabled)
+	SOLO_DEMO_MODE=$${SOLO_DEMO_MODE:-1} $(PYTHON) -m uvicorn sololicense.api.app:app --port 8000
 
 web:                ## Launch the React app on :5174 (proxies /api to :8000)
 	npm --prefix frontend run dev

@@ -209,11 +209,15 @@ against the incident bill of blind autonomy. Model and plan: [`planning/cfo/`](p
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env                             # sets SOLO_DEMO_MODE=1: "Try the demo" works without a token
 uvicorn sololicense.api.app:app --port 8000      # the gate + API
 npm --prefix frontend install
 npm --prefix frontend run dev                    # http://127.0.0.1:5174 - landing, setup guide, dashboard
 make coding-demo                                 # ../shop-api-demo: a repo with two bugs, hooks installed
 ```
+
+On Windows PowerShell use `Copy-Item .env.example .env`. Without `SOLO_DEMO_MODE=1` (or `SOLO_API_TOKENS`)
+the dashboard answers 401 and shows no data: open the app, choose **Try the demo**, enter your name.
 
 Open Claude Code (or any supported agent) in `../shop-api-demo` and ask it to run the tests, then to
 fix the bug in `cart.js`. The dashboard shows each decision, each turn's check and every level change.
