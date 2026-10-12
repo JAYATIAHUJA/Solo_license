@@ -22,7 +22,8 @@ function RequireSession({ children }) {
   const location = useLocation();
   if (!session) {
     const next = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/access?next=${next}`} replace />;
+    // keep the hash: `solo-license onboard` hands its sign-in token there
+    return <Navigate to={`/access?next=${next}${location.hash}`} replace />;
   }
   return children;
 }

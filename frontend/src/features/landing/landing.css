@@ -203,6 +203,7 @@
     height: auto; min-height: 0;
     padding-block: clamp(36px, 7vh, 72px);
   }
+  #fixes { padding-top: clamp(96px, 16vh, 180px); }
   .lp-head { margin-bottom: clamp(18px, 4vh, 48px); }
   .lp-split { margin-bottom: clamp(18px, 4vh, 48px); }
   .lp-h2 { font-size: clamp(40px, min(6vw, 9vh), 96px); }
@@ -301,7 +302,12 @@
 @media (max-width: 560px) {
   .lp-h1 { font-size: clamp(24px, 8.6vw, 52px); line-height: 1; }
   .lp-hero-cta .btn { width: 100%; justify-content: center; }
+  /* install bar: command on its own row, Copy full-width below it */
+  .lp-ask { flex-wrap: wrap; padding: 12px; gap: 10px; }
+  .lp-ask > svg { display: none; }
+  .lp-ask-cmd { flex: 1 1 100%; font-size: 12.5px; overflow-wrap: anywhere; word-break: break-all; }
+  .lp-ask .btn { flex: 1 1 100%; }
   .lp-hero-meta { grid-template-columns: 1fr; }
-  .lp-hero-meta > div, .lp-hero-meta > div + div { padding: 14px 0; border-left: 0; text-align: left; }
+  .lp-hero-meta > div, .lp-hero-meta > div + div, .lp-hero-meta > div:nth-child(3) { padding: 14px 0; border-left: 0; text-align: left; grid-column: auto; }
   .lp-hero-meta > div + div { border-top: 1px solid var(--hair); }
 }

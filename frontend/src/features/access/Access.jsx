@@ -3,13 +3,15 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { clearSession, saveSession } from '../../lib/session.js';
 import { Logo } from '../../components/brand/Logo.jsx';
+import { PaperGrain } from '../../components/shader/PaperBackdrop.jsx';
 import { HandIcon } from '../../components/icons/HandIcon.jsx';
 import { DitherField } from '../../components/shader/PaperBackdrop.jsx';
 import './access.css';
 
-/** Sign-in. Two honest paths: a local demo session (only when the API runs
- *  with SOLO_DEMO_MODE=1) and a deployment-issued access token. The name a
- *  demo user types is recorded as the actor on every run and license change. */
+/** Sign-in. The access token is the front door: `solo-license onboard` opens
+ *  this page already signed in, `solo-license token` prints it for pasting.
+ *  A local demo session stays available (only when the API runs with
+ *  SOLO_DEMO_MODE=1), tucked away. */
 export function Access() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -71,6 +73,7 @@ export function Access() {
 
   return (
     <div className="axo ax">
+      <PaperGrain opacity={0.3} />
       <aside className="axo-aside">
         <DitherField className="axo-shader" shape="simplex" speed={0.2} size={2.4} />
         <div className="axo-aside-card">
@@ -87,72 +90,42 @@ export function Access() {
       </aside>
 
       <main className="axo-main">
-        <p className="mono muted">Sign in</p>
-        <h1 className="axo-title serif">Open your <i>workspace.</i></h1>
-        <p className="axo-sub">
-          Your name is written into the audit trail of every run and every license change you make.
-        </p>
+        <h1 className="axo-title serif">Paste your <i>access token.</i></h1>
 
-        {info === null && !error && <p className="mono muted">Checking the API…</p>}
+        <form className="ax-card" onSubmit={useToken}>
+          <label className="field">
+            <span>Access token</span>
+            <input
+              className="input axo-big-input"
+              type="password"
+              autoComplete="off"
+              autoFocus
+              placeholder="Paste access token"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+          </label>
+          <button className="btn btn-ink" disabled={busy || token.trim().length < 8}>
+            {busy ? 'Opening…' : 'Open dashboard'} <HandIcon name="arrow-right" size={16} />
+          </button>
+          <p className="ax-note">
+            Get it in your terminal: <code>solo-license token</code>. Running <code>solo-license onboard</code> opens
+            this page already signed in.
+          </p>
+        </form>
 
         {info?.demo_enabled && (
-          <form className="ax-card" onSubmit={startDemo}>
-            <div className="ax-card-head">
-              <HandIcon name="play" size={18} />
-              <div>
-                <b>Try the demo</b>
-                <small>Local demo session · admin role · no token needed</small>
-              </div>
-            </div>
-            <label className="field">
-              <span>Your name</span>
+          <details className="ax-demo">
+            <summary>No token? Use the local demo instead</summary>
+            <form onSubmit={startDemo} className="ax-token-form">
               <input
-                className="input axo-big-input"
-                autoFocus
+                className="input"
                 maxLength={40}
-                placeholder="e.g. Jayati"
+                placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-            </label>
-            <button className="btn btn-ink" disabled={busy || name.trim().length < 2}>
-              {busy ? 'Opening…' : 'Enter the demo'} <HandIcon name="arrow-right" size={16} />
-            </button>
-          </form>
-        )}
-
-        {info && !info.demo_enabled && (
-          <div className="ax-card">
-            <div className="ax-card-head">
-              <HandIcon name="key" size={18} />
-              <div>
-                <b>Open this dashboard from your terminal</b>
-                <small>No token to copy: the command signs you in as this machine's admin.</small>
-              </div>
-            </div>
-            <p className="ax-note"><code>solo-license onboard</code></p>
-          </div>
-        )}
-
-        {info && (
-          <details className="ax-card ax-token">
-            <summary>
-              <HandIcon name="key" size={18} />
-              <div>
-                <b>Deployed workspace? Use an access token</b>
-                <small>Only for a shared deployment (issued by whoever set it up)</small>
-              </div>
-            </summary>
-            <form onSubmit={useToken} className="ax-token-form">
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                placeholder="Paste access token"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <button className="btn btn-line" disabled={busy || token.trim().length < 8}>Connect</button>
+              <button className="btn btn-line" disabled={busy || name.trim().length < 2}>Enter the demo</button>
             </form>
           </details>
         )}

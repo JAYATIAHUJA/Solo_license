@@ -29,10 +29,7 @@
 .sc-journey-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(24px, 4vw, 72px); align-items: center; }
 .sc-journey-copy { display: flex; flex-direction: column; }
 .sc-big-level { display: block; font-size: clamp(64px, 14vh, 160px); line-height: 0.85; letter-spacing: -0.04em; margin-bottom: 10px; }
-.sc-steps { list-style: none; margin: clamp(16px, 3vh, 36px) 0 0; padding: 0; border-top: 1px solid var(--ink); }
-.sc-steps li { display: flex; gap: 14px; padding: clamp(6px, 1.2vh, 10px) 0; border-bottom: 1px solid var(--hair); font-size: 14px; opacity: 0.4; transition: opacity 0.3s, padding 0.3s; }
-.sc-steps li.is-done { opacity: 0.7; }
-.sc-steps li.is-on { opacity: 1; padding-left: 10px; font-weight: 500; }
+.sc-rule { margin: clamp(16px, 3vh, 36px) 0 0; border: 0; border-top: 1px solid var(--ink); }
 .sc-journey-card { display: grid; justify-items: center; gap: 18px; }
 .sc-card-note { font-size: 24px; margin: 0; }
 
@@ -68,10 +65,6 @@
 
 /* ---------- 04 agent graph ---------- */
 .sc-agent-wrap { display: grid; grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.5fr); gap: clamp(20px, 3vw, 56px); align-items: center; }
-.sc-agent-step { display: grid; gap: 8px; margin-top: clamp(14px, 3vh, 32px); padding: 16px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
-.sc-agent-step b { font-size: clamp(26px, 4vh, 36px); font-weight: 400; line-height: 1; }
-.sc-agent-step p { margin: 0; font-size: 15px; color: var(--ink-2); }
-.sc-agent-step code { font-size: 12px; padding: 6px 8px; background: var(--ink); color: var(--paper); justify-self: start; text-transform: none; }
 .ag-board { position: relative; width: 100%; aspect-ratio: 1000 / 560; max-height: 72vh; }
 .ag-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ag-edge { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; }
@@ -150,8 +143,7 @@ html[data-invert="1"] .alt { color: var(--paper); }
 /* ---------- short screens (laptops ~720–820px tall) ---------- */
 @media (max-height: 820px) and (min-width: 901px) {
   .sc-big-level { display: none; }
-  .sc-steps li { padding: 4px 0; }
-  .sc-body { margin-top: 8px; }
+    .sc-body { margin-top: 8px; }
   .lc-sig svg { width: clamp(90px, 15vh, 140px); }
   .lc { aspect-ratio: auto; gap: 6px; }
   .lc-level .serif { font-size: clamp(56px, 10vh, 96px); }
@@ -164,7 +156,7 @@ html[data-invert="1"] .alt { color: var(--paper); }
 @media (max-width: 900px) {
   .sc-problem-grid, .sc-journey-wrap, .sc-agent-wrap, .sc-crash-wrap { grid-template-columns: 1fr; align-content: center; }
   .sc-problem-grid { gap: 14px; }
-  .sc-journey-wrap .sc-steps, .sc-journey-wrap .sc-body, .sc-agent-step p, .sc-crash-copy .sc-body { display: none; }
+  .sc-journey-wrap .sc-body, .sc-crash-copy .sc-body { display: none; }
   .sc-big-level { display: none; }
   .lc { width: min(100%, 360px); box-shadow: 8px 8px 0 rgba(14, 14, 13, 0.9); }
   .sc-crash-level { height: 90px; font-size: 90px; }
@@ -286,3 +278,13 @@ html[data-invert="1"] .alt { color: var(--paper); }
   .pt-card b { font-size: 24px; }
   .pt-span { grid-template-columns: minmax(110px, 40%) 1fr; }
 }
+
+/* Crash scene: the session itself shows what went wrong */
+.sc-crash-term { border-color: #3a3a36; box-shadow: none; min-height: min(56vh, 480px); }
+.sc-crash-chip { margin-left: auto; padding: 2px 8px; border: 1px solid #3a3a36; color: #e9e6df; font-size: 11px; transition: color 0.3s, border-color 0.3s, background 0.3s; }
+.sc-crash-chip.is-l0 { color: #fff; background: var(--signal); border-color: var(--signal); }
+.term-line.is-alert { animation: crash-alert 0.9s ease-out; box-shadow: 0 0 0 1px var(--signal), 0 0 28px rgba(216, 52, 31, 0.45); }
+@keyframes crash-alert { 0% { background: rgba(216, 52, 31, 0.7); } 100% { background: rgba(216, 52, 31, 0.12); } }
+.sc-crash-visual { width: 100%; }
+.sc-crash-visual .sc-crash-level { height: clamp(70px, 14vh, 140px); font-size: clamp(70px, 14vh, 140px); }
+.sc-crash-visual .sc-crash-term { width: 100%; min-height: min(44vh, 400px); }

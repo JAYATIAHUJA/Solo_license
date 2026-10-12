@@ -7,6 +7,7 @@ import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey, pauseC
 import { byTurn, loopBadge, remediationView } from '../../../lib/coding-guidance.js';
 import { personName } from '../../../lib/ledger-words.js';
 import { classLabel, isMcpClass } from '../../../lib/action-classes.js';
+import { CopyCommand } from '../../../components/CopyCommand.jsx';
 import './coding.css';
 
 const POLL_MS = 4000;
@@ -152,38 +153,34 @@ function nextSentence(lic) {
   return `${lic.runs_needed} more verified run${lic.runs_needed === 1 ? '' : 's'} to earn L${lic.next_level}.`;
 }
 
-function CopyLine({ cmd }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => navigator.clipboard?.writeText(cmd)
-    .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
-    .catch(() => {});
-  return (
-    <span className="cd-cmd">
-      <code>{cmd}</code>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
-    </span>
-  );
-}
+const START = [
+  { n: '1', title: 'Connect your agent', text: 'One command adds Solo License to its hooks.' },
+  { n: '2', title: 'Work as usual', text: 'Every action starts at L0 and asks you.' },
+  { n: '3', title: 'It earns autonomy', text: 'Verified turns unlock L1, then L2.' },
+];
 
-function Setup({ open }) {
+/** First visit, nothing connected yet: what happens, and one button. */
+function Start() {
   return (
-    <details className="pl-help cd-setup" open={open}>
-      <summary><b>Connect a coding agent</b> - Claude Code, Codex, Cursor, Gemini, Antigravity, Copilot, Grok, Windsurf, Kiro, Cline, OpenCode</summary>
-      <ol>
-        <li>Keep this API running (<code>make run-api</code>). Claude Code calls it from its hooks.</li>
-        <li>In Claude Code, install the plugin:
-          <div className="cd-cmds">
-            <CopyLine cmd="/plugin marketplace add JAYATIAHUJA/Solo_license" />
-            <CopyLine cmd="/plugin install solo-license@solo-license" />
-          </div>
-        </li>
-        <li>Or, for a single repository, without the plugin:
-          <div className="cd-cmds"><CopyLine cmd="python -m sololicense.coding.install path/to/your/repo" /></div>
-        </li>
+    <section className="cd-start">
+      <div className="cd-start-head">
+        <h2>Connect your first coding agent</h2>
+        <p>Claude Code, Codex, Cursor, Gemini and more. Takes about two minutes.</p>
+      </div>
+      <ol className="cd-start-steps">
+        {START.map((s) => (
+          <li key={s.n}>
+            <span className="cd-start-n">{s.n}</span>
+            <b>{s.title}</b>
+            <span>{s.text}</span>
+          </li>
+        ))}
       </ol>
-      <p><Link className="btn btn-ink btn-sm" to="/onboarding">Open the setup guide for any agent</Link></p>
-      <p className="pl-small pl-muted">Every repository starts at zero trust. If this API is down, Claude Code simply asks you as before. Nothing is ever allowed silently.</p>
-    </details>
+      <div className="cd-start-cta">
+        <Link className="btn btn-ink" to="/onboarding">Set up your agent →</Link>
+        <span className="pl-small pl-muted">Nothing is ever allowed silently. If Solo License is down, your agent asks you as before.</span>
+      </div>
+    </section>
   );
 }
 
@@ -366,9 +363,10 @@ export function Coding() {
         </div>
       ))}
 
-      <Setup open={!repos.length} />
-      <Savings s={coding?.savings} />
+      {!repos.length && coding && <Start />}
+      {repos.length > 0 && <Savings s={coding?.savings} />}
 
+      {repos.length > 0 && (<>
       <section className="pl-section" aria-labelledby="h-lic">
         <h2 id="h-lic">What your agent may do alone{current ? ` in ${current}` : ''}</h2>
         {!licenses.length ? (
@@ -407,7 +405,7 @@ export function Coding() {
                     </small>
                     {t.reason && <pre className="cd-reason">{t.reason}</pre>}
                     {t.entire_checkpoint && (
-                      <span className="cd-cmds"><CopyLine cmd={`entire checkpoint explain ${t.entire_checkpoint.slice(0, 12)}`} /></span>
+                      <CopyCommand text={`entire checkpoint explain ${t.entire_checkpoint.slice(0, 12)}`} />
                     )}
                     <TurnLinks turn={t} />
                     <Told remediations={told.get(t.id) || []} />
@@ -465,6 +463,7 @@ export function Coding() {
           </button></p>
         )}
       </section>
+      </>)}
     </div>
   );
 }

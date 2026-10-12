@@ -3,9 +3,9 @@
 .axo-logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }
 
 .axo { display: grid; grid-template-columns: minmax(320px, 0.8fr) 1.2fr; min-height: 100vh; }
-.axo-aside { position: relative; border-right: 1px solid var(--ink); }
+.axo-aside { position: relative; border-right: 1px solid var(--ink); display: flex; align-items: center; }
 .axo-shader { position: absolute !important; inset: 0; }
-.axo-aside-card { position: sticky; top: 24px; margin: 24px; padding: 28px; background: var(--paper); border: 1px solid var(--ink); display: grid; gap: 32px; z-index: 1; }
+.axo-aside-card { position: relative; width: calc(100% - 48px); margin: 24px; padding: 28px; background: var(--paper); border: 1px solid var(--ink); display: grid; gap: 32px; z-index: 1; }
 .axo-steps { list-style: none; margin: 0; padding: 0; display: grid; }
 .axo-steps li button { width: 100%; display: flex; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--hair); font-size: 17px; text-align: left; opacity: 1; }
 .axo-steps li button:disabled { opacity: 0.4; cursor: default; }
@@ -93,3 +93,7 @@
   .ax-token-form { grid-template-columns: 1fr; }
   .ax-card { box-shadow: 4px 4px 0 var(--ink); padding: 18px; }
 }
+
+.ax-demo { max-width: 560px; font-size: 14px; color: var(--ink-2); }
+.ax-demo summary { cursor: pointer; }
+.ax-demo .ax-token-form { margin-top: 12px; }

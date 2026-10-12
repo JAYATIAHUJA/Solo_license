@@ -68,6 +68,18 @@ def cmd_onboard(args: argparse.Namespace) -> int:
     return onboard.run(args, get=_get)
 
 
+def cmd_token(args: argparse.Namespace) -> int:
+    """Print this machine's dashboard access token, for the sign-in page."""
+    from sololicense import credentials
+
+    creds = credentials.load()
+    if not creds:
+        print("No access token yet. Run `solo-license onboard` first.", file=sys.stderr)
+        return 1
+    print(creds["admin_token"])
+    return 0
+
+
 def cmd_init_global(args: argparse.Namespace) -> int:
     from sololicense.coding import global_install
 
@@ -355,6 +367,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("prompt", help="print a prompt that makes your agent install Solo License")
     p.add_argument("--agent", default="auto")
     p.set_defaults(fn=cmd_prompt)
+
+    p = sub.add_parser("token", help="print this machine's dashboard access token (paste it on the sign-in page)")
+    p.set_defaults(fn=cmd_token)
 
     p = sub.add_parser("hook", help="command-hook shim (called by the agent)")
     p.add_argument("agent")

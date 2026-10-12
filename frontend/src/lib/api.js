@@ -43,6 +43,8 @@ export const api = {
   saveCodingPolicy: (body) => request('/api/coding/policy', { method: 'PUT', body }),
   codingFreeze: (repo, enabled) => request('/api/coding/freeze', { method: 'POST', body: { repo, enabled } }),
   coding: (repo) => request(`/api/coding${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`),
+  wizard: () => request('/api/wizard'),
+  wizardSelect: (agents) => request('/api/wizard/select', { method: 'POST', body: { agents } }),
   codingDecisions: (repo) => request(`/api/coding/decisions${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`),
   codingRestore: (body) => request('/api/coding/licenses/restore', { method: 'POST', body }),
   codingRewind: (turnId) => request(`/api/coding/turns/${turnId}/rewind`, { method: 'POST' }),

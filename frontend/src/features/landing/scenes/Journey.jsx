@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AnimatePresence, motion, useMotionValueEvent, useTransform } from 'motion/react';
+import { useMotionValueEvent, useTransform } from 'motion/react';
 import { ScrambleText } from '../../../components/fx/ScrambleText.jsx';
 import { Pinned } from '../Pinned.jsx';
 import { CODING_LEVELS as LEVELS, LicenseCard } from './LicenseCard.jsx';
@@ -41,20 +41,12 @@ function Scene({ p }) {
           <span className="mono muted">(004)</span>
           <ScrambleText className="mono" text="How it earns the keys" />
         </div>
-        <AnimatePresence mode="wait">
-          <motion.div key={state.level} initial={{ opacity: 0, y: 30, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -30, filter: 'blur(8px)' }} transition={{ duration: 0.5 }}>
-            <span className="sc-big-level serif">{LEVELS[state.level].code}</span>
-            <h2 className="sc-title serif">{story.title}</h2>
-            <p className="sc-body">{story.body}</p>
-          </motion.div>
-        </AnimatePresence>
-        <ol className="sc-steps">
-          {LEVELS.map((l) => (
-            <li key={l.id} className={l.id === state.level ? 'is-on' : l.id < state.level ? 'is-done' : ''}>
-              <span className="mono">{l.code}</span> {l.name}
-            </li>
-          ))}
-        </ol>
+        <div>
+          <span className="sc-big-level serif">{LEVELS[state.level].code}</span>
+          <h2 className="sc-title serif">{story.title}</h2>
+          <p className="sc-body">{story.body}</p>
+        </div>
+        <hr className="sc-rule" />
       </div>
 
       <div className="sc-journey-card" style={{ perspective: 1400 }}>

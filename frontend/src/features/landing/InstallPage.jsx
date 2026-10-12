@@ -3,7 +3,6 @@ import { PaperGrain } from '../../components/shader/PaperBackdrop.jsx';
 import { Nav } from './sections/Nav.jsx';
 import { Install } from './sections/Install.jsx';
 import { AskBar } from './sections/AskBar.jsx';
-import { Footer } from './sections/Footer.jsx';
 import './landing.css';
 import './scenes/scenes.css';
 
@@ -22,7 +21,6 @@ export function InstallPage() {
         </section>
         <Install />
       </main>
-      <Footer />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useStore } from '../../lib/store.jsx';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Toast } from './components/Toast.jsx';
+import { PaperGrain } from '../../components/shader/PaperBackdrop.jsx';
 import './app.css';
 
 export function AppShell() {
@@ -40,6 +41,7 @@ export function AppShell() {
         </main>
       </div>
       <Toast />
+      <PaperGrain opacity={0.3} />
     </div>
   );
 }

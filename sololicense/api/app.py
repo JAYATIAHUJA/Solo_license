@@ -805,12 +805,101 @@ def agent_hook(
         return native.body or {}
 
 
-@app.get("/api/coding/agents")
-def coding_agents() -> dict:
-    """Supported agents and how each one is installed (public: no data)."""
+# --- the onboard wizard: the browser chooses the agents, the gate installs -------
+
+_wizard: dict = {}
+
+
+@app.get("/api/wizard")
+def wizard_state() -> dict:
+    """What the browser wizard shows: detected agents, selection, install result."""
     from sololicense.coding import agents
 
-    return {"agents": [
+    found = _wizard.get("found") or []
+    return {
+        "repo": _wizard.get("repo", ""),
+        "status": _wizard.get("status", "waiting"),  # waiting | installed
+        "agents": [
+            {"key": a.key, "label": a.label, "transport": a.transport,
+             "can_send_back": a.can_send_back, "found": a.key in found}
+            for a in agents.AGENTS.values()
+        ],
+        "selected": _wizard.get("selected", []),
+        "installed": _wizard.get("installed", []),
+        "errors": _wizard.get("errors", {}),
+    }
+
+
+@app.post("/api/wizard/start")
+def wizard_start(payload: dict = Body(default_factory=dict),
+                 actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """``solo-license onboard`` registers the repository before opening the browser."""
+    from sololicense.coding import install as install_mod
+
+    from pathlib import Path as _P
+
+    repo = str(payload.get("repo", "")).strip()[:4096]
+    if not repo:
+        raise HTTPException(status_code=422, detail="A repository path is required.")
+    _wizard.clear()
+    _wizard.update(repo=repo, found=install_mod.detect(_P(repo)), status="waiting",
+                   selected=[], installed=[], errors={}, url=str(payload.get("url", "http://127.0.0.1:8000")).rstrip("/"))
+    return wizard_state()
+
+
+@app.post("/api/wizard/select")
+def wizard_select(payload: dict = Body(default_factory=dict),
+                  actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """Install hooks for exactly the agents chosen in the browser, nothing else."""
+    from sololicense.coding import install as install_mod
+    from sololicense.coding.agents import AGENTS, resolve
+
+    if not _wizard.get("repo"):
+        raise HTTPException(status_code=409, detail="No onboard wizard is running. Start it with solo-license onboard.")
+    chosen = payload.get("agents") or []
+    if not isinstance(chosen, list) or not chosen:
+        raise HTTPException(status_code=422, detail="Pick at least one agent.")
+    from pathlib import Path as _P
+
+    repo = _P(_wizard["repo"])
+    url = _wizard.get("url") or "http://127.0.0.1:8000"
+    installed: list[str] = []
+    errors: dict[str, str] = {}
+    for key in chosen[:12]:
+        if key not in AGENTS:
+            errors[key] = "unknown agent"
+            continue
+        try:
+            install_mod.install(repo, url, resolve(key).key)
+            installed.append(key)
+        except SystemExit as error:  # install refuses unsafe paths this way
+            errors[key] = str(error)
+        except Exception as error:  # noqa: BLE001 - one agent failing must not stop the rest
+            errors[key] = f"{type(error).__name__}: {error}"[:200]
+    _wizard.update(selected=chosen, installed=installed, errors=errors,
+                   status="installed" if installed else "waiting")
+    return wizard_state()
+
+
+@app.get("/api/coding/agents")
+def coding_agents(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """Supported agents and how each one is installed. `detected` (agents that
+    left a trace on this machine) is only told to this machine or a signed-in user."""
+    import pathlib
+
+    from sololicense.coding import agents, install
+
+    host = request.client.host if request.client else ""
+    local = host in ("127.0.0.1", "::1", "localhost", "testclient")
+    if not local and authorization:
+        try:
+            current_actor(authorization)
+            local = True
+        except HTTPException:
+            local = False
+    detected = install.detect(pathlib.Path.cwd()) if local else []
+
+    return {"detected": detected, "agents": [
         {"key": a.key, "label": a.label, "transport": a.transport, "config_path": a.config_path,
          "can_send_back": a.can_send_back, "notes": a.notes, "docs": a.docs,
          "install": f"solo-license init --agent {a.key}"}
