@@ -27,7 +27,7 @@ if [ ! -f "$CLAIMS" ]; then
   exit 2
 fi
 
-LOGDIR=$(mktemp -d "${TMPDIR:-/tmp}solo-verify.XXXXXX") || exit 2
+LOGDIR=$(mktemp -d "${TMPDIR:-/tmp}/solo-verify.XXXXXX") || exit 2
 trap 'rm -rf "$LOGDIR"' EXIT
 
 # One interpreter spawn reads the whole file and emits `id<TAB>command`
