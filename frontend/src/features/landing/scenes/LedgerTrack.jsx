@@ -31,7 +31,7 @@ function Track({ p }) {
       <div className="sc-ledger-head">
         <div className="sc-head"><span className="mono muted">(010)</span><ScrambleText className="mono" text="The ledger" /></div>
         <h2 className="sc-title serif">Every change is a <em className="italic">commit.</em></h2>
-        <p className="sc-body">Promotions, demotions and restores are appended to <code className="mono">ledger/license_ledger.jsonl</code> and committed - a history you can diff, blame and audit.</p>
+        <p className="sc-body">Promotions, demotions, flags and resumes are appended to <code className="mono">ledger/license_ledger.jsonl</code> in your ledger repo and committed - a history you can diff, blame and audit.</p>
       </div>
       <div className="sc-ledger-rail">
         <SketchRule seed={1201} draw={false} />

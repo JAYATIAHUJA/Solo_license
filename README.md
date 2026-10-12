@@ -187,7 +187,7 @@ per developer against asking every time, about 68× the $15 Team price; $0.48 un
 
 **neatlogs - one trace per turn.** `turn.start → gate.allow|ask|deny → tool.ran|failed|observed →
 turn.blocked → license.promote|demote → turn.end`, with detections (`forbidden_action`, loops) as error
-spans and GenAI attributes on model calls. The before/after replay sends all 15 turns as traces.
+spans and GenAI attributes on model calls. The before/after replay records all 15 turns as traces (sent to neatlogs when `NEATLOGS_API_KEY` is set).
 
 **Entire - the history behind every license change.** Entire's session id *is* the agent's
 `session_id`, so a failed turn points at the last checkpoint of that session; promotions and demotions
@@ -196,7 +196,7 @@ including review findings that were fixed before merging (injection in hook path
 an agent's own settings, regressions hidden by a cached verdict). Details: [`evidence/entire.md`](evidence/entire.md).
 
 ```bash
-git log --oneline -- ledger/license_ledger.jsonl       # how each action class earned and lost its license
+git -C ~/.solo-license/ledger log --oneline           # how each action class earned and lost its license
 entire checkpoint list                                 # the sessions behind the code
 ```
 
@@ -211,7 +211,7 @@ against the incident bill of blind autonomy. Model and plan: [`planning/cfo/`](p
 | Before / after with numbers | [`evidence/benchmarks/coding_before_after.md`](evidence/benchmarks/coding_before_after.md) |
 | A failure and what happened next | Over-edited turn sent back → reverted → verified; force-push denied and `git-remote` demoted; a regression blocks and demotes `file-edit`; a flagged decision drops the class and tells the agent |
 | neatlogs traces | one per turn (trace ids in the benchmark JSON), deep-linked from each history row in the dashboard |
-| Entire | Trails and Entire Gates on every PR, checkpoints linked to failed turns, ledger: `git log -- ledger/license_ledger.jsonl` |
+| Entire | Trails and Entire Gates on every PR, checkpoints linked to failed turns, the replay's ledger and its commits: [`evidence/benchmarks/coding_ledger_commits.txt`](evidence/benchmarks/coding_ledger_commits.txt) |
 | cfo.ai plan | [`planning/cfo/coding_business_model.md`](planning/cfo/coding_business_model.md) · [screenshot](evidence/assets/screens/cfo-scorecard.png) |
 | Tests | `make test` (backend, pytest) and `npm --prefix frontend test`; CI runs both plus the frontend build on every PR |
 | Commits during the hackathon | `git log --since=2026-10-10` |

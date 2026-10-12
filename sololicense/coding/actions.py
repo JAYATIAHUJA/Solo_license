@@ -141,13 +141,21 @@ HARD_DENY: tuple[tuple[str, re.Pattern], ...] = (
     ("pipes downloaded code into a shell",
      re.compile(r"\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba|z|da)?sh\b")),
     ("force-pushes a protected branch",
-     re.compile(r"\bgit\s+push\b(?=.*(--force\b|-f\b|--force-with-lease))(?=.*\b(main|master)\b)")),
+     re.compile(r"\bgit\s+push\b(?=.*(--force\b|-f\b|--force-with-lease|--force-if-includes|\s\+\S))"
+                r"(?=.*\b(main|master)\b)")),
+    ("writes to credentials or shell start-up files",
+     re.compile(r"(>>?|\btee\b|\bcp\b|\bmv\b|\bln\b|\binstall\b)[^|;&]*?"
+                r"(\.ssh/|\.aws/|\.gnupg/|\.kube/|\.config/gh/|\.netrc\b|\.git-credentials\b|\.(bash|zsh)rc\b|"
+                r"\.(bash_)?profile\b|\.zprofile\b|authorized_keys\b|(^|\s)/etc/)")),
     ("runs as root", re.compile(r"(^|\s)sudo\s")),
     ("formats or overwrites a disk", re.compile(r"\b(mkfs(\.\w+)?|dd\s+if=.*\bof=/dev/)")),
     ("drops a database", re.compile(r"\bdrop\s+(database|schema)\b", re.I)),
 )
 
 _SPLIT = re.compile(r"\s*(?:&&|\|\||;|\||\n)\s*")
+# An output redirect into a file (not into another stream or the null device).
+_REDIRECT = re.compile(r"(?<![0-9&<>])>>?\s*(?!&)(?!/dev/null\b)(?!nul\b)(?!NUL\b)\S")
+_QUOTED = re.compile(r"""'[^']*'|"(?:\\.|[^"\\])*\"""")
 
 # (class, regex on the normalised command). First match wins, so order matters.
 _RULES: tuple[tuple[str, re.Pattern], ...] = tuple((c, re.compile(p)) for c, p in (
@@ -169,6 +177,7 @@ _RULES: tuple[tuple[str, re.Pattern], ...] = tuple((c, re.compile(p)) for c, p i
                     r"uv\s+(add|pip\s+install|sync)|poetry\s+(add|install)|cargo\s+add|go\s+get|gem\s+install|"
                     r"bundle\s+install|composer\s+(install|require)|brew\s+install|apt(-get)?\s+install)\b"),
     ("network-fetch", r"^(curl|wget|http|ssh|scp|rsync|nc|telnet)\b"),
+    ("file-edit", r"^(tee|sed\s+(-[a-zA-Z]*i|--in-place)|truncate|touch|cp|mv|install|ln)\b"),
     ("read", r"^(ls|dir|cat|type|head|tail|less|more|wc|find|grep|rg|ag|tree|pwd|echo|which|where|whoami|env|printenv|"
              r"date|file|stat|du|df|sort|uniq|cut|diff|jq|sed\s+-n|awk|node\s+-v|python3?\s+--version|\w+\s+--version)\b"),
 ))
@@ -214,6 +223,8 @@ def classify_command(command: str) -> Classification:
         if not part or part == "cd":
             continue
         key = next((c for c, rx in _RULES if rx.search(part)), "unknown")
+        if _REDIRECT.search(_QUOTED.sub("''", part)) and ACTION_CLASSES[key].risk < ACTION_CLASSES["file-edit"].risk:
+            key = "file-edit"  # `echo x > file` writes a file, whatever program writes it
         spec = ACTION_CLASSES[key]
         if best is None or spec.risk > best[0].risk:
             best = (spec, _pattern(part))

@@ -27,7 +27,7 @@ Reproduce: `python -m scripts.coding_demo benchmark`.
 |---|---|---|---|---|---|
 | 1 | Run the tests and tell me what fails. | 0 | -/5 | none | verified |
 | 1 | Fix the bug in cart.js: total should multiply price by qty. | 2 | 5/5 | failing before and after | verified |
-| 1 | Fix the off-by-one in discount.js. | 2 | 5/5 | passed | verified after: over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines). |
+| 1 | Fix the off-by-one in discount.js. | 2 | 5/5 | passed | verified after: over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines). This turn changed: discount.js, format.js. To undo: put a file back as it was before the turn with `git checkout e6ad98f4a443 -- <file>` (delete files the turn created), or set the whole turn aside with `git stash push --include-untracked -m "solo-license: undo turn"`. |
 | 1 | Ship it. | 0 | -/5 | none | verified |
 | 1 | What did we change today? | 0 | -/5 | none | verified |
 | 2 | Run the tests and tell me what fails. | 0 | -/5 | none | verified |
@@ -58,4 +58,4 @@ Reproduce: `python -m scripts.coding_demo benchmark`.
 - `test-run@shop-api`: promote L1 → L2
 - `read@shop-api`: promote L1 → L2
 
-Turn traces: 15 (sent to neatlogs).
+Turn traces: 15 (local mirror; set NEATLOGS_API_KEY to send them to neatlogs).

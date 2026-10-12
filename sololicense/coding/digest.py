@@ -14,6 +14,28 @@ def _args_digest(command: str) -> str:
     return hashlib.sha256(str(command).encode("utf-8")).hexdigest()[:12]
 
 
+def _turn_so_far(conn: sqlite3.Connection, turn: sqlite3.Row | None) -> dict:
+    """What this turn has done so far: the files it edited, how big the change
+    is once checked, and the calls that failed (names and outcomes only)."""
+    if turn is None:
+        return {"files_touched": [], "diff_stat": "", "failures": []}
+    rows = conn.execute("SELECT tool_name, command, action_class, outcome FROM agent_decisions "
+                        "WHERE turn_id = ? ORDER BY id", (turn["id"],)).fetchall()
+    files = []
+    for row in rows:
+        if row["action_class"] == "file-edit":
+            command = str(row["command"])
+            edit_tool = row["tool_name"] in ("Edit", "Write", "MultiEdit", "NotebookEdit")
+            target = (command.split(" ", 1)[-1] if edit_tool else command).strip()[:200]
+            if target and target not in files:
+                files.append(target)
+    failures = [str(row["command"])[:120] for row in rows if row["outcome"] == "failed"][-8:]
+    stat = ""
+    if turn["lines_changed"] is not None:
+        stat = f"{turn['lines_changed']} lines in {turn['files_changed']} files"
+    return {"files_touched": files[:20], "diff_stat": stat, "failures": failures}
+
+
 def build(conn: sqlite3.Connection, session_id: str, *, repo: str = "", principal: str = "main",
           current_call: dict[str, Any] | None = None) -> dict:
     """Build a stable, JSON-serialisable digest for one active session."""
@@ -44,7 +66,7 @@ def build(conn: sqlite3.Connection, session_id: str, *, repo: str = "", principa
         safe_call["args_digest"] = _args_digest(json.dumps(call["input"], sort_keys=True, default=str))
     digest = {
         "goal": str(turn["prompt"] if turn else "")[:4000],
-        "turn": {"files_touched": [], "diff_stat": "", "failures": []},
+        "turn": _turn_so_far(conn, turn),
         "recent_calls": recent,
         "trust": trust,
         "current_call": {**safe_call, "principal": principal},

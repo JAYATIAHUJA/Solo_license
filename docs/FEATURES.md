@@ -75,7 +75,7 @@ live with that agent).
 | **Trace links** | each turn and decision in the dashboard and each change in the history links to its neatlogs trace | Dashboard | ✅ |
 | **`solo-license explain [turn]`** | one turn's whole story: decisions, what the agent was told, license changes with ledger commits, the trace timeline, the Entire checkpoint, how to rewind | CLI | ✅ |
 | **Entire checkpoints** | a failed turn is linked to the agent's last Entire checkpoint (`entire checkpoint explain <id>`) | Dashboard, CLI | ✅ with the Entire CLI |
-| **License ledger** | every promote, demote, flag, resume and budget stop is a git commit: `git log -- ledger/license_ledger.jsonl` | git, Entire | ✅ |
+| **License ledger** | every promote, demote, flag, resume and budget stop is a git commit in the ledger repo; the replay's ledger is in `evidence/benchmarks/` | git, Entire | ✅ |
 | Entire Trails + Gates | every pull request in this repository went through Entire Trails and the Entire Gates check | Entire | ✅ |
 | **cfo.ai model** | per-developer cost of asking every time vs. full access vs. Solo License, pricing, unit economics, runway: `make cfo` | `planning/cfo/` | ✅ |
 
