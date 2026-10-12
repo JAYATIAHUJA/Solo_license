@@ -207,10 +207,14 @@ def benchmark() -> dict:
             "SELECT action_class || '@' || repo AS task_class, kind, from_level, to_level, git_sha "
             "FROM agent_events ORDER BY id")]
         traces = [r["trace_id"] for r in ctx.conn.execute("SELECT trace_id FROM agent_turns ORDER BY id")]
+        ledger_file = ledger / "ledger" / "license_ledger.jsonl"
+        ledger_lines = ledger_file.read_text(encoding="utf-8") if ledger_file.exists() else ""
+        ledger_log = subprocess.run(["git", "log", "--format=%h %s", "--", "ledger/license_ledger.jsonl"],
+                                    cwd=ledger, capture_output=True, text=True, check=False).stdout
         ctx.neatlogs.shutdown()
         ctx.conn.close()
     result.update(licenses=licenses, events=events, traces=traces,
-                  neatlogs=bool(config.neatlogs_api_key))
+                  neatlogs=bool(config.neatlogs_api_key), ledger=ledger_lines, ledger_log=ledger_log)
     return result
 
 
@@ -274,6 +278,8 @@ def main() -> None:
         return
     result = benchmark()
     OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "coding_ledger.jsonl").write_text(result.pop("ledger"), encoding="utf-8")
+    (OUT / "coding_ledger_commits.txt").write_text(result.pop("ledger_log"), encoding="utf-8")
     (OUT / "coding_before_after.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     (OUT / "coding_before_after.md").write_text(report(result), encoding="utf-8")
     print(report(result).encode("ascii", "replace").decode())

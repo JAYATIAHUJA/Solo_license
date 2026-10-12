@@ -1,0 +1,4 @@
+1e505bb license(read@shop-api): promote L1 -> L2
+553b8cf license(test-run@shop-api): promote L1 -> L2
+5cec4d3 license(read@shop-api): promote L0 -> L1
+15b0848 license(test-run@shop-api): promote L0 -> L1

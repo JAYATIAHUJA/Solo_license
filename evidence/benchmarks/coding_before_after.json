@@ -52,7 +52,7 @@
     {
       "day": 1,
       "prompt": "Fix the off-by-one in discount.js.",
-      "sent_back": "over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines).",
+      "sent_back": "over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines). This turn changed: discount.js, format.js. To undo: put a file back as it was before the turn with `git checkout e6ad98f4a443 -- <file>` (delete files the turn created), or set the whole turn aside with `git stash push --include-untracked -m \"solo-license: undo turn\"`.",
       "status": "verified",
       "scope_score": 5,
       "lines_changed": 2,
@@ -205,46 +205,46 @@
       "kind": "promote",
       "from_level": 0,
       "to_level": 1,
-      "git_sha": "60ed30a"
+      "git_sha": "15b0848"
     },
     {
       "task_class": "read@shop-api",
       "kind": "promote",
       "from_level": 0,
       "to_level": 1,
-      "git_sha": "75c89a1"
+      "git_sha": "5cec4d3"
     },
     {
       "task_class": "test-run@shop-api",
       "kind": "promote",
       "from_level": 1,
       "to_level": 2,
-      "git_sha": "250924f"
+      "git_sha": "553b8cf"
     },
     {
       "task_class": "read@shop-api",
       "kind": "promote",
       "from_level": 1,
       "to_level": 2,
-      "git_sha": "70f7a2e"
+      "git_sha": "1e505bb"
     }
   ],
   "traces": [
-    "a36b75e299cbd32b606e4658a854a2a7",
-    "7ad6f28ed25fe27b43db094a082f28ac",
-    "5037c38e7b98b97ad57d25f2dc98a61a",
-    "a1cd723e3b16329b251e669a757a16f3",
-    "c64163fd731af05f117c4085587e9266",
-    "f9d23d879a60eeca7dc7dd900289d42c",
-    "c9e0f97eff672b3256c1455bea97dd86",
-    "05d72bee75aa300a5b4af8568976f928",
-    "17435743f8e8e11cfd268048eb61cfe3",
-    "9c4601b858ef56a9549152700fb68300",
-    "6bdbec5cfa8eb94185a61f698cac28e0",
-    "ff31fe6416035114e218363bfa9e05fe",
-    "9e99ae59457cb126a495beb9562e7d32",
-    "40525f070f752cfc0910ba5f491044b4",
-    "5190edcdfd04f2fadbfc251e290f63e2"
+    "ac6365e9aee54817b5b8f439712e7b76",
+    "41612f2f9ecb4764b710c16b256763a8",
+    "cbcf817185134392a3246079d41a13d1",
+    "4b58fec8208848bf806a28900864719b",
+    "447a500f9662435c81d9233ffd811e5e",
+    "7c006f6db16646d1a55942e5804a76a9",
+    "6627fd5ce72545008b36020d40125816",
+    "dbd1fb8e079244febf105c827cb567ab",
+    "8036f7b75e9e4befba0be61b115bfb40",
+    "8ac30855fbd64817854039e6ec915964",
+    "172c798ea31e4767b426bcfa0a228d88",
+    "59fa41c7b0bb40be8781d4177d0ae77a",
+    "2d21b581b46a4ba9ac0549db910e1528",
+    "fa43053faa9741e7a20aadeaafcb6e33",
+    "45ed206bda1e4df8a60ebdf515809421"
   ],
-  "neatlogs": true
+  "neatlogs": false
 }

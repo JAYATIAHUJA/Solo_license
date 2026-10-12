@@ -1,99 +1,77 @@
 # How Solo License uses Entire
 
-Entire is used in two ways: as the **audit trail of the product** (every change to what the agent
-may do is a git commit) and as the **record of how the product was built** (checkpoints of the AI
-coding sessions, and Trails that gate every pull request).
+Entire is used in two ways: as the **audit trail of the product** (every change to what an agent may do
+is a git commit, and a failed turn points at the agent's Entire checkpoint) and as the **record of how the
+product was built** (checkpoints of the AI coding sessions, and Trails with Gates on every pull request).
 
-## 1 · Every permission change is a commit
+## 1 · Every license change is a commit
 
-The licence service writes each promote / pause / resume to
-[`ledger/license_ledger.jsonl`](../ledger/license_ledger.jsonl) and commits it with the reason, the
-run id and the neatlogs trace id. Entire can explain any of them.
+The gate appends each promote, demote, flag, resume and budget stop to `ledger/license_ledger.jsonl` in
+the ledger repository (`SOLO_LEDGER_REPO`) and commits it, with the reason and the neatlogs trace id.
+The before/after replay's ledger is committed as evidence:
+[`benchmarks/coding_ledger.jsonl`](benchmarks/coding_ledger.jsonl) and
+[`benchmarks/coding_ledger_commits.txt`](benchmarks/coding_ledger_commits.txt), e.g.
 
-```bash
-git log --oneline -- ledger/license_ledger.jsonl    # 31 commits at the time of writing
-git show <sha> -- ledger/license_ledger.jsonl       # the reason, run and trace behind one change
-entire checkpoint explain <sha>                     # the session behind it, when one is linked
+```
+15b0848 license(test-run@shop-api): promote L0 -> L1
+553b8cf license(test-run@shop-api): promote L1 -> L2
 ```
 
-## 2 · Checkpoints of the build sessions
-
-Commits made with Entire's git hooks carry an `Entire-Checkpoint:` trailer that links the code to
-the AI session (prompts, transcript, files) that produced it.
-
-| Commit | Checkpoint |
-|---|---|
-| `87ab58d` fix(app): evidence page tells the recovery story; screenshots for the README | `01M4N1QZY7KGEB08SN5PEKZR1C` |
+On your machine:
 
 ```bash
+git -C ~/.solo-license/ledger log --oneline -- ledger/license_ledger.jsonl
+```
+
+## 2 · A failed turn points at its Entire checkpoint
+
+When a turn fails its end-of-turn check, the gate looks up the agent's last Entire checkpoint for that
+session (`entire checkpoint list --json`, [`sololicense/coding/entire.py`](../sololicense/coding/entire.py))
+and keeps it on the turn. The dashboard shows it next to **Rewind**, and the CLI prints it:
+
+```bash
+solo-license explain            # ... Entire checkpoint: entire checkpoint explain <id>
+entire checkpoint explain <id>  # the prompts, transcript and files behind that turn
+```
+
+## 3 · Checkpoints of the build sessions
+
+Commits made with Entire's git hooks carry an `Entire-Checkpoint:` trailer that links the code to the AI
+session that produced it. For example, `408592b` (MCP tool classes, PR #59) carries
+`Entire-Checkpoint: 01M4R1TMHGFAAGTADDEE7AX76V`.
+
+```bash
+git log --format='%h %s%n  %(trailers:key=Entire-Checkpoint,valueonly)' -5
 entire checkpoint list
-entire checkpoint explain 87ab58d
-entire why sololicense/agent/worker.py:351      # provenance of one line
 ```
 
-Some earlier commits on these branches have no trailer: Entire's `prepare-commit-msg` hook stalled
-when commits were made from Git Bash on Windows, and the commits were completed without it.
-Commits made from PowerShell carry the trailer.
+Some commits made from Git Bash on Windows have no trailer: Entire's `prepare-commit-msg` hook stalled
+there, and those commits were completed without it.
 
-## 3 · Trails gate every pull request
+## 4 · Trails and Gates on every pull request
 
-Runners and Trails are enabled on the repository. Each pull request gets an **Entire Gates** check
-(approvals, CI checks, agent findings, up to date):
+Each pull request gets an **Entire Gates** check: approvals, CI checks, agent review findings, up to date.
+Review findings were fixed before merging, for example a fail-open in the Windows background stop (a
+process whose command line could not be read was treated as the gate; it is now left alone).
 
 | Pull request | Trail |
 |---|---|
-| #8 Score autonomy policies on τ-bench retail | [trail 2](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/2) |
-| #9 Ticket agent with recovery, Stripe/CSV connectors, inbox and earned trust | [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) |
-| #10 Evidence pack: before/after recovery with paired neatlogs traces | [trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4) |
+| #54 Remediations on main and fixes from the live check | [trail 48](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/48) |
+| #64 Hero shows the gate at work | [trail 58](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/58) |
+| #65 `solo-license budget` | [trail 59](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/59) |
 
-### Capturing evaluated Trail evidence
-
-For judge evidence, capture a Trail only **after** its Entire Gates have evaluated the pushed
-commit. A useful screenshot shows the Trail title and branch, the commit or diff, and populated
-Gates for findings, checks, and up-to-date status. A Trail that was merged before evaluation may
-show `Not checked`; that is audit history, but not runner evidence.
+## 5 · Entire Graph: what a demotion touches
 
 ```bash
-entire trail list --status any
-entire trail create                 # create a Trail for the current evidence branch
-git push origin <branch>            # runners trigger from the push
-```
-
-Wait for the Trail page to report the runner outcomes before merging. The expected clean result
-for a documentation-only change is no findings, rather than an empty, unevaluated Gates panel.
-
-## 4 · Entire Graph: what the recovery path touches
-
-`entire graph` (plugin v0.4.0) indexes the repository and answers structural questions before a
-change. Searching in plain words finds the recovery path first, with its covering tests:
-
-```bash
-entire graph search --repo . --query "recover a failed refund" --profile full
-```
-
-Top result: `RefundWorker._recover` (`sololicense/agent/worker.py:351`), then its caller
-`RefundWorker._run_refund`; suggested check:
-`python -m pytest tests/integration/test_agent_loop.py -k test_quiet_failure_is_recovered_and_the_customer_still_gets_a_true_reply`
-(2 more covering tests: `test_worker_recovers_a_lost_stripe_refund`,
-`test_quiet_failure_is_caught_recovered_and_still_demotes`).
-
-```bash
-entire graph impact --repo . --symbol _recover
+entire graph impact --repo . --symbol _fail
 ```
 
 ```
-Impact: RefundWorker._recover (sololicense/agent/worker.py:351) def=351 span=351-387 [method in RefundWorker]
-Blast radius: 3 callers (2 direct, 1 transitive), 2 callees, 2 type consumers, 1 data flow, 25 co-change files, 12 siblings.
-Callers (2 direct, 1 transitive; who breaks if behavior changes):
-- RefundWorker._run_refund (sololicense/agent/worker.py:223, def :137)
-- RefundWorker.run_refund (sololicense/agent/worker.py:118, def :96) [via RefundWorker._run_refund]
-Callees (2; what it depends on):
-- sololicense.services.verify
-- RefundWorker._read (sololicense/agent/worker.py:322)
-Type consumers: -> RefundRequest (sololicense/domain/models.py:35) [PARAM_TYPE, USES_TYPE]
-Co-change coupling: sololicense/api/app.py (6 recent commits before the restructure), db/schema.sql (4), db/database.py (4), …
+Impact: CodingGate._fail (sololicense/coding/gate.py:562) def=562 span=562-573 [method in CodingGate]
+Blast radius: 8 callers (4 direct, 4 transitive), 6 callees, 2 type consumers, 2 data flows, ...
+Callers: CodingGate.permission, CodingGate.tool_result, CodingGate.stop, CodingGate.subagent_stop, ...
+Callees: effective_license, forget_patterns, CodingGate._change, _subagent_ceiling, _checkpoint_for, ...
 ```
 
-The blast radius is small and every caller goes through `run_refund`, which is why recovery could
-be added — and switched off for the before/after benchmark with `worker.recovery_enabled` —
-without touching the API, the licence service or the connectors.
+Every path that takes trust away (a forbidden attempt, a failed tool, a failed turn, a subagent's stop)
+goes through `_fail`, which is why one demotion rule holds for all eleven agents.
