@@ -8,7 +8,7 @@ const LINKS = [
   ['#journey', 'How it earns'],
   ['#agent', 'The loop'],
   ['#crash', 'The crash'],
-  ['#evidence', 'Evidence'],
+  ['#tour', 'Product'],
   ['#install', 'Install'],
   ['#faq', 'FAQ'],
 ];
