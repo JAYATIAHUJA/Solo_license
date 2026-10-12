@@ -610,6 +610,44 @@ def flag_coding_decision(
         return coding_payload(context)
 
 
+def budget_payload(context: AppContext) -> dict:
+    """Spend per session and per repo today, the caps, and what earned autonomy saved."""
+    from sololicense.coding import agents, budget
+    from sololicense.coding import policy as policy_mod
+
+    repos = [dict(r) for r in context.conn.execute("SELECT repo, path FROM agent_repos")]
+    out = budget.payload(context.conn, repos,
+                         lambda r: policy_mod.effective(context.conn, r["repo"], r["path"]).budget,
+                         {a.key: a.label for a in agents.AGENTS.values()})
+    out["savings"] = coding_savings(context)
+    return out
+
+
+@app.get("/api/coding/budget")
+def coding_budget(_: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
+    """What the coding agents spent, against the caps in the policy."""
+    with _lock:
+        return budget_payload(get_context())
+
+
+class BudgetResumePayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200)
+    session_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+@app.post("/api/coding/budget/resume")
+def resume_coding_budget(
+    payload: BudgetResumePayload, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
+    """A person lets the agent continue past a reached cap (the session, and the repo today)."""
+    with _lock:
+        context = get_context()
+        if context.coding_gate is None:
+            raise HTTPException(status_code=422, detail="The coding gate is not running.")
+        context.coding_gate.resume_budget(payload.repo, payload.session_id, actor_id=actor.actor_id)
+        return budget_payload(context)
+
+
 @app.post("/api/coding/jev/test")
 def test_jev(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
     """Ask Jev to classify one command with the saved key: proves the key works."""

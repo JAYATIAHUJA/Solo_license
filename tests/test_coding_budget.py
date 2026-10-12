@@ -225,3 +225,53 @@ def test_schema_is_idempotent(harness):
     apply_schema(harness.conn)
     tables = {r["name"] for r in harness.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"agent_spend", "agent_spend_days", "agent_budget_marks"} <= tables
+
+
+def test_budget_api_shows_spend_and_a_person_resumes_past_the_cap(gate, harness, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sololicense.api import app as app_module
+    from sololicense.db.database import init_db
+    from sololicense.security import Actor, Role
+
+    conn = init_db(tmp_path / "budget.db", check_same_thread=False)
+    threaded = CodingGate(conn, harness.tracer, GitLedger(repo_root=harness.repo),
+                          jev_client=JevClient(), checkpoint_lookup=lambda cwd, session: None)
+    policy.save_local(conn, "*", {"budget": {"session_usd": 1.0, "day_usd": 5.0, "warn_at": 0.8}})
+    conn.commit()
+
+    class Ctx:
+        coding_gate = threaded
+
+    Ctx.conn = conn
+    monkeypatch.setattr(app_module, "get_context", lambda: Ctx)
+    app_module.app.dependency_overrides[app_module.current_actor] = \
+        lambda: Actor(actor_id="human:jayati", role=Role.APPROVER)
+    try:
+        client = TestClient(app_module.app)
+        threaded.user_prompt(_event(gate, prompt="refactor the cart"))
+        _spend_output_tokens(gate, "m1", 80_000)            # $1.20 of $1.00
+        threaded.tool_result(_bash(gate, "npm test"), failed=False)
+
+        body = client.get("/api/coding/budget").json()
+        [repo] = body["repos"]
+        assert repo["repo"] == "shop-api" and repo["limits"]["session_usd"] == 1.0
+        assert repo["day_usd"] == pytest.approx(1.2)
+        [session] = body["sessions"]
+        assert session["session_id"] == "s1" and session["blocked"] and session["state"] == "cap"
+        assert session["usd"] == pytest.approx(1.2) and session["source"] == "estimate"
+        assert "usd_saved" in body["savings"]
+        assert any(a["agent"] == "claude-code" for a in body["agents"])
+
+        resumed = client.post("/api/coding/budget/resume", json={"repo": "shop-api", "session_id": "s1"})
+        assert resumed.status_code == 200
+        assert not resumed.json()["sessions"][0]["blocked"] and resumed.json()["repos"][0]["resumed_today"]
+        event = conn.execute("SELECT * FROM agent_events WHERE kind = 'budget' ORDER BY id DESC").fetchone()
+        assert event["actor_id"] == "human:jayati"
+
+        app_module.app.dependency_overrides[app_module.current_actor] = \
+            lambda: Actor(actor_id="human:viewer", role=Role.OPERATOR)
+        assert client.get("/api/coding/budget").status_code == 200
+        assert client.post("/api/coding/budget/resume", json={"repo": "shop-api"}).status_code == 403
+    finally:
+        app_module.app.dependency_overrides.clear()

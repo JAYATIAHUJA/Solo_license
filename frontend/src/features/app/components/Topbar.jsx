@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 
-const TITLES = { '': 'Coding agent', ledger: 'Permission history', settings: 'Settings' };
+const TITLES = { '': 'Coding agent', ledger: 'Permission history', budget: 'Budget', settings: 'Settings' };
 
 export function Topbar({ onMenu }) {
   const { pathname } = useLocation();
