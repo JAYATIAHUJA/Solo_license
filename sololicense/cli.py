@@ -1,6 +1,7 @@
 """``solo-license``: install, run and check Solo License from one command.
 
     uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent auto
+    solo-license onboard          # one command: hooks, local admin key, gate, browser, first check
     solo-license init --global    # user-level hooks: every repository on this machine
     solo-license serve            # the local gate + dashboard on http://127.0.0.1:8000
     solo-license serve --background / stop / status
@@ -60,6 +61,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_onboard(args: argparse.Namespace) -> int:
+    from sololicense import onboard
+
+    return onboard.run(args, get=_get)
+
+
 def cmd_init_global(args: argparse.Namespace) -> int:
     from sololicense.coding import global_install
 
@@ -104,6 +111,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
         print("The server needs its dependencies: uv tool install git+" + REPO_URL)
         return 1
     args.port = args.port or background.default_port()
+    from sololicense import credentials
+
+    credentials.apply_env()  # the admin token and settings key made by `solo-license onboard`, if any
     if args.background:
         return cmd_serve_background(args)
     home = Path(os.environ.get("SOLO_LICENSE_HOME", Path.home() / ".solo-license"))
@@ -142,6 +152,8 @@ def cmd_stop(args: argparse.Namespace) -> int:
     print({"stopped": f"Stopped the gate (pid {result.get('pid')}).",
            "still-running": f"Could not stop pid {result.get('pid')}.",
            "stale": "The gate was not running (cleared a stale pid file).",
+           "pid-reused": f"Pid {result.get('pid')} now belongs to another program; left it running "
+                         "and cleared the pid file.",
            "not-running": "The gate is not running.",
            "external": f"A gate answers at {result['url']}, but it was not started with --background; "
                        "stop it where it runs."}[result["status"]])
@@ -231,6 +243,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--url", default=DEFAULT_URL)
     _add_init_scope_args(p)
     p.set_defaults(fn=cmd_init)
+
+    p = sub.add_parser("onboard", help="one command: detect agents, install hooks, make a local admin, "
+                                         "start the gate, open the dashboard")
+    p.add_argument("--agent", default="auto")
+    p.add_argument("--repo", default=".")
+    p.add_argument("--url", default=DEFAULT_URL)
+    p.add_argument("--yes", "-y", action="store_true", help="write the hooks without asking")
+    p.add_argument("--no-browser", action="store_true", help="print the sign-in link instead of opening it")
+    p.set_defaults(fn=cmd_onboard)
 
     p = sub.add_parser("serve", help="run the local gate and dashboard")
     p.add_argument("--host", default="127.0.0.1")

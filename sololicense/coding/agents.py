@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 # The gate's own events (the routes under /api/hooks/<event>).
 PROMPT, PERMISSION, POST, POST_FAIL, STOP = "user-prompt", "permission", "post-tool", "post-tool-failure", "stop"
 SUB_START, SUB_STOP = "subagent-start", "subagent-stop"
+# OpenCode's permission.ask: the agent is about to ask a person about the call it just announced.
+PERSON_ASKED = "person-asked"
 # Claude Code's PreToolUse: only refusals no permission mode may skip; already in Claude Code's shape.
 PRE_TOOL = "pre-tool"
 
@@ -108,9 +110,11 @@ AGENTS: dict[str, AgentSpec] = {a.key: a for a in (
               can_send_back=False, notes="Enable Hooks in Cline's settings. The VS Code extension's hooks do not run on Windows.",
               docs="https://github.com/cline/cline/blob/main/.clinerules/hooks/README.md"),
     AgentSpec("opencode", "OpenCode (Groq, GLM and any model)", "plugin", ".opencode/plugins/solo-license.ts",
-              {"tool.execute.before": PERMISSION, "tool.execute.after": POST, "session.idle": STOP},
+              {"tool.execute.before": PERMISSION, "permission.ask": PERSON_ASKED, "tool.execute.after": POST,
+               "session.idle": STOP},
               can_send_back=False,
-              notes="A small TypeScript plugin calls the gate. This is how Groq models are usually used for coding.",
+              notes="A small TypeScript plugin calls the gate; OpenCode's permission.ask tells it when a person "
+                    "is asked, so approvals earn trust here too. This is how Groq and free models are usually used.",
               docs="https://opencode.ai/docs/plugins", aliases=("groq",)),
 )}
 
@@ -250,6 +254,8 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     if event == STOP:
         body["stop_hook_active"] = bool(_first(p, "stop_hook_active", "stopHookActive", default=False)) or \
             int(_first(p, "loop_count", default=0) or 0) > 0
+        return event, body
+    if event == PERSON_ASKED:
         return event, body
     if event in (SUB_START, SUB_STOP):
         body["subagent_type"] = str(_first(p, "agent_type", "subagent_type", default="unknown"))

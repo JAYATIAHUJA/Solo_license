@@ -352,10 +352,23 @@ async function gate(event: string, body: unknown): Promise<any> {
   }
 }
 
+// Calls this repo has earned, so OpenCode need not ask a person about them.
+const earned = new Set<string>()
+
 export const SoloLicense: Plugin = async ({ directory }) => ({
   "tool.execute.before": async (input: any, output: any) => {
     const d = await gate("tool.execute.before", { tool_name: input.tool, tool_input: output.args, sessionID: input.sessionID, cwd: directory })
     if (d?.decision === "deny") throw new Error(d.reason ?? "Blocked by Solo License")
+    if (d?.decision === "allow" && input.callID) earned.add(input.callID)
+  },
+  "permission.ask": async (input: any, output: any) => {
+    if (input?.callID && earned.has(input.callID)) {
+      earned.delete(input.callID)
+      output.status = "allow" // earned in this repo: no prompt
+      return
+    }
+    // A person decides; if the call then runs, that yes is evidence.
+    await gate("permission.ask", { sessionID: input?.sessionID, cwd: directory })
   },
   "tool.execute.after": async (input: any, output: any) => {
     await gate("tool.execute.after", { tool_name: input.tool, tool_input: output?.args ?? {}, sessionID: input.sessionID, cwd: directory, result: output?.metadata })

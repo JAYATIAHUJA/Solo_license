@@ -61,6 +61,16 @@ hook defers - it never turns an outage into an "allow".
 ## Install - one line, any agent
 
 ```bash
+uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license onboard
+```
+
+`onboard` does the whole setup in one go: it finds the agents you use (Claude Code, Codex, Cursor, OpenCode, ...),
+shows the hook changes and writes them, makes this machine's admin token and settings key (macOS Keychain, or
+`~/.solo-license/credentials.json` readable only by you - no `SOLO_API_TOKENS` to write), starts the gate in the
+background, checks it with a harmless read, and opens the dashboard already signed in at the setup guide, where
+neatlogs, Jev and Entire are optional one-step connections. Or step by step:
+
+```bash
 uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent <agent>   # in your repo
 uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve                  # keep it running
 ```
@@ -82,7 +92,7 @@ The web app's **setup guide** (`/onboarding`) walks through all of it and turns 
 | Windsurf / Devin Desktop | command hooks | records it |
 | Kiro | command hooks | records it |
 | Cline | hook scripts | records it |
-| OpenCode (how Groq models are used for coding) | plugin | records it |
+| OpenCode (Groq, GLM, free models) | plugin, earns from `permission.ask` | records it |
 
 `init` writes each agent's own config, merged with hooks already there (Entire's included), plus a
 one-file standard-library shim `.solo-license/hook.py` for command-hook agents. Paths a shell would
@@ -108,7 +118,9 @@ credible bound of its failure rate is below break-even:
 Running the tests earns L1 in 3 verified runs; pushing to a remote would need hundreds and is capped at
 L1; deploys and database changes always ask. **Only a person's "yes" or an earned "allow" builds trust** -
 actions an agent's own settings let through are recorded as *observed*, never credited. Failures always
-count, whoever let the action run, and drop the class to L0.
+count, whoever let the action run, and drop the class to L0. A person's yes is seen through Claude Code's and
+Codex's `PermissionRequest`, and through OpenCode's `permission.ask` (so OpenCode with any model - Groq, GLM or a
+free one - earns and loses trust the same way; once a call is earned, the plugin answers OpenCode's prompt itself).
 
 ## The end-of-turn check
 
