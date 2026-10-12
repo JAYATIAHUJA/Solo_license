@@ -36,7 +36,15 @@ THRASH_AT = 4
 
 _HALT = "halt"
 # Repeat counters; 'edit:<turn>:<path>' bookkeeping and the halt outlive edits and the window.
-_COUNTERS = f"fingerprint NOT GLOB 'edit:*' AND fingerprint != '{_HALT}'"
+_TRIM_WINDOW = """
+    DELETE FROM agent_fingerprints
+     WHERE session_id = ? AND fingerprint NOT GLOB 'edit:*' AND fingerprint != ?
+       AND fingerprint NOT IN (SELECT fingerprint FROM agent_fingerprints
+                                WHERE session_id = ? AND fingerprint NOT GLOB 'edit:*' AND fingerprint != ?
+                                ORDER BY seq DESC LIMIT ?)
+"""
+_RESET_COUNTERS = ("DELETE FROM agent_fingerprints "
+                   "WHERE session_id = ? AND fingerprint NOT GLOB 'edit:*' AND fingerprint != ?")
 _SHELL = {"Bash", "PowerShell"}
 _EDITS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 _VOLATILE = (
@@ -107,22 +115,14 @@ def record(conn: sqlite3.Connection, session_id: str, fp: str, *, failed: bool, 
         """,
         (session_id, fp, failures, "failed" if failed else "ok", head),
     )
-    conn.execute(
-        f"""
-        DELETE FROM agent_fingerprints WHERE session_id = ? AND {_COUNTERS}
-           AND fingerprint NOT IN (SELECT fingerprint FROM agent_fingerprints
-                                    WHERE session_id = ? AND {_COUNTERS}
-                                    ORDER BY seq DESC LIMIT ?)
-        """,
-        (session_id, session_id, WINDOW),
-    )
+    conn.execute(_TRIM_WINDOW, (session_id, _HALT, session_id, _HALT, WINDOW))
     return seen(conn, session_id, fp)
 
 
 def record_edit(conn: sqlite3.Connection, session_id: str, turn_id: int | None, path: str) -> None:
     """An edit: repeat counters start over, and the file's edits this turn grow
     (earlier turns' counts are dropped: only the open turn is checked)."""
-    conn.execute(f"DELETE FROM agent_fingerprints WHERE session_id = ? AND {_COUNTERS}", (session_id,))
+    conn.execute(_RESET_COUNTERS, (session_id, _HALT))
     if turn_id is not None:
         conn.execute("DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint GLOB 'edit:*' "
                      "AND fingerprint NOT GLOB ?", (session_id, f"edit:{int(turn_id)}:*"))
