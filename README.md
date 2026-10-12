@@ -2,24 +2,57 @@
 
 # Solo License
 
-**Your coding agent has to earn the right to act without asking.**<br/>
-Each kind of action - run the tests, install a package, push - is auto-approved only once it has
-proven itself **in your repo**, from verified results. One failure, or one over-edited turn, takes it back.
-Works in Claude Code, Codex, Cursor, Gemini CLI, Antigravity, Copilot CLI, Grok Build, Windsurf, Kiro, Cline and OpenCode.
+**Autonomy is earned, not assumed.**<br/>
+Solo License is the control layer for coding agents. It lets an agent earn the right to act without
+interrupting you—one action type, one repository, and one verified outcome at a time. A failure or an
+over-scoped turn revokes that right immediately.
 
 *Earned. Revocable. Priced.*
 
 ```bash
-uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent auto
+uvx --refresh --from 'git+https://github.com/JAYATIAHUJA/Solo_license@main' solo-license onboard
 ```
+
+[Live website](https://solo-license.vercel.app/) · [One-command setup](#one-command-install) · [Architecture](#architecture-at-a-glance) · [Hackathon evidence](#product-tour--evidence-from-a-real-run)
 
 Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · uses **neatlogs**, **Entire** and **cfo.ai** · by [@JAYATIAHUJA](https://github.com/JAYATIAHUJA)
 
 </div>
 
+<p align="center">
+  <a href="https://solo-license.vercel.app/"><img src="evidence/assets/screens/home.png" alt="Solo License website" width="920" /></a>
+</p>
+
+> **The simple promise:** stop approving the same safe action repeatedly without giving an agent blanket access.
+> Solo License starts an action at **L0 (ask)**, promotes it through verified successful work, and demotes it on failure.
+
 ---
 
 **Every feature, and where to find it (CLI, dashboard, plugin): [docs/FEATURES.md](docs/FEATURES.md).**
+
+## Product tour — evidence from a real run
+
+These screens are from a live local run: the gate received native agent-hook events, recorded the decisions,
+promoted verified action classes, and emitted the trace and audit evidence shown below. They are not mockups.
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><strong>Earned autonomy dashboard</strong><br />Action classes have independent L0–L2 levels. In this run, reading files and running tests reached L2 while edits and remote Git actions remained constrained.<br /><br /><img src="evidence/assets/screens/product-tour/coding-agent-dashboard.jpg" alt="Coding agent dashboard with per-action trust levels" width="100%" /></td>
+    <td width="50%" valign="top"><strong>Every permission decision</strong><br />The dashboard distinguishes what the person approved from what the agent ran on its own, and links each decision to its trace.<br /><br /><img src="evidence/assets/screens/product-tour/permission-decisions.jpg" alt="Permission decision history" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Auditable promotion history</strong><br />A promotion or demotion becomes an entry in the Git-backed license ledger and can be tied to an Entire checkpoint.<br /><br /><img src="evidence/assets/screens/product-tour/permission-history.jpg" alt="Permission history with ledger commit and Entire checkpoint" width="100%" /></td>
+    <td width="50%" valign="top"><strong>Live policy controls</strong><br />A person can cap each action class at L0, L1, or the built-in ceiling, or freeze all autonomy at once. Repository policy can only make the agent ask more.<br /><br /><img src="evidence/assets/screens/product-tour/policy-controls.jpg" alt="Policy controls and action ceilings" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>neatlogs trace</strong><br />A turn is observable end to end: start, gate decision, human approval when needed, tool execution, verification, and the final license change.<br /><br /><img src="evidence/assets/screens/product-tour/neatlogs-trace.jpg" alt="neatlogs trace for an agent turn" width="100%" /></td>
+    <td width="50%" valign="top"><strong>Budget view</strong><br />Token and model spend are shown beside the developer time saved by earned autonomy, with policy-based session and daily caps available.<br /><br /><img src="evidence/assets/screens/product-tour/budget.jpg" alt="Solo License budget dashboard" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Entire analytics</strong><br />Entire provides the code-history side of the evidence: checkpoints, trails, commits, and token activity around the work.<br /><br /><img src="evidence/assets/screens/product-tour/entire-analytics.jpg" alt="Entire analytics for the Solo License repository" width="100%" /></td>
+    <td width="50%" valign="top"><strong>cfo.ai financial model</strong><br />The economics model turns fewer repeated approvals and fewer incidents into a transparent pricing and break-even case.<br /><br /><img src="evidence/assets/screens/product-tour/cfo-model.jpg" alt="cfo.ai financial model for Solo License" width="100%" /></td>
+  </tr>
+</table>
 
 ## The problem
 
@@ -77,21 +110,48 @@ server: a model may choose not to call a tool). To every permission request it g
 Solo License never widens what an agent may do beyond what it has earned, and if the gate is down every
 hook defers - it never turns an outage into an "allow".
 
-## Install - one line, any agent
+## One-command install
 
 ```bash
-uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license onboard
+uvx --refresh --from 'git+https://github.com/JAYATIAHUJA/Solo_license@main' solo-license onboard
 ```
 
-`onboard` does the whole setup in one go: it finds the agents you use (Claude Code, Codex, Cursor, OpenCode, ...),
-shows the hook changes and writes them, makes this machine's admin token and settings key (macOS Keychain, or
-`~/.solo-license/credentials.json` readable only by you - no `SOLO_API_TOKENS` to write), starts the gate in the
-background, checks it with a harmless read, and opens the dashboard already signed in at the setup guide, where
-neatlogs, Jev and Entire are optional one-step connections. Or step by step:
+`onboard` does the complete local setup: it detects the agents you use (Claude Code, Codex, Cursor, OpenCode, ...),
+previews and writes their native hooks, creates this machine's admin token and settings key (macOS Keychain, or
+`~/.solo-license/credentials.json` readable only by you), starts the gate in the background, verifies it with a
+harmless read, and opens the signed-in setup guide. There is no manual `SOLO_API_TOKENS` step for this flow.
+
+The marketing and setup website is hosted at [solo-license.vercel.app](https://solo-license.vercel.app/).
+The **gate remains local by design**: installed agent hooks call `127.0.0.1`, so code, credentials, policy, and
+the decision path stay on the developer's machine. In other words, users do not manually run a frontend or backend;
+`onboard` starts the small background gate that the hooks need.
+
+### First-time setup
 
 ```bash
-uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent <agent>   # in your repo
-uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve                  # keep it running
+# macOS: install uv once (skip if `uvx --version` works)
+brew install uv
+
+# Run inside the repository where the agent should be governed.
+uvx --refresh --from 'git+https://github.com/JAYATIAHUJA/Solo_license@main' solo-license onboard
+
+# `uvx` is intentionally ephemeral; use the same runner to inspect the install.
+uvx --from 'git+https://github.com/JAYATIAHUJA/Solo_license@main' solo-license doctor
+uvx --from 'git+https://github.com/JAYATIAHUJA/Solo_license@main' solo-license status
+```
+
+The setup guide offers **neatlogs**, **Jev**, and **Entire** as optional integrations. Jev improves the
+end-of-turn scope judgement when its key is connected; safe deterministic rules remain available without it.
+neatlogs exports traces when connected (and retains a local mirror), while Entire links a failed turn to its
+code checkpoint when the Entire CLI is available.
+
+For a manual or development setup:
+
+```bash
+# Install a persistent command once, then use it normally.
+uv tool install 'git+https://github.com/JAYATIAHUJA/Solo_license@main'
+solo-license init --agent <agent>   # wire one agent in this repo
+solo-license serve                  # run the gate in the foreground
 ```
 
 or paste the ready prompt from `solo-license prompt --agent <agent>` into your agent and let it install
@@ -171,8 +231,8 @@ Earning trust is the engine. Around it sit the controls a team needs while agent
 | **Budget guardrails** | `[budget]` caps USD per session and per day, read from the agent's own transcript where it reports cost. Past a cap only reading is allowed until a person raises it. |
 | **Policy as code** | `.solo-license/policy.toml` is committed with the repo and can only make the agent ask *more*. `solo-license policy init` writes a starter file. |
 
-Everything above is stored in the repo's own SQLite file and shows up as neatlogs spans, so a decision
-can be explained after the fact.
+The live state is stored in a local SQLite database and appears as neatlogs spans when that optional
+integration is connected, so every decision can be explained after the fact.
 
 ## Results
 
@@ -272,7 +332,58 @@ manage it, `doctor` checks the gate and the hooks).
 Set a Jev key for model-graded turns (rules run without one), `NEATLOGS_API_KEY` for traces, and
 `SOLO_API_TOKENS` (`operator` < `approver` < `admin`) to lock the API when deployed.
 
-## Architecture
+## Architecture at a glance
+
+```text
+                        ┌─────────────────────────────────┐
+                        │ Claude Code · Codex · OpenCode   │
+                        │ Cursor · Gemini · other agents   │
+                        └───────────────┬─────────────────┘
+                                        │ native pre / post / stop hooks
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Local Solo License gate (127.0.0.1)                                               │
+│  classify action → apply hard rules + policy → read trust state → allow/deny/defer │
+│  end of turn: scope check + regression-aware tests → promote / demote / rewind    │
+└──────────────┬────────────────────┬──────────────────────┬────────────────────────┘
+               │                    │                      │
+               ▼                    ▼                      ▼
+       local SQLite state     Git-backed license ledger   neatlogs trace (optional)
+       trust, turns, policy   append + focused commit     local mirror always exists
+               │                    │                      │
+               └────────────────────┴──────────────┬───────┘
+                                                    ▼
+                                  dashboard · Entire checkpoint · cfo.ai model
+```
+
+### Why there is a database
+
+Solo License is **local-first**, but it needs durable facts. SQLite retains the trust record for each
+`(repository, principal, action class)`, the evidence behind it, turns, decisions, session spend, and local
+operator settings. Without it, restarting the gate would erase an agent's earned permissions and make the
+dashboard impossible to audit.
+
+SQLite is not a cloud dependency or a shared SaaS control plane. A standard local install can work without a
+remote database. The Git-backed ledger complements it: SQLite is the fast queryable operational state, while the
+ledger makes important trust changes human-readable and committed to Git. neatlogs, Entire, and cfo.ai are
+integrations around that local core, not prerequisites for the first protected agent run.
+
+### Concurrency: mutexes, `RLock`, and the pthread distinction
+
+The API intentionally shares one local application context and SQLite connection when it is running. The code
+uses Python's [`threading.RLock`](sololicense/api/app.py#L39)—a re-entrant mutex—to serialize API paths that read
+or change that shared context. This prevents two request threads from interleaving a session update, settings
+change, or trust decision around the same connection. It is re-entrant so a protected endpoint may safely call a
+helper that also needs the same lock.
+
+There is **no project-authored C/C++ `pthread` implementation** in this repository: no `pthread_create`,
+`pthread_mutex_*`, or custom pthread code. On macOS and Linux, CPython may implement Python thread primitives using
+the operating system's synchronization facilities internally, but the project-level implementation is the Python
+`RLock`. The lock is process-local; the normal `onboard` deployment runs one local gate process. A future
+multi-process/server deployment should use a database strategy designed for coordinated multi-process writes rather
+than treating this in-process mutex as distributed locking.
+
+## Repository map
 
 ```
 plugin/solo-license/  Claude Code plugin: hooks, skill, /solo-license:trust
