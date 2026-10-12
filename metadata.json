@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R6EQN24QZ99WVGK7KQ3QYM",
+  "strategy": "manual-commit",
+  "branch": "feat/landing-product-tour",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/entry.jsx",
+    "frontend/src/features/landing/InstallPage.jsx",
+    "frontend/src/features/landing/LandingPage.jsx",
+    "frontend/src/features/landing/landing.css",
+    "frontend/src/features/landing/scenes/AgentGraph.jsx",
+    "frontend/src/features/landing/scenes/Altimeter.jsx",
+    "frontend/src/features/landing/scenes/Journey.jsx",
+    "frontend/src/features/landing/scenes/LedgerTrack.jsx",
+    "frontend/src/features/landing/scenes/Problem.jsx",
+    "frontend/src/features/landing/sections/Detections.jsx",
+    "frontend/src/features/landing/sections/Footer.jsx",
+    "frontend/src/features/landing/sections/Hero.jsx",
+    "frontend/src/features/landing/sections/Install.jsx",
+    "frontend/src/features/landing/sections/Nav.jsx",
+    "frontend/src/features/landing/sections/Remedies.jsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 15506,
+    "cache_read_tokens": 4950620,
+    "output_tokens": 7851,
+    "api_call_count": 10
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R6EQN24QZ99WVGK7KQ3QYM",
+  "session_id": "9785f29d-f1ba-41b1-bd01-4ac78bf07f72",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-12T13:57:26.9288342Z",
+  "branch": "feat/landing-product-tour",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/entry.jsx",
+    "frontend/src/features/landing/InstallPage.jsx",
+    "frontend/src/features/landing/LandingPage.jsx",
+    "frontend/src/features/landing/landing.css",
+    "frontend/src/features/landing/scenes/AgentGraph.jsx",
+    "frontend/src/features/landing/scenes/Altimeter.jsx",
+    "frontend/src/features/landing/scenes/Journey.jsx",
+    "frontend/src/features/landing/scenes/LedgerTrack.jsx",
+    "frontend/src/features/landing/scenes/Problem.jsx",
+    "frontend/src/features/landing/sections/Detections.jsx",
+    "frontend/src/features/landing/sections/Footer.jsx",
+    "frontend/src/features/landing/sections/Hero.jsx",
+    "frontend/src/features/landing/sections/Install.jsx",
+    "frontend/src/features/landing/sections/Nav.jsx",
+    "frontend/src/features/landing/sections/Remedies.jsx"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "ccac2a94f513",
+  "checkpoint_transcript_start": 1863,
+  "transcript_lines_at_start": 1863,
+  "compact_transcript_start": 285,
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 15506,
+    "cache_read_tokens": 4950620,
+    "output_tokens": 7851,
+    "api_call_count": 10
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-12T13:57:26.5904531Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 99,
+    "human_removed": 421,
+    "total_committed": 0,
+    "total_lines_changed": 520,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2467,
+      "user_lines_removed": 39,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/launch.json": 109,
+        ".cursor/hooks.json": 40,
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "docs/IMPLEMENTATION_PLAN.md": 179,
+        "docs/PRD-v3-control-layer.md": 453,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/strategy/2026-10-11-pivot-and-winning-plan.md": 651,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260,
+        "docs/superpowers/plans/2026-10-12-agent-events.md": 321,
+        "docs/superpowers/plans/2026-10-12-scrap-payments-frontend.md": 139,
+        "docs/superpowers/plans/2026-10-12-v3-roadmap.md": 206
+      },
+      "user_removed_per_file": {
+        ".claude/launch.json": 39
+      }
+    }
+  ]
+}
