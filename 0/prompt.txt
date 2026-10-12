@@ -1,0 +1,9 @@
+ye implementation plan dekh le, aur wahan pe yahan pe ye new comment chahiye, to wo jo comment chahiye, unko bhi dekh le. us hisaab se ek naya implementation plan de de ki kaise kya theek karna hai.
+
+---
+
+sab, jo meri origin main repo hai, uspe 4, 5, 6 new commits hain, to wo dekh le aur usko main ko meri update kar de. uske according kaam kar: naya implementation plan
+
+---
+
+sab, jo meri origin main repo hai, uspe 4, 5, 6 new commits hain, to wo dekh le aur usko main ko meri update kar de. uske according kaam kar: naya implementation plan
