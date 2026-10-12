@@ -68,6 +68,13 @@ def _alive(pid: int) -> bool:
         finally:
             kernel32.CloseHandle(handle)
     try:
+        # A detached child can briefly remain as a zombie after it exits;
+        # treat that as stopped even though kill(pid, 0) still succeeds.
+        stat = Path(f"/proc/{pid}/stat")
+        if stat.is_file():
+            fields = stat.read_text(encoding="ascii", errors="ignore").split()
+            if len(fields) > 2 and fields[2] == "Z":
+                return False
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
