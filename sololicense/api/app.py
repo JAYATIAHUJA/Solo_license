@@ -25,7 +25,7 @@ from sololicense.bootstrap import AppContext, build_app
 from sololicense.db.repositories import agent as agent_repo
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.coding.actions import ACTION_CLASSES, MCP_PREFIX
-from sololicense.observability.links import event_payload
+from sololicense.observability.links import event_payload, neatlogs_link
 from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
 
@@ -474,9 +474,11 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
             "mcp_server": spec.key[len(MCP_PREFIX):] if spec.key.startswith(MCP_PREFIX) else None,
             "demoted_from": row["demoted_from"], "updated_at": row["updated_at"], **progress,
         })
-    decisions = [dict(r) for r in agent_repo.recent_decisions(context.conn, 60)
-                 if repo is None or r["repo"] == repo]
-    turns = [dict(r) for r in agent_repo.recent_turns(context.conn, 30) if repo is None or r["repo"] == repo]
+    config = getattr(context, "config", None)
+    decisions = [{**dict(r), "neatlogs_link": neatlogs_link(config, r["trace_id"])}
+                 for r in agent_repo.recent_decisions(context.conn, 60) if repo is None or r["repo"] == repo]
+    turns = [{**dict(r), "neatlogs_link": neatlogs_link(config, r["trace_id"])}
+             for r in agent_repo.recent_turns(context.conn, 30) if repo is None or r["repo"] == repo]
     counts = {k: sum(1 for d in decisions if d["decision"] == k) for k in ("allow", "ask", "deny")}
     savings = coding_savings(context, repo)
     from sololicense.coding import policy as policy_mod
@@ -535,6 +537,58 @@ def set_coding_test_command(
         agent_repo.set_test_command(context.conn, payload.repo, payload.test_command.strip() or None)
         context.conn.commit()
         return coding_payload(context)
+
+
+def turn_story(context: AppContext, turn_id: int) -> dict | None:
+    """One turn's whole story: what was asked, every decision, what the agent was
+    told, the license changes it caused, its trace (neatlogs link and the local
+    span timeline) and its Entire checkpoint, with how to rewind it."""
+    import json as _json
+
+    turn = agent_repo.get_turn(context.conn, turn_id)
+    if turn is None:
+        return None
+    config = getattr(context, "config", None)
+    trace_id = turn["trace_id"]
+    spans = [] if not trace_id else [
+        {"name": r["name"], "status": r["status"], "at": r["created_at"],
+         "reason": (_json.loads(r["attributes"] or "{}").get("reason") or "")[:200]}
+        for r in context.conn.execute("SELECT name, status, attributes, created_at FROM spans "
+                                      "WHERE trace_id = ? ORDER BY id LIMIT 200", (trace_id,))]
+    events = [] if not trace_id else [event_payload(r, config) for r in context.conn.execute(
+        "SELECT * FROM agent_events WHERE trace_id = ? ORDER BY id", (trace_id,))]
+    told = [dict(r) for r in context.conn.execute(
+        "SELECT kind, text, delivered_at FROM agent_remediations WHERE turn_id = ? ORDER BY id", (turn_id,))]
+    checkpoint = (turn["entire_checkpoint"] or "")[:12]
+    can_rewind = turn["status"] in ("failed", "blocked")
+    return {
+        "turn": {**dict(turn), "neatlogs_link": neatlogs_link(config, trace_id)},
+        "decisions": [dict(r) for r in agent_repo.decisions_for_turn(context.conn, turn_id)],
+        "told": told,
+        "events": events,
+        "spans": spans,
+        "entire": {"checkpoint": checkpoint or None,
+                   "explain": f"entire checkpoint explain {checkpoint}" if checkpoint else None},
+        "rewind": {"available": can_rewind,
+                   "how": (f"Press Rewind on this turn in the dashboard (or POST /api/coding/turns/{turn_id}/rewind): "
+                           "the turn's changes are stashed with git stash, never deleted.") if can_rewind else None},
+    }
+
+
+@app.get("/api/coding/turns/{turn_id}/explain")
+def explain_coding_turn(
+    turn_id: int, request: Request, authorization: str | None = Header(default=None),
+) -> dict:
+    """Read-only; served to this machine (``solo-license explain``) and to signed-in users."""
+    with _lock:
+        context = get_context()
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        story = turn_story(context, turn_id)
+        if story is None:
+            raise HTTPException(status_code=404, detail="No such turn.")
+        return story
 
 
 @app.post("/api/coding/turns/{turn_id}/rewind")

@@ -228,6 +228,20 @@ function LicenseCard({ lic, onResume, busy, flash, flagged }) {
   );
 }
 
+const isLink = (url) => /^https?:\/\//i.test(String(url || ''));
+
+/** Where this turn's story is told: its neatlogs trace and the CLI command that prints all of it. */
+function TurnLinks({ turn }) {
+  return (
+    <small className="cd-links">
+      {isLink(turn.neatlogs_link)
+        ? <a className="hist-link" href={turn.neatlogs_link} target="_blank" rel="noreferrer">Trace in neatlogs</a>
+        : turn.trace_id ? <span title="Add a neatlogs key in Settings to send traces">Trace kept locally</span> : null}
+      {turn.trace_id ? ' · ' : ''}<code>solo-license explain {turn.id}</code>
+    </small>
+  );
+}
+
 function Savings({ s }) {
   if (!s) return null;
   const items = [
@@ -378,6 +392,7 @@ export function Coding() {
                     {t.entire_checkpoint && (
                       <span className="cd-cmds"><CopyLine cmd={`entire checkpoint explain ${t.entire_checkpoint.slice(0, 12)}`} /></span>
                     )}
+                    <TurnLinks turn={t} />
                     <Told remediations={told.get(t.id) || []} />
                   </span>
                   <span className="pl-row-side">
@@ -410,7 +425,9 @@ export function Coding() {
                 <li key={d.id} className="pl-row">
                   <span className="pl-row-main">
                     <b><code>{d.command}</code></b>
-                    <small>{when(d.created_at)} · {classLabel(d.action_class)} at L{d.level} · {d.reason}</small>
+                    <small>{when(d.created_at)} · {classLabel(d.action_class)} at L{d.level} · {d.reason}
+                      {isLink(d.neatlogs_link) && <> · <a className="hist-link" href={d.neatlogs_link} target="_blank" rel="noreferrer">Trace</a></>}
+                    </small>
                   </span>
                   <span className="pl-row-side">
                     <span className={`pl-status ${s.tone}`}>{d.decided_by === 'person' ? 'You approved' : s.label}</span>
