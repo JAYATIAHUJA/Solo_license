@@ -5,6 +5,7 @@
     solo-license serve            # the local gate + dashboard on http://127.0.0.1:8000
     solo-license serve --background / stop / status
     solo-license doctor           # is the gate up, which agents are wired here
+    solo-license budget           # what the agents spent today, against the caps
     solo-license prompt --agent codex   # a ready prompt that makes your agent set itself up
     solo-license hook <agent> <event>   # the command-hook shim (normally called by the agent)
 
@@ -163,6 +164,48 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 1
 
 
+def _usd(value) -> str:
+    return "no cap" if value is None else f"${float(value):,.2f}"
+
+
+def budget_lines(data: dict) -> list[str]:
+    """The Budget page as terminal lines."""
+    lines = [f"Spend on {data.get('day', 'today')}"]
+    repos = data.get("repos") or []
+    if not repos:
+        lines.append("  no repositories yet - spend appears once an agent works in a repo with Solo License")
+    for r in repos:
+        limits = r.get("limits") or {}
+        cap = limits.get("day_usd")
+        share = f" ({100 * r['day_usd'] / cap:.0f}%)" if cap else ""
+        resumed = " | resumed by a person today" if r.get("resumed_today") else ""
+        lines.append(f"  {r['repo']}: {_usd(r['day_usd'])} of {_usd(cap)} today{share}"
+                     f" | per session {_usd(limits.get('session_usd'))}{resumed}")
+    sessions = data.get("sessions") or []
+    if sessions:
+        lines.append("Recent sessions")
+    for s in sessions:
+        state = "STOPPED at the cap" if s.get("blocked") else {"warn": "near the cap"}.get(s.get("state"), "ok")
+        model = f" ({s['model']})" if s.get("model") else ""
+        how = "reported by the agent" if s.get("source") == "reported" else "estimated from tokens"
+        lines.append(f"  {_usd(s['usd'])}  {s['agent']}{model} in {s['repo']} | {how} | {state}")
+    saved = (data.get("savings") or {}).get("usd_saved")
+    if saved is not None:
+        lines.append(f"Developer time saved by earned autonomy: {_usd(saved)}")
+    if any(s.get("blocked") for s in sessions):
+        lines.append("A stopped session continues once you press Resume on the dashboard's Budget page.")
+    return lines
+
+
+def cmd_budget(args: argparse.Namespace) -> int:
+    data = _get(f"{args.url.rstrip('/')}/api/coding/budget")
+    if data is None:
+        print(f"The gate is not answering at {args.url}. Start it: solo-license serve --background")
+        return 1
+    print("\n".join(budget_lines(data)))
+    return 0
+
+
 def _add_init_scope_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--global", dest="global_", action="store_true",
                    help="user-level hooks for every repository (with --agent auto: the agents found in your home)")
@@ -200,6 +243,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", default=".")
     p.add_argument("--url", default=DEFAULT_URL)
     p.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("budget", help="what the coding agents spent today, against the caps")
+    p.add_argument("--url", default=DEFAULT_URL)
+    p.set_defaults(fn=cmd_budget)
 
     p = sub.add_parser("policy", help="write a starter .solo-license/policy.toml for this repository")
     p.add_argument("action", choices=["init"])
