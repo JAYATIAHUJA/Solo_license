@@ -47,6 +47,9 @@ GATE_ACTOR = "system:coding-gate"
 INTERRUPT_AFTER_DENIALS = 3
 # Decisions whose action actually ran, so a flagged turn holds them to account.
 FLAGGABLE_OUTCOMES = ("ran", "verified", "observed", "failed")
+# Asked before they run at L0 even with permissions bypassed. Unrecognised
+# commands are not: in bypass mode that would prompt for nearly everything.
+ASK_FIRST = frozenset({"file-delete", "deploy", "db-migrate"})
 
 
 def _who(repo: str, agent: str = "", principal: str = "main") -> dict:
@@ -128,8 +131,10 @@ class CodingGate:
         mode, bypass included, where PermissionRequest may never fire. Only what
         no mode may skip is answered here: a forbidden action or a loop stop is
         denied (and recorded by :meth:`permission`, once: a denied call never
-        reaches PermissionRequest), a freeze asks. Anything else gets no decision
-        and nothing is written, so PermissionRequest and the earned levels decide."""
+        reaches PermissionRequest); a freeze, or a deletion, deploy or migration
+        at L0, asks (recorded by the PermissionRequest that follows). Anything
+        else gets no decision and nothing is written, so PermissionRequest and
+        the earned levels decide."""
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
         repo, root = repo_of(cwd)
@@ -148,10 +153,22 @@ class CodingGate:
                 out.update({"continue": False, "stopReason": reason})
             return out
         if rules.freeze and result.action_class != "read":
-            return {"hookSpecificOutput": {
-                "hookEventName": "PreToolUse", "permissionDecision": "ask",
-                "permissionDecisionReason": f"Solo License: Frozen by policy ({rules.source}): every action asks."}}
+            return self._pre_tool_ask(f"Frozen by policy ({rules.source}): every action asks.")
+        if result.action_class in ASK_FIRST:
+            key = result.action_class
+            # Read without creating the license row: a pass-through or an ask writes nothing.
+            row = self.conn.execute("SELECT level FROM agent_licenses WHERE repo = ? AND action_class = ?",
+                                    (repo, key)).fetchone()
+            if min(int(row["level"]) if row else 0, rules.ceilings[key]) < 1:
+                spec = ACTION_CLASSES[key]
+                return self._pre_tool_ask(f"{spec.label} always needs a person." if spec.max_level == 0
+                                          else f"{spec.label} is at L0 in {repo}: a person decides.")
         return {}
+
+    @staticmethod
+    def _pre_tool_ask(reason: str) -> dict:
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+                                       "permissionDecisionReason": f"Solo License: {reason}"}}
 
     def permission(self, event: dict) -> dict:
         self._agent = str(event.get("_agent") or "claude-code")

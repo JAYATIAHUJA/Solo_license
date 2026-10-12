@@ -131,7 +131,7 @@ def test_repeated_forbidden_attempts_interrupt_the_agent_on_the_third(gate):
 def test_an_ordinary_call_passes_through_with_no_decision(gate):
     gate.user_prompt(_event(gate, prompt="x"))
     turns_before = gate.conn.execute("SELECT COUNT(*) FROM agent_turns").fetchone()[0]
-    for call in (_bash(gate, "npm test"), _bash(gate, "vercel --prod"),
+    for call in (_bash(gate, "npm test"), _bash(gate, "python scripts/seed.py"),
                  _event(gate, tool_name="Edit", tool_input={"file_path": "app.py", "old_string": "a",
                                                             "new_string": "b"})):
         assert gate.pre_tool(call) == {}
@@ -171,6 +171,58 @@ def test_a_freeze_makes_changes_ask_even_in_bypass_mode_and_leaves_reads_alone(g
     assert out["permissionDecision"] == "ask" and "Frozen" in out["permissionDecisionReason"]
     assert gate.pre_tool(_event(gate, tool_name="Read", tool_input={"file_path": "app.py"})) == {}
     assert _decisions(gate) == []  # the PermissionRequest that follows records it
+
+
+# --- risky classes a person must answer: ask, even when permissions are bypassed -----
+
+@pytest.mark.parametrize("command, action_class", [
+    ("rm -rf build", "file-delete"),
+    ("vercel --prod", "deploy"),
+    ("alembic upgrade head", "db-migrate"),
+])
+def test_a_risky_class_at_level_zero_asks_in_bypass_mode(gate, command, action_class):
+    gate.user_prompt(_event(gate, prompt="x"))
+    licenses_before = gate.conn.execute("SELECT COUNT(*) FROM agent_licenses").fetchone()[0]
+    out = _pre(gate.pre_tool(_bash(gate, command)))
+    assert out["hookEventName"] == "PreToolUse" and out["permissionDecision"] == "ask"
+    assert "always needs a person" in out["permissionDecisionReason"]
+    assert _decisions(gate) == []  # the PermissionRequest that follows records it
+    assert gate.conn.execute("SELECT COUNT(*) FROM agent_licenses").fetchone()[0] == licenses_before
+
+    gate.permission(_bash(gate, command))
+    assert [(r["action_class"], r["decision"]) for r in _decisions(gate)] == [(action_class, "ask")]
+
+
+def test_an_unrecognised_command_passes_through(gate):
+    gate.user_prompt(_event(gate, prompt="x"))
+    assert gate.pre_tool(_bash(gate, "./run-something --now")) == {}
+    assert _decisions(gate) == []
+
+
+def test_a_risky_class_earned_above_level_zero_does_not_ask(gate, monkeypatch):
+    """Built-in ceilings keep these at L0; were one raised and earned, it would not ask."""
+    from dataclasses import replace
+
+    from sololicense.coding import actions
+
+    monkeypatch.setitem(actions.ACTION_CLASSES, "deploy", replace(actions.ACTION_CLASSES["deploy"], max_level=2))
+    gate.user_prompt(_event(gate, prompt="x"))
+    agent_repo.get_license(gate.conn, "shop-api", "deploy")
+    agent_repo.set_level(gate.conn, "shop-api", "deploy", 1)
+    assert gate.pre_tool(_bash(gate, "vercel --prod")) == {}
+
+
+def test_a_risky_class_capped_by_policy_still_asks_once_earned(gate, monkeypatch):
+    from dataclasses import replace
+
+    from sololicense.coding import actions
+
+    monkeypatch.setitem(actions.ACTION_CLASSES, "deploy", replace(actions.ACTION_CLASSES["deploy"], max_level=2))
+    policy.save_local(gate.conn, "shop-api", {"classes": {"deploy": {"max": 0}}})
+    gate.user_prompt(_event(gate, prompt="x"))
+    agent_repo.get_license(gate.conn, "shop-api", "deploy")
+    agent_repo.set_level(gate.conn, "shop-api", "deploy", 2)
+    assert _pre(gate.pre_tool(_bash(gate, "vercel --prod")))["permissionDecision"] == "ask"
 
 
 # --- the hook routes and the installers ---------------------------------------------
