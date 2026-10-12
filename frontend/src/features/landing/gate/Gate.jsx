@@ -8,7 +8,7 @@ import { SignaturePad } from './SignaturePad.jsx';
 import './gate.css';
 
 const ANSWERS = {
-  yes: 'Bold. Most people wouldn’t — not on day one.',
+  yes: 'Bold. Most people wouldn’t - not on day one.',
   no: 'Good. Neither would we. That’s why it has to earn it.',
 };
 
@@ -44,8 +44,8 @@ export function Gate({ onDone }) {
       <AnimatePresence mode="wait">
         {(phase === 'ask' || phase === 'answer') && (
           <motion.div key="ask" className="gate-card" exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}>
-            <p className="mono gate-kicker">Solo License — before we start</p>
-            <SplitTitle lines={['Would you hand', 'an AI your', 'refund button?']} />
+            <p className="mono gate-kicker">Solo License - before we start</p>
+            <SplitTitle lines={['Would you give', 'your coding agent', 'full access?']} />
             <AnimatePresence mode="wait">
               {phase === 'ask' ? (
                 <motion.div key="btns" className="gate-choices" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: 0.9 } }} exit={{ opacity: 0 }}>
@@ -63,12 +63,12 @@ export function Gate({ onDone }) {
 
         {(phase === 'sign' || phase === 'issued' || phase === 'flood') && (
           <motion.div key="sign" className="gate-card gate-sign" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <p className="mono gate-kicker">License № 0001 · task class: refund</p>
+            <p className="mono gate-kicker">License № 0001 · action class: test-run</p>
             <h2 className="serif gate-sign-title">Sign its <em className="italic">first</em> license.</h2>
-            <p className="gate-sign-sub">It starts at <b>L0 — suggest only</b>. Everything above that, it earns.</p>
+            <p className="gate-sign-sub">It starts at <b>L0 - asks you</b>. Everything above that, it earns.</p>
             <div className="gate-sign-body">
               <SignaturePad onSigned={signed} />
-              <div className="gate-stamp"><Stamp text="Issued" sub="L0 · suggest only" show={phase !== 'sign'} size="lg" /></div>
+              <div className="gate-stamp"><Stamp text="Issued" sub="L0 · asks you" show={phase !== 'sign'} size="lg" /></div>
             </div>
           </motion.div>
         )}

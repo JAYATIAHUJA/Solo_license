@@ -6,15 +6,6 @@ from sololicense.api import app as api_module
 from sololicense.bootstrap import build_app
 
 
-def test_provider_catalogue_includes_groq_and_zcode_with_no_manual_url():
-    providers = {provider["key"]: provider for provider in api_module.serialize_providers()}
-
-    assert providers["groq"]["needs_base_url"] is False
-    assert providers["zcode_glm"]["needs_base_url"] is False
-    assert providers["groq"]["default_model"]
-    assert providers["zcode_glm"]["default_model"]
-
-
 def _client(monkeypatch, harness, *, demo: bool):
     monkeypatch.delenv("SOLO_API_TOKENS", raising=False)
     config = replace(harness.config, demo_mode=demo)
@@ -38,61 +29,6 @@ def test_demo_session_is_refused_outside_demo_mode(monkeypatch, harness):
     assert client.get("/api/dashboard").status_code == 401
 
 
-def test_demo_session_records_the_named_actor(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-
-    body = client.post(
-        "/api/runs", headers=headers,
-        json={"order_id": "ORD-1001", "amount": 10, "task_class": "store_credit"},
-    ).json()
-
-    run = body["runs"][0]
-    assert run["actor_id"] == "demo:jayati"
-    assert run["task_class"] == "store_credit"
-    assert set(body["licenses"]) == {"refund", "store_credit"}
-    assert {p["key"] for p in body["providers"]} >= {"deterministic", "gemini", "openai_compatible"}
-    assert body["economics"]["classes"][0]["supervision_cost_l0_month"] > 0
-
-
-def test_unknown_task_class_is_a_422(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-
-    response = client.post(
-        "/api/runs", headers=headers, json={"order_id": "ORD-1001", "task_class": "wire"}
-    )
-
-    assert response.status_code == 422
-
-
-def test_onboarding_validates_before_saving(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-
-    bad = client.post(
-        "/api/onboarding/complete", headers=headers,
-        json={"business_name": "Acme", "starting_level": 9},
-    )
-    settings = client.get("/api/settings", headers=headers).json()
-
-    assert bad.status_code == 422
-    assert settings["onboarded"] is False
-
-
-def test_payouts_share_one_remaining_balance(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-    client.post("/api/runs", headers=headers,
-                json={"order_id": "ORD-1001", "amount": 20, "task_class": "refund"})
-
-    over = client.post("/api/runs", headers=headers,
-                       json={"order_id": "ORD-1001", "amount": 10, "task_class": "store_credit"})
-
-    assert over.status_code == 422
-    assert "5.00" in over.json()["detail"]
-
-
 def test_demo_session_survives_api_restart(monkeypatch, harness):
     client = _client(monkeypatch, harness, demo=True)
     headers = _demo_headers(client)
@@ -101,100 +37,80 @@ def test_demo_session_survives_api_restart(monkeypatch, harness):
     assert client.get("/api/session/me", headers=headers).json()["id"] == "demo:jayati"
 
 
-def test_dashboard_runs_carry_their_problems(monkeypatch, harness):
+def test_dashboard_is_only_settings_events_and_observability(monkeypatch, harness):
     client = _client(monkeypatch, harness, demo=True)
     headers = _demo_headers(client)
-    client.post("/api/faults", headers=headers, json={"mode": "quiet_failure"})
+    context = api_module._context
+    context.coding_gate.restore("shop-api", "test-run", 1, actor_id="demo:jayati", reason="reviewed")
 
-    body = client.post("/api/runs", headers=headers, json={"order_id": "ORD-1001", "amount": 5}).json()
-
-    assert body["runs"][0]["problems"] == ["state_mismatch"]
-
-
-def test_inbox_webhook_needs_the_secret_and_returns_the_reply(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-    secret = client.get("/api/inbox/secret", headers=headers).json()["secret"]
-    message = {"from": "x", "email": "ada@example.com", "subject": "Broken", "body": "ORD-1001 is broken, refund please"}
-
-    assert client.post("/api/inbox", json=message).status_code == 401
-    assert client.post("/api/inbox?key=wrong", json=message).status_code == 401
-    reply = client.post("/api/inbox", json=message, headers={"X-Solo-Inbox-Key": secret}).json()
-
-    assert reply["status"] == "done" and "$25.00" in reply["reply"]
-    tickets = client.get("/api/dashboard", headers=headers).json()["tickets"]
-    assert tickets[0]["source"] == "webhook" and tickets[0]["steps"][0]["name"] == "read"
-
-
-def test_paste_and_inbox_queue_are_handled_by_the_agent(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-
-    pasted = client.post("/api/intake", headers=headers,
-                         json={"message": "refund please", "sender": "alan@example.com"}).json()
-    assert pasted["intake"]["status"] == "done" and pasted["intake"]["order_id"] == "ORD-1003"
-
-    body = client.post("/api/tickets/handle-new", headers=headers).json()
-    statuses = {t["sender"]: t["status"] for t in body["tickets"]}
-    assert statuses["mallory@example.net"] == "needs_human"
-    assert statuses["margaret@example.com"] == "declined"
-    assert statuses["katherine@example.com"] == "waiting"
-
-
-def test_csv_import_and_export(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-    csv_text = "Order number,Customer,Email,Total,Date\nW-9001,Jo,jo@example.com,$19.99,2026-10-01\n"
-
-    body = client.post("/api/orders/import", headers=headers, json={"csv": csv_text}).json()
-    assert body["import"]["added"] == 1
-    assert any(o["order_id"] == "W-9001" and o["source"] == "csv" for o in body["orders"])
-    exported = client.get("/api/orders/export", headers=headers).text
-    assert exported.splitlines()[0].startswith("order_id,customer,email") and "W-9001" in exported
-    assert client.post("/api/orders/import", headers=headers, json={"csv": "a,b\n1,2"}).status_code == 422
-
-
-def test_rejecting_a_draft_counts_against_the_job_type(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-    body = client.post("/api/runs", headers=headers,
-                       json={"order_id": "ORD-1004", "amount": 120, "task_class": "refund"}).json()
-    run = body["runs"][0]
-    assert run["status"] == "pending_approval"
-
-    body = client.post(f"/api/runs/{run['id']}/reject", headers=headers).json()
-    assert body["licenses"]["refund"]["failures"] == 1
-    assert body["licenses"]["refund"]["progress"]["runs_needed"] is not None
-
-
-def test_stripe_key_is_validated_before_saving(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-    bad = client.put("/api/settings", headers=headers, json={"values": {"stripe_secret_key": "pk_test_123"}})
-    live = client.put("/api/settings", headers=headers, json={"values": {"stripe_secret_key": "sk_live_123"}})
-    assert bad.status_code == 422 and live.status_code == 422
-
-
-def test_onboarding_with_a_csv_and_rules(monkeypatch, harness):
-    client = _client(monkeypatch, harness, demo=True)
-    headers = _demo_headers(client)
-    harness.conn.execute("DELETE FROM tickets")
-    harness.conn.execute("DELETE FROM runs")
-    harness.conn.execute("DELETE FROM orders")
-    harness.conn.commit()
-    body = client.post("/api/onboarding/complete", headers=headers, json={
-        "business_name": "Lamp Shop",
-        "load_sample_orders": False,
-        "orders_csv": "Name,Email,Total,Created at\n#5001,jo@example.com,19.99,2026-10-01\n",
-        "values": {"orders_source": "csv", "trust_confidence": 0.95, "refund_window_days": 14,
-                   "econ_incident_cost": 60},
-    }).json()
-    assert body["settings"]["onboarded"] and body["settings"]["orders_source"] == "csv"
-    assert [o["order_id"] for o in body["orders"]] == ["5001"]
-    # The real API rebuilds its context after saving; do the same here.
-    fresh = build_app(replace(harness.config, demo_mode=True), check_same_thread=False)
-    monkeypatch.setattr(api_module, "_context", fresh)
     body = client.get("/api/dashboard", headers=headers).json()
-    assert body["settings"]["refund_window_days"] == 14 and body["trust"]["confidence"] == 0.95
-    # A cheaper mistake lowers the bar: the break-even rate doubles from $120 to $60.
-    assert body["trust"]["break_even"]["1"] == round(1.875 / 60, 4)
+
+    assert set(body) == {"settings", "events", "observability"}
+    assert [(e["id"][:6], e["task_class"], e["kind"]) for e in body["events"]] == [
+        ("agent-", "test-run@shop-api", "restore"),
+    ]
+    assert body["observability"]["ledger"]["repo"] == str(harness.repo)
+    assert body["observability"]["ledger"]["events"] == 1
+    assert not any("refund" in key or "stripe" in key for key in body["settings"])
+
+
+def test_saving_the_neatlogs_project_round_trips(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+
+    saved = client.put("/api/settings", headers=headers,
+                       json={"values": {"neatlogs_project": "team-a", "business_name": "ignored"}})
+    assert saved.status_code == 200
+    assert set(saved.json()) == {"settings", "events", "observability"}
+    # The real API rebuilds its context after saving; do the same here.
+    monkeypatch.setattr(api_module, "_context",
+                        build_app(replace(harness.config, demo_mode=True), check_same_thread=False))
+    settings = client.get("/api/settings", headers=headers).json()
+
+    assert settings["neatlogs_project"] == "team-a"
+    assert "business_name" not in settings
+
+
+def test_saved_secrets_are_masked_and_a_mask_keeps_the_stored_key(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+    client.put("/api/settings", headers=headers, json={"values": {"typesafe_api_key": "ts-secret-1234"}})
+    monkeypatch.setattr(api_module, "_context",
+                        build_app(replace(harness.config, demo_mode=True), check_same_thread=False))
+
+    client.put("/api/settings", headers=headers, json={"values": {"typesafe_api_key": "••••1234"}})
+    monkeypatch.setattr(api_module, "_context",
+                        build_app(replace(harness.config, demo_mode=True), check_same_thread=False))
+    response = client.get("/api/settings", headers=headers)
+
+    settings = response.json()
+    assert settings["has_typesafe_api_key"] is True and settings["jev_enabled"] is True
+    assert settings["typesafe_api_key_hint"] == "••••1234"
+    assert "ts-secret-1234" not in response.text
+
+
+def test_trust_confidence_out_of_range_is_a_422(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+
+    response = client.put("/api/settings", headers=headers, json={"values": {"trust_confidence": 1.5}})
+
+    assert response.status_code == 422
+
+
+def test_payments_routes_are_gone(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+    headers = _demo_headers(client)
+
+    assert client.post("/api/runs", headers=headers, json={"order_id": "ORD-1001"}).status_code == 404
+    assert client.post("/api/inbox", json={"body": "refund please"}).status_code == 404
+    assert client.get("/api/policies", headers=headers).status_code == 404
+
+
+def test_coding_dashboard_answers_on_an_empty_database(monkeypatch, harness):
+    client = _client(monkeypatch, harness, demo=True)
+
+    body = client.get("/api/coding").json()
+
+    assert body["licenses"] == [] and body["events"] == []
+    assert {c["key"] for c in body["classes"]} >= {"test-run"}

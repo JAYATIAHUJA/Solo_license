@@ -1,4 +1,4 @@
-"""Settings repository — operator-editable key/value configuration."""
+"""Settings repository - operator-editable key/value configuration."""
 
 from __future__ import annotations
 
@@ -7,11 +7,7 @@ import sqlite3
 from cryptography.fernet import Fernet, InvalidToken
 
 
-SECRET_KEYS = frozenset({
-    "anthropic_api_key", "openai_api_key", "gemini_api_key", "groq_api_key",
-    "zcode_api_key", "compat_api_key",
-    "neatlogs_api_key", "alert_webhook_url", "stripe_secret_key", "inbox_secret",
-})
+SECRET_KEYS = frozenset({"neatlogs_api_key", "typesafe_api_key"})
 _PREFIX = "fernet:"
 
 

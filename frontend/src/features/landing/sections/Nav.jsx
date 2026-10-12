@@ -9,6 +9,7 @@ const LINKS = [
   ['#agent', 'The loop'],
   ['#crash', 'The crash'],
   ['#evidence', 'Evidence'],
+  ['#install', 'Install'],
   ['#faq', 'FAQ'],
 ];
 
@@ -26,7 +27,7 @@ export function Nav() {
           {LINKS.map(([href, label]) => <a key={href} href={href}>{label}</a>)}
         </nav>
         <div className="lp-nav-cta">
-          <Link to="/onboarding" className="btn btn-ghost btn-sm">Set up</Link>
+          <a href="https://github.com/JAYATIAHUJA/Solo_license" className="btn btn-ghost btn-sm">GitHub</a>
           <Link to="/app" className="btn btn-ink btn-sm">Open app <HandIcon name="arrow-up-right" size={14} /></Link>
           <button className="lp-burger" onClick={() => setOpen(!open)} aria-label="Menu" aria-expanded={open}>
             <HandIcon name={open ? 'cross' : 'menu'} size={22} />

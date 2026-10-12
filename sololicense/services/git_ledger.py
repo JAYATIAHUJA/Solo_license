@@ -10,7 +10,7 @@ earned and lost its license, and each message explains the change.
 
 Commits are scoped to the ledger file so running the app never sweeps up
 unrelated working-tree edits. If git is unavailable the ledger line is still
-written and the caller simply gets ``None`` for the sha — the app keeps working.
+written and the caller simply gets ``None`` for the sha - the app keeps working.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ class LedgerEntry:
     reason: str
     run_id: int | None
     trace_id: str | None
+    entire_checkpoint: str | None = None
 
 
 def _commit_message(entry: LedgerEntry) -> str:
@@ -46,15 +47,22 @@ def _commit_message(entry: LedgerEntry) -> str:
         "demote": "demote",
         "restore": "restore",
     }.get(entry.kind, entry.kind)
-    title = (
-        f"license({entry.task_class}): {verb} L{entry.from_level}"
-        f" -> L{entry.to_level}"
-    )
+    if entry.kind == "policy":
+        title = f"policy({entry.task_class}): {entry.reason.splitlines()[0][:72]}"
+    elif entry.kind == "flag":
+        title = f"flag({entry.task_class}): L{entry.from_level} -> L{entry.to_level}"
+    else:
+        title = (
+            f"license({entry.task_class}): {verb} L{entry.from_level}"
+            f" -> L{entry.to_level}"
+        )
     body = [title, "", entry.reason]
     if entry.run_id is not None:
         body.append(f"run: {entry.run_id}")
     if entry.trace_id:
         body.append(f"trace: {entry.trace_id}")
+    if entry.entire_checkpoint:
+        body.append(f"agent checkpoint: entire checkpoint explain {entry.entire_checkpoint[:12]}")
     return "\n".join(body)
 
 

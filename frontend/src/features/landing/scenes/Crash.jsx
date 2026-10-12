@@ -6,14 +6,14 @@ import { Pinned } from '../Pinned.jsx';
 import { LicenseCard } from './LicenseCard.jsx';
 
 const LOG = [
-  ['license.check', 'L3 · full auto'],
-  ['tool.execute_refund', '$40.00 → ORD-1002'],
-  ['tool.result', '“Refund processed.” · trusted=false'],
-  ['verify.readback', 'before 0.00 · after 0.00'],
-  ['detection.state_mismatch', 'intended $40.00 · verified $0.00'],
+  ['gate.allow', 'file-edit · L2 · runs on its own'],
+  ['tool.Edit', 'cart.js · format.js · utils.js'],
+  ['turn.check', '210 lines in 3 files · scope 1/5'],
+  ['verify.tests', 'npm test · 2 failing'],
+  ['detection.over_editing', 'asked for 1 line · changed 210'],
 ];
 
-/* Scene 05 — the page itself goes dark the moment the detection fires
+/* Scene 05 - the page itself goes dark the moment the detection fires
    (Moto's theme-invert), the level crashes, and the card is stamped. */
 export function Crash() {
   return (
@@ -34,16 +34,16 @@ function Scene({ p }) {
   }, [dark]);
   useEffect(() => () => { delete document.documentElement.dataset.invert; }, []);
 
-  const level = stage >= 2 ? 0 : 3;
+  const level = stage >= 2 ? 0 : 2;
 
   return (
     <motion.div className="sc-crash-stage" animate={{ backgroundColor: dark ? '#0e0e0d' : 'rgba(14,14,13,0)', color: dark ? '#f3f1ec' : '#0e0e0d' }} transition={{ duration: 0.5 }}>
       <motion.div className="sc-wrap sc-crash-wrap" animate={stage === 2 ? { x: [0, -16, 13, -8, 5, 0], y: [0, 6, -4, 2, 0] } : {}} transition={{ duration: 0.5 }}>
         <div className="sc-crash-copy">
-          <div className="sc-head"><span className="mono">(005)</span><span className="mono">The crash</span></div>
+          <div className="sc-head"><span className="mono">(006)</span><span className="mono">The crash</span></div>
           <AnimatePresence mode="wait">
             <motion.h2 key={stage} className="sc-title serif" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              {['Run #48. Same tool, same refund.', 'Something is off.', 'One lie. Back to zero.', 'And it stays there.'][stage]}
+              {['Turn #48. Same agent, same repo.', 'Something is off.', 'One bad turn. Back to zero.', 'And it stays there.'][stage]}
             </motion.h2>
           </AnimatePresence>
           <ol className="sc-log mono">
@@ -54,7 +54,7 @@ function Scene({ p }) {
             ))}
           </ol>
           <motion.p className="sc-body" animate={{ opacity: stage === 3 ? 1 : 0 }}>
-            A quarantined class can’t earn its way back. Only a person who has read the evidence can restore it — and that decision is committed to git with their reason.
+            A paused class asks you before every action again. A person reads the turn - with its Entire checkpoint - rewinds it if needed and resumes it at a level they choose. That decision is committed to git with their reason.
           </motion.p>
         </div>
 
@@ -73,12 +73,12 @@ function Scene({ p }) {
             </AnimatePresence>
           </div>
           <div className="sc-crash-card">
-            <LicenseCard level={level} runs={level === 3 ? 3 : 0} quarantined={stage >= 2} stamp={null} />
-            <div className="sc-crash-stamp"><Stamp text="Quarantined" sub="state_mismatch" tone="signal" size="lg" show={stage >= 2} angle={-10} /></div>
+            <LicenseCard level={level} runs={level === 2 ? 3 : 0} quarantined={stage >= 2} stamp={null} taskClass="file-edit" />
+            <div className="sc-crash-stamp"><Stamp text="Paused" sub="over_editing" tone="signal" size="lg" show={stage >= 2} angle={-10} /></div>
           </div>
           {stage >= 2 && (
             <motion.p className="sc-crash-note hand" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: 0.4 } }}>
-              <HandIcon name="arrow-left" size={18} /> L3 → L0 in one run
+              <HandIcon name="arrow-left" size={18} /> L2 → L0 in one turn
             </motion.p>
           )}
         </div>

@@ -35,7 +35,25 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     """Create every table/index if absent. Safe to call on every startup."""
     conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
     _migrate_runs(conn)
+    _migrate_v3(conn)
     conn.commit()
+
+
+def _migrate_v3(conn: sqlite3.Connection) -> None:
+    """Coding events used to share ``license_events`` with the payments agent
+    (as ``<class>@<repo>``). Copy them into ``agent_events`` the first time."""
+    if conn.execute("SELECT 1 FROM agent_events LIMIT 1").fetchone():
+        return
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'license_events'").fetchone():
+        return
+    conn.execute(
+        """
+        INSERT INTO agent_events (repo, action_class, kind, from_level, to_level, reason, actor_id, git_sha, created_at)
+        SELECT substr(task_class, instr(task_class, '@') + 1), substr(task_class, 1, instr(task_class, '@') - 1),
+               kind, from_level, to_level, reason, actor_id, git_sha, created_at
+          FROM license_events WHERE task_class LIKE '%@%' ORDER BY id
+        """
+    )
 
 
 _ADDED_COLUMNS = {
@@ -56,6 +74,23 @@ _ADDED_COLUMNS = {
         ("recovered", "INTEGER NOT NULL DEFAULT 0"),   # agent fixed a failed action
         ("ticket_id", "INTEGER"),
     ),
+    "tickets": (
+        ("follows_ticket_id", "INTEGER"),          # the earlier message this one answers
+    ),
+    "agent_turns": (
+        ("entire_checkpoint", "TEXT"),             # last Entire checkpoint before a failure
+        ("agent", "TEXT NOT NULL DEFAULT 'claude-code'"),  # which coding agent
+    ),
+    "agent_decisions": (
+        ("agent", "TEXT NOT NULL DEFAULT 'claude-code'"),
+    ),
+    "agent_repos": (
+        ("last_tests", "TEXT"),                    # passed | failed at the last turn check
+    ),
+    "agent_events": (
+        ("trace_id", "TEXT"),                      # the neatlogs trace that recorded the change
+        ("entire_checkpoint", "TEXT"),             # the agent's last Entire checkpoint
+    ),
 }
 
 
@@ -72,6 +107,8 @@ def _migrate_runs(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN actor_id TEXT NOT NULL DEFAULT 'system:license-service'")
     if "actor_role" not in columns:
         conn.execute("ALTER TABLE runs ADD COLUMN actor_role TEXT NOT NULL DEFAULT 'admin'")
+    if "policy_version" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN policy_version INTEGER")
     event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(license_events)")}
     if "actor_id" not in event_columns:
         conn.execute("ALTER TABLE license_events ADD COLUMN actor_id TEXT NOT NULL DEFAULT 'system:license-service'")

@@ -7,12 +7,12 @@ import { Pinned } from '../Pinned.jsx';
 
 /* Node positions in a 1000×560 board (percent-free so connectors line up). */
 const NODES = [
-  { x: 110, y: 120, icon: 'message', title: 'Customer message', out: '“ORD-1002 arrived broken, refund $40”', body: 'A plain-language message comes in from email or chat.' },
-  { x: 400, y: 120, icon: 'spark', title: 'Intake', out: 'order=ORD-1002 · amount=40.00', body: 'The model (or built-in parser) pulls out the order, amount and reason.' },
-  { x: 690, y: 120, icon: 'key', title: 'License check', out: 'L2 · ceiling $50 → AUTO_EXECUTE', body: 'The license decides what is allowed. The model never does.' },
-  { x: 690, y: 400, icon: 'play', title: 'Refund tool', out: 'tool says: “Refund processed.”', body: 'The tool runs — and its answer is written down, but not believed.' },
-  { x: 400, y: 400, icon: 'eye', title: 'Read-back', out: 'refunded_amount 0.00 → 40.00 ✓', body: 'The database is read again. Only this counts as proof.' },
-  { x: 110, y: 400, icon: 'dial', title: 'Move the dial', out: 'clean run 2 of 3 → toward L3', body: 'Clean: credit toward the next rung. Mismatch: straight to L0.' },
+  { x: 110, y: 120, icon: 'message', title: 'Your request', out: '“fix the off-by-one in cart.js”', body: 'UserPromptSubmit opens a turn: the request and a snapshot of the working tree.' },
+  { x: 400, y: 120, icon: 'spark', title: 'Permission prompt', out: 'Bash · npm test → action class test-run', body: 'Claude Code is about to ask you. The hook classifies the call instead - rules first, Jev only for the unknown.' },
+  { x: 690, y: 120, icon: 'key', title: 'License check', out: 'test-run@shop-api · L1 · approved → allow', body: 'The license for this class, in this repo, decides. The model never does.' },
+  { x: 690, y: 400, icon: 'play', title: 'The agent works', out: 'npm test ran · cart.js edited', body: 'Every tool result is recorded. A failed change counts against its class at once.' },
+  { x: 400, y: 400, icon: 'eye', title: 'Turn check', out: '2 lines in 1 file · scope 5/5 · tests pass ✓', body: 'Once per turn: the diff against the request, then the tests. Only this counts as proof.' },
+  { x: 110, y: 400, icon: 'dial', title: 'Move the dial', out: 'verified 3 of 3 → test-run earns L1', body: 'Verified: credit toward the next level. Over-edit or failing tests: straight to L0.' },
 ];
 const W = 200;
 const H = 92;
@@ -54,7 +54,7 @@ function Scene({ p }) {
     <div className="sc-wrap sc-agent-wrap">
       <div className="sc-agent-copy">
         <div className="sc-head">
-          <span className="mono muted">(004)</span>
+          <span className="mono muted">(005)</span>
           <ScrambleText className="mono" text="One loop, every run" />
         </div>
         <h2 className="sc-title serif">Watch it <em className="italic">work.</em></h2>

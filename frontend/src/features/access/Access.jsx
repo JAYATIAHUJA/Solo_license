@@ -61,7 +61,7 @@ export function Access() {
         <div className="axo-aside-card">
           <Link to="/" className="axo-logo"><Logo /> Solo License</Link>
           <p className="axo-aside-note hand">
-            An agent that earns the right to act alone — and loses it the instant a detection fires.
+            An agent that earns the right to act alone - and loses it the instant a detection fires.
           </p>
           <ul className="ax-points">
             <li><HandIcon name="dial" size={16} /> Per-task autonomy, L0 → L3</li>

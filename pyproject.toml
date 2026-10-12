@@ -1,12 +1,32 @@
 [project]
 name = "solo-license"
-version = "1.0.0"
-description = "An operations agent that earns unattended autonomy from a measured reliability track record."
+version = "1.1.0"
+description = "Earned autonomy for coding agents: each kind of action is auto-approved only once it has proven itself in your repo, and taken back the moment it fails."
 requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.30,<1.0",
+    "python-dotenv>=1.0.0",
+    "cryptography>=43.0.0",
+    "neatlogs>=1.4.26; python_version < '3.14'",
+]
+
+[project.scripts]
+solo-license = "sololicense.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/JAYATIAHUJA/Solo_license"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 
-[tool.setuptools]
-packages = ["sololicense"]
+[tool.setuptools.packages.find]
+include = ["sololicense*", "planning*"]
+
+[tool.setuptools.package-data]
+sololicense = ["db/*.sql"]

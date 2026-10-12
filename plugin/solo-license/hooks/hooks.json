@@ -1,0 +1,111 @@
+{
+  "description": "Solo License: refuse forbidden actions and loops before any tool runs, answer permission prompts from each action class's earned license, record outcomes, verify each turn.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/user-prompt",
+            "timeout": 10,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/pre-tool",
+            "timeout": 10,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/permission",
+            "timeout": 10,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/post-tool",
+            "timeout": 10,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/post-tool-failure",
+            "timeout": 10,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/stop",
+            "timeout": 150,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

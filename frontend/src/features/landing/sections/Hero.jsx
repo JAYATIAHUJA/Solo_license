@@ -9,9 +9,9 @@ import { AskBar } from './AskBar.jsx';
 import { Magnetic } from '../../../components/fx/Magnetic.jsx';
 
 const META = [
-  ['For', 'Support teams refunding on Stripe or Shopify'],
-  ['Proves', 'Every refund, read back from Stripe before it counts'],
-  ['Earns', 'More freedom only when the evidence beats your break-even'],
+  ['For', 'Claude Code, Codex, Cursor, Gemini, Antigravity, Copilot, Grok, Windsurf and more'],
+  ['Proves', 'Every turn: the diff against your request, then the tests'],
+  ['Earns', 'Auto-approval per action class, only when the evidence beats the cost of a mistake'],
 ];
 
 export function Hero() {
@@ -20,7 +20,7 @@ export function Hero() {
       <div className="lp-hero-grid">
         <div className="lp-hero-copy">
           <motion.p className="mono lp-kicker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            (001) — Earned-autonomy agents
+            (001) - Earned autonomy for coding agents
           </motion.p>
           <h1 className="lp-h1 serif">
             <MaskWords text="Autonomy" animateOnMount />
@@ -36,12 +36,12 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.8 }}
           >
-            An AI agent that answers refund emails end to end — and has to <b>earn</b> the right to
-            pay out alone. Every refund is checked in Stripe; one bad result drops it to zero.
+            Your coding agent has to <b>earn</b> the right to act without asking - one kind of action at a
+            time, in each repo, from verified results. One failure, or one over-edit, drops it back to asking you.
           </motion.p>
           <motion.div className="lp-hero-cta" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.8 }}>
             <AskBar />
-            <Magnetic><Link to="/onboarding" className="btn btn-ink">Set up your agent <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
+            <Magnetic><Link to="/app" className="btn btn-ink">Open the dashboard <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
             <Magnetic><a href="#journey" className="btn btn-line">See how it earns</a></Magnetic>
           </motion.div>
         </div>
@@ -56,7 +56,7 @@ export function Hero() {
           <HeroSpecimen />
           <div className="lp-note lp-note-b hand">
             <SketchArrow width={70} height={46} d="M64 42 C 44 40, 20 30, 8 6" end={[8, 6, -2.1]} delay={2} />
-            one bad write → L0
+            one failed turn → L0
           </div>
         </motion.div>
       </div>

@@ -1,0 +1,303 @@
+"""End-of-turn checks: did the turn's changes work, and were they what was asked?
+
+Run once per turn from the ``Stop`` hook, never per edit:
+
+1. **Scope.** The diff since the prompt is compared with the request. A
+   one-line bug fix that rewrites fifty lines in four files is over-editing:
+   the turn is sent back with the files that look unrelated. Jev grades the
+   diff when a key is configured; otherwise a size-and-spread rule does.
+2. **Tests.** If the repository has a test command (configured, or found in
+   ``package.json`` / pytest config), it runs. Failing tests after a turn
+   that changed code are evidence against the classes that changed it.
+
+The result decides whether the turn's changes count as verified evidence.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sqlite3
+import subprocess
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+from sololicense.coding import jev
+from sololicense.db.repositories import agent as agent_repo
+
+TEST_TIMEOUT_SECONDS = 120
+_SMALL_REQUEST = re.compile(r"\b(fix|bug|typo|rename|small|tiny|one[- ]line|quick|minor|off[- ]by[- ]one|tweak)\b", re.I)
+_TEST_FILE = re.compile(r"(^|/)(tests?/|test_|.*\.(test|spec)\.)")
+
+
+@dataclass(frozen=True)
+class FileChange:
+    path: str
+    lines: int
+
+
+def _run(cwd: str, args: list[str], timeout: float = 15.0) -> subprocess.CompletedProcess | None:
+    try:
+        return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+# Tooling state, not the agent's work.
+_IGNORED = (".claude/", ".entire/", "ledger/", "node_modules/", ".git/")
+
+
+def changed_files(cwd: str, base: str | None, since: float | None = None) -> list[FileChange]:
+    """Files changed since ``base`` (tracked) plus untracked files written
+    after ``since`` (a timestamp), so files that were already lying around
+    before the turn are not counted as the agent's."""
+    changes: list[FileChange] = []
+    numstat = _run(cwd, ["git", "diff", "--numstat", base or "HEAD"])
+    for line in (numstat.stdout if numstat and numstat.returncode == 0 else "").splitlines():
+        added, deleted, path = (line.split("\t", 2) + ["", ""])[:3]
+        lines = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
+        changes.append(FileChange(path, lines))
+    untracked = _run(cwd, ["git", "ls-files", "--others", "--exclude-standard"])
+    for path in (untracked.stdout if untracked and untracked.returncode == 0 else "").splitlines():
+        try:
+            if since is not None and (Path(cwd) / path).stat().st_mtime < since:
+                continue
+            lines = sum(1 for _ in (Path(cwd) / path).open(encoding="utf-8", errors="ignore"))
+        except OSError:
+            lines = 0
+        changes.append(FileChange(path, lines))
+    return [c for c in changes if c.path and not c.path.startswith(_IGNORED)]
+
+
+def diff_text(cwd: str, base: str | None, limit: int = 12000) -> str:
+    result = _run(cwd, ["git", "diff", "--unified=2", base or "HEAD"])
+    return (result.stdout if result and result.returncode == 0 else "")[:limit]
+
+
+def _mentioned(path: str, request: str) -> bool:
+    text = request.lower()
+    name = Path(path).name.lower()
+    stem = Path(path).stem.lower().removeprefix("test_").split(".")[0]
+    return name in text or (len(stem) >= 3 and re.search(rf"\b{re.escape(stem)}\b", text) is not None)
+
+
+def scope_by_rule(request: str, changes: list[FileChange]) -> dict:
+    """Grade 1..5 how proportionate a diff is, from its size and spread."""
+    lines = sum(c.lines for c in changes)
+    mentioned = sum(1 for c in changes if _mentioned(c.path, request))
+    small = bool(_SMALL_REQUEST.search(request)) and len(request) < 400
+    line_budget = 40 if small else 200
+    file_budget = max(2, mentioned + 1) if small else max(5, mentioned + 3)
+    if lines <= line_budget and len(changes) <= file_budget:
+        score = 5
+    elif lines <= 1.5 * line_budget and len(changes) <= file_budget + 1:
+        score = 4
+    elif lines <= 2.5 * line_budget:
+        score = 3
+    elif lines <= 5 * line_budget:
+        score = 2
+    else:
+        score = 1
+    if len(changes) > file_budget + 3:
+        score = min(score, 2)
+    return {"score": score, "confidence": 1.0, "source": "rules", "small_request": small}
+
+
+def drift(request: str, changes: list[FileChange]) -> list[FileChange]:
+    """Changed files the request never points at, biggest first. Tests that
+    belong to a mentioned file are not drift."""
+    mentioned_stems = {Path(c.path).stem.lower().removeprefix("test_").split(".")[0]
+                       for c in changes if _mentioned(c.path, request)}
+    out = []
+    for c in changes:
+        stem = Path(c.path).stem.lower().removeprefix("test_").split(".")[0]
+        if _mentioned(c.path, request) or (_TEST_FILE.search(c.path) and stem in mentioned_stems):
+            continue
+        out.append(c)
+    return sorted(out, key=lambda c: -c.lines)
+
+
+def detect_test_command(root: str) -> str | None:
+    package = Path(root) / "package.json"
+    if package.exists():
+        try:
+            script = json.loads(package.read_text(encoding="utf-8")).get("scripts", {}).get("test", "")
+        except (OSError, ValueError):
+            script = ""
+        if script and "no test specified" not in script:
+            return "npm test --silent"
+    pyproject = Path(root) / "pyproject.toml"
+    if (Path(root) / "pytest.ini").exists() or (
+            pyproject.exists() and "[tool.pytest" in pyproject.read_text(encoding="utf-8", errors="ignore")):
+        return "python -m pytest -q -x"
+    return None
+
+
+def run_tests(root: str, command: str) -> tuple[bool, str, str]:
+    """(passed, last lines for the agent, full output)."""
+    try:
+        result = subprocess.run(command, cwd=root, shell=True, capture_output=True, text=True,
+                                timeout=TEST_TIMEOUT_SECONDS, check=False)
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {TEST_TIMEOUT_SECONDS}s", ""
+    except OSError as error:
+        return False, str(error), ""
+    output = (result.stdout or "") + (result.stderr or "")
+    tail = "\n".join(output.strip().splitlines()[-6:])
+    return result.returncode == 0, tail, output
+
+
+# Failing-test lines of common runners: pytest, node --test (TAP), jest/vitest,
+# go test, cargo test, mocha. The captured group names the test.
+_FAILURE_LINES = (
+    re.compile(r"^FAILED (\S+)", re.M),                         # pytest short summary
+    re.compile(r"^\s*not ok \d+ - (.+?)\s*$", re.M),             # TAP (node --test)
+    re.compile(r"^\s*(?:✕|×|✗)\s+(.+?)(?:\s+\(\d+\s*m?s\))?\s*$", re.M),  # jest / vitest
+    re.compile(r"^--- FAIL: (\S+)", re.M),                       # go test
+    re.compile(r"^test (\S+) \.\.\. FAILED", re.M),               # cargo test
+    re.compile(r"^\s*\d+\) (.+?)\s*$", re.M),                     # mocha
+)
+
+
+def failing_tests(output: str) -> set[str] | None:
+    """The names of the failing tests, or ``None`` when the output is in a
+    format we cannot read (then nothing can be proven about regressions)."""
+    names: set[str] = set()
+    for pattern in _FAILURE_LINES:
+        names.update(m.strip() for m in pattern.findall(output or ""))
+    return names or None
+
+
+# Installed dependencies are untracked, so a fresh worktree lacks them; the
+# baseline borrows the checkout's own copy instead of failing for want of it.
+DEPENDENCY_DIRS = ("node_modules", ".venv", "venv", "env", "vendor", ".tox")
+
+
+def _link_dir(target: Path, link: Path) -> bool:
+    """Link ``link`` to an existing directory: a symlink, or on Windows a
+    junction (no admin rights needed)."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return True
+    except OSError:
+        pass
+    if os.name == "nt":
+        try:
+            import _winapi
+
+            _winapi.CreateJunction(str(target), str(link))
+            return True
+        except OSError:
+            return False
+    return False
+
+
+def _unlink_dir(link: Path) -> None:
+    """Remove only the link, never what it points at."""
+    try:
+        if link.is_symlink():
+            link.unlink()
+        else:
+            os.rmdir(link)  # a junction: removes the link itself
+    except OSError:
+        pass
+
+
+def tests_before(root: str, base_ref: str | None, command: str) -> tuple[bool, str] | None:
+    """Run the tests on the pre-turn snapshot in a throwaway worktree that
+    shares the checkout's installed dependencies. ``None`` (unknown) when the
+    snapshot or its dependencies cannot be set up; the caller then treats a
+    failure as the agent's, never the other way round."""
+    import tempfile
+
+    if not base_ref:
+        return None
+    with tempfile.TemporaryDirectory(prefix="solo-baseline-") as scratch:
+        tree = Path(scratch) / "tree"
+        added = _run(root, ["git", "worktree", "add", "--detach", str(tree), base_ref], timeout=60)
+        if added is None or added.returncode != 0:
+            return None
+        links: list[Path] = []
+        try:
+            for name in DEPENDENCY_DIRS:
+                source, link = Path(root) / name, tree / name
+                if source.is_dir() and not link.exists():
+                    if not _link_dir(source, link):
+                        return None
+                    links.append(link)
+            passed, _, output = run_tests(str(tree), command)
+            return passed, output
+        finally:
+            # Links first: removing the worktree must never reach into them.
+            for link in links:
+                _unlink_dir(link)
+            _run(root, ["git", "worktree", "remove", "--force", str(tree)], timeout=60)
+
+
+def check_turn(gate, turn: sqlite3.Row, decisions: list[sqlite3.Row]) -> tuple[bool, str, dict]:
+    """The verifier the gate calls at ``Stop``: (ok, reason, details)."""
+    root, request = turn["cwd"], turn["prompt"] or ""
+    started = datetime.strptime(turn["created_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+    changes = changed_files(root, turn["base_ref"], since=started - 1)
+    lines = sum(c.lines for c in changes)
+    details: dict = {"lines_changed": lines, "files_changed": len(changes), "tests": "none"}
+    if not changes:
+        return True, "", details
+
+    # 1. Scope, only when we know what was asked.
+    if request.strip():
+        grade = None
+        if gate.jev_client.enabled:
+            grade = jev.score_diff(gate.jev_client, request, diff_text(root, turn["base_ref"]))
+            if grade and grade["confidence"] < jev.MIN_CHOICE_CONFIDENCE:
+                grade = None
+        grade = grade or scope_by_rule(request, changes)
+        details.update(scope_score=grade["score"], scope_source=grade["source"])
+        if grade["score"] <= 2:
+            unrelated = drift(request, changes)[:5]
+            listed = ", ".join(f"{c.path} ({c.lines} lines)" for c in unrelated) or "the extra changes"
+            details["blame"] = ["file-edit"]
+            return False, (
+                f"over-editing: this turn changed {lines} lines in {len(changes)} files for this request "
+                f"(scope {grade['score']}/5). Keep only the change that was asked for and revert the "
+                f"unrelated edits in: {listed}."
+            ), details
+
+    # 2. Tests.
+    repo = agent_repo.ensure_repo(gate.conn, turn["repo"], root)
+    command = repo["test_command"] or detect_test_command(root)
+    if command:
+        passed, tail, output = run_tests(root, command)
+        details["tests"] = "passed" if passed else "failed"
+        details["test_command"] = command
+        agent_repo.set_last_tests(gate.conn, turn["repo"], "passed" if passed else "failed")
+        if not passed:
+            regression, why = is_regression(root, turn["base_ref"], command, output)
+            if not regression:
+                details["tests"] = "failing before and after"
+                return True, "", details
+            details["blame"] = ["file-edit"]
+            return False, f"the tests fail after this turn's changes (`{command}`){why}:\n{tail}\nFix them before finishing.", details
+    return True, "", details
+
+
+def is_regression(root: str, base_ref: str | None, command: str, output: str) -> tuple[bool, str]:
+    """Did this turn break something? Compared against the turn's *own*
+    starting point every time - never a cached verdict - and test by test:
+    a turn that fixes one old failure but adds a new one is a regression.
+    Anything that cannot be proven innocent counts against the agent."""
+    before = tests_before(root, base_ref, command)
+    if before is None:
+        return True, ""
+    passed_before, output_before = before
+    if passed_before:
+        return True, ""
+    now, then = failing_tests(output), failing_tests(output_before)
+    if now is None or then is None:
+        return True, " (could not tell which tests failed before)"
+    new = sorted(now - then)
+    if new:
+        return True, f" - newly failing: {', '.join(new[:5])}"
+    return False, ""

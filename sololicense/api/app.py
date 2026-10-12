@@ -1,7 +1,8 @@
-"""HTTP adapter for the Solo License application services.
+"""HTTP adapter for Solo License.
 
-The React client talks only to this file. Domain, worker, verification, SQLite,
-and the git-backed ledger remain the implementation in ``sololicense``.
+The React client and the coding agents' hooks talk only to this file. The
+coding gate, SQLite and the git-backed ledger remain the implementation in
+``sololicense``.
 """
 
 from __future__ import annotations
@@ -14,43 +15,23 @@ from dataclasses import replace
 from hashlib import sha256
 from threading import RLock
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from typing import Annotated
+
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from sololicense.agent.intake import complete, parse_message
 from sololicense.bootstrap import AppContext, build_app
-from sololicense.config import PROVIDERS
-from sololicense.connectors import ConnectorError
-from sololicense.connectors.csv_import import orders_to_csv, parse_orders_csv
-from sololicense.db.repositories import tickets as tickets_repo
-from sololicense.db.repositories import events as events_repo
-from sololicense.db.repositories import license as license_repo
-from sololicense.db.repositories import orders as orders_repo
-from sololicense.db.repositories import runs as runs_repo
+from sololicense.db.repositories import agent as agent_repo
 from sololicense.db.repositories import settings as settings_repo
-from sololicense.db.seed import SEED_ORDERS, install_sample_store, seed
-from sololicense.domain.license import LicenseLevel, LicenseState
-from sololicense.domain.models import FaultMode, RefundRequest, RunStatus
-from sololicense.domain.task_classes import DEFAULT_TASK_CLASS, TASK_CLASSES
+from sololicense.coding.actions import ACTION_CLASSES
+from sololicense.observability.links import event_payload
+from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
-from sololicense.services import economics
-from sololicense.services.alerts import AlertNotifier, valid_webhook_url
-from sololicense.services.evidence import build_packet
 
 SECRET_KEYS = tuple(sorted(settings_repo.SECRET_KEYS))
-ECON_KEYS = tuple(economics.SETTING_DEFAULTS)
-SETTING_KEYS = (
-    "business_name", "llm_provider",
-    *(spec.model_field for spec in PROVIDERS.values() if spec.model_field),
-    "compat_base_url",
-    "trust_confidence", "refund_window_days", "orders_source",
-    "l2_auto_refund_ceiling", "l2_auto_credit_ceiling",
-    "neatlogs_project", *ECON_KEYS, *SECRET_KEYS,
-)
-_NUMERIC_KEYS = ("trust_confidence", "refund_window_days", "l2_auto_refund_ceiling", "l2_auto_credit_ceiling", *ECON_KEYS)
-ORDER_SOURCES = ("sample", "csv", "stripe")
+SETTING_KEYS = ("neatlogs_project", "jev_endpoint", "trust_confidence", *SECRET_KEYS)
+_NUMERIC_KEYS = ("trust_confidence",)
 
 _context: AppContext | None = None
 _authenticator: TokenAuthenticator | None = None
@@ -81,89 +62,12 @@ app.add_middleware(
 
 # --- payloads -------------------------------------------------------------
 
-def _task_class_field():
-    return Field(default=DEFAULT_TASK_CLASS, max_length=40)
-
-
-class RefundPayload(BaseModel):
-    order_id: str
-    amount: float | None = Field(default=None, ge=0)
-    reason: str = "customer request"
-    task_class: str = _task_class_field()
-    idempotency_key: str | None = Field(default=None, max_length=120)
-
-
-class IntakePayload(BaseModel):
-    message: str = Field(min_length=3, max_length=4000)
-    sender: str | None = Field(default=None, max_length=200)
-    run: bool = True
-
-
-class InboxPayload(BaseModel):
-    """What a helpdesk or email forwarder posts. Common field names are accepted."""
-
-    body: str = Field(default="", max_length=4000)
-    text: str = Field(default="", max_length=4000)
-    message: str = Field(default="", max_length=4000)
-    sender: str = Field(default="", max_length=200)
-    email: str = Field(default="", max_length=200)
-    subject: str = Field(default="", max_length=300)
-
-    @property
-    def content(self) -> str:
-        return (self.body or self.text or self.message).strip()
-
-    @property
-    def from_address(self) -> str:
-        return (self.sender or self.email).strip()
-
-
-class CsvPayload(BaseModel):
-    csv: str = Field(min_length=1, max_length=5_000_000)
-
-
-class StripeSamplePayload(BaseModel):
-    confirm_test_mode: bool = False
-
-
-class FaultPayload(BaseModel):
-    mode: FaultMode
-    task_class: str = _task_class_field()
-
-
-class RestorePayload(BaseModel):
-    level: int
-    reason: str = "Human restored after evidence review."
-    task_class: str = _task_class_field()
-
-
-class OrderPayload(BaseModel):
-    order_id: str = Field(min_length=3, max_length=32)
-    customer: str = Field(min_length=1, max_length=80)
-    amount: float = Field(gt=0, le=1_000_000)
-
-
 class SettingsPayload(BaseModel):
     values: dict[str, str | int | float | None]
 
 
-class OnboardingPayload(BaseModel):
-    business_name: str = ""
-    starting_level: int = 0
-    starting_levels: dict[str, int] = {}
-    load_sample_orders: bool = True
-    orders: list[OrderPayload] = []
-    orders_csv: str | None = Field(default=None, max_length=5_000_000)
-    values: dict[str, str | int | float | None] = {}
-
-
 class DemoSessionPayload(BaseModel):
     name: str = Field(default="", max_length=40)
-
-
-class TopUpPayload(BaseModel):
-    task_class: str = _task_class_field()
-    count: int = Field(default=4, ge=1, le=12)
 
 
 # --- context --------------------------------------------------------------
@@ -255,46 +159,10 @@ def require_role(required: Role):
     return dependency
 
 
-def _task_class(value: str) -> str:
-    key = value.strip().lower()
-    if key not in TASK_CLASSES:
-        raise HTTPException(status_code=422, detail=f"Unknown task class '{value}'.")
-    return key
-
-
 # --- serialization ----------------------------------------------------------
 
 def _mask(value: str) -> str:
     return f"••••{value[-4:]}" if len(value) > 4 else ("••••" if value else "")
-
-
-def serialize_providers() -> list[dict]:
-    return [
-        {
-            "key": key,
-            "label": spec.label,
-            "needs_key": spec.key_field is not None,
-            "key_field": spec.key_field,
-            "model_field": spec.model_field,
-            "default_model": spec.default_model,
-            "needs_base_url": spec.needs_base_url,
-        }
-        for key, spec in PROVIDERS.items()
-    ]
-
-
-def serialize_task_classes(context: AppContext) -> list[dict]:
-    return [
-        {
-            "key": spec.key,
-            "label": spec.label,
-            "verb": spec.verb,
-            "description": spec.description,
-            "effect_column": spec.effect_column,
-            "ceiling": context.config.ceiling_for(spec.key),
-        }
-        for spec in TASK_CLASSES.values()
-    ]
 
 
 def serialize_settings(context: AppContext) -> dict:
@@ -302,117 +170,24 @@ def serialize_settings(context: AppContext) -> dict:
     cfg = context.config
     out = {
         "onboarded": stored.get("onboarded") == "1",
-        "business_name": stored.get("business_name", ""),
-        "llm_provider": cfg.llm_provider,
-        "llm_enabled": cfg.llm_enabled,
-        "llm_model": cfg.llm_model,
-        "compat_base_url": cfg.compat_base_url,
         "trust_confidence": cfg.trust_confidence,
-        "refund_window_days": cfg.refund_window_days,
-        "orders_source": stored.get("orders_source", ""),
-        "stripe_connected": bool(cfg.stripe_secret_key),
-        "inbox_path": "/api/inbox",
-        "l2_auto_refund_ceiling": cfg.l2_auto_refund_ceiling,
-        "l2_auto_credit_ceiling": cfg.l2_auto_credit_ceiling,
         "neatlogs_project": cfg.neatlogs_project,
         "neatlogs_enabled": cfg.neatlogs_enabled,
-        "alerts_enabled": valid_webhook_url(cfg.alert_webhook_url),
         "demo_mode": cfg.demo_mode,
+        "jev_enabled": bool(cfg.typesafe_api_key),
+        "jev_endpoint": cfg.jev_endpoint,
     }
-    for spec in PROVIDERS.values():
-        if spec.model_field:
-            out[spec.model_field] = getattr(cfg, spec.model_field)
     for key in SECRET_KEYS:
         value = getattr(cfg, key, "")
         out[f"has_{key}"] = bool(value)
         out[f"{key}_hint"] = _mask(value)
-    assumptions = economics.Assumptions.from_settings(stored)
-    for key in ECON_KEYS:
-        out[key] = getattr(assumptions, key.removeprefix("econ_"))
     return out
-
-
-def serialize_state(state: LicenseState, progress: dict | None = None) -> dict:
-    return {
-        "task_class": state.task_class,
-        "level": int(state.level),
-        "effective_level": int(state.effective_level),
-        "clean_runs": state.consecutive_clean_runs,
-        "successes": state.successes,
-        "failures": state.failures,
-        "progress": progress or {},
-        "quarantined": state.quarantined,
-        "demoted_from": int(state.demoted_from) if state.demoted_from is not None else None,
-    }
-
-
-def serialize_packet(context: AppContext, run_id: int | None) -> dict | None:
-    if run_id is None:
-        return None
-    packet = build_packet(context.conn, run_id, context.config)
-    if packet is None:
-        return None
-    return {
-        "run": packet.run,
-        "order": packet.order,
-        "detections": packet.detections,
-        "spans": packet.spans,
-        "license_history": packet.license_history,
-        "neatlogs_link": packet.neatlogs_link,
-        "before_refunded": packet.before_refunded,
-        "after_refunded": packet.after_refunded,
-        "intended_delta": packet.intended_delta,
-        "actual_delta": packet.actual_delta,
-    }
-
-
-_STATS_SQL = """
-    SELECT COUNT(*) AS total,
-           SUM(status = 'clean') AS clean,
-           SUM(status = 'demoted') AS demoted,
-           SUM(status = 'pending_approval') AS pending,
-           SUM(status = 'suggested') AS suggested,
-           SUM(executed) AS executed,
-           SUM(fault_mode != 'none') AS faulted,
-           COALESCE(SUM(CASE WHEN status = 'clean'
-                             THEN after_refunded - before_refunded END), 0) AS paid
-      FROM runs
-"""
-
-
-def _stats_row(row) -> dict:
-    return {
-        "total_runs": row["total"] or 0,
-        "clean_runs": row["clean"] or 0,
-        "demotions": row["demoted"] or 0,
-        "pending_approval": row["pending"] or 0,
-        "suggested": row["suggested"] or 0,
-        "executed": row["executed"] or 0,
-        "faults_injected": row["faulted"] or 0,
-        # Every injected fault that executed was caught (it demoted) — the
-        # false-success count that reached the customer is the difference.
-        "paid_out": round(row["paid"] or 0, 2),
-    }
-
-
-def _stats(context: AppContext) -> dict:
-    overall = _stats_row(context.conn.execute(_STATS_SQL).fetchone())
-    overall["refunded_total"] = overall["paid_out"]  # legacy key
-    overall["by_class"] = {
-        key: _stats_row(context.conn.execute(_STATS_SQL + " WHERE task_class = ?", (key,)).fetchone())
-        for key in TASK_CLASSES
-    }
-    return overall
-
-
-def _licenses(context: AppContext) -> dict[str, LicenseState]:
-    return {key: context.license_service.get_or_create(key) for key in TASK_CLASSES}
 
 
 def _observability(context: AppContext) -> dict:
     cfg = context.config
     ledger = context.conn.execute(
-        "SELECT COUNT(*) AS n, SUM(git_sha IS NOT NULL) AS committed FROM license_events"
+        "SELECT COUNT(*) AS n, COUNT(git_sha) AS committed FROM agent_events"
     ).fetchone()
     return {
         "neatlogs": {
@@ -420,122 +195,24 @@ def _observability(context: AppContext) -> dict:
             "project": cfg.neatlogs_project,
             "app_url": cfg.neatlogs_app_url,
         },
-        "llm": {
-            "provider": cfg.llm_provider,
-            "label": PROVIDERS.get(cfg.llm_provider, PROVIDERS["deterministic"]).label,
-            "model": cfg.llm_model,
-            "enabled": cfg.llm_enabled,
-        },
         "ledger": {
             "repo": str(cfg.ledger_repo),
             "events": ledger["n"] or 0,
             "commits": ledger["committed"] or 0,
         },
-        "alerts": {"enabled": valid_webhook_url(cfg.alert_webhook_url)},
     }
 
 
-def dashboard_payload(context: AppContext, selected_run_id: int | None = None) -> dict:
-    runs = [dict(row) for row in runs_repo.list_recent(context.conn, limit=100)]
-    if runs:
-        marks = ",".join("?" * len(runs))
-        rules: dict[int, list[str]] = {}
-        for row in context.conn.execute(
-            f"SELECT run_id, rule FROM detections WHERE run_id IN ({marks}) ORDER BY id",
-            [r["id"] for r in runs],
-        ):
-            rules.setdefault(row["run_id"], []).append(row["rule"])
-        for r in runs:
-            r["problems"] = rules.get(r["id"], [])
-    selected = selected_run_id or (runs[0]["id"] if runs else None)
-    intakes = [
-        dict(r) for r in context.conn.execute(
-            "SELECT * FROM intakes ORDER BY id DESC LIMIT 20"
-        ).fetchall()
-    ]
-    licenses = _licenses(context)
-    stored = settings_repo.get_all(context.conn)
-    orders = []
-    for row in orders_repo.list_orders(context.conn):
-        order = dict(row)
-        order["remaining"] = orders_repo.remaining_balance(row)
-        orders.append(order)
-    events = [
-        dict(e) for e in context.conn.execute(
-            "SELECT * FROM license_events ORDER BY id DESC LIMIT 60"
-        ).fetchall()
-    ]
-    armed = {key: context.fault_injector.peek(key).value for key in TASK_CLASSES}
+def dashboard_payload(context: AppContext) -> dict:
+    """The workspace view: settings, the license history and where it is kept."""
+    events = [{**event_payload(e, context.config), "id": f"agent-{e['id']}",
+               "task_class": f"{e['action_class']}@{e['repo']}"}
+              for e in agent_repo.list_events(context.conn, limit=60)]
     return {
         "settings": serialize_settings(context),
-        "warnings": list(context.warnings),
-        "providers": serialize_providers(),
-        "task_classes": serialize_task_classes(context),
-        "licenses": {
-            key: serialize_state(state, context.license_service.progress(state))
-            for key, state in licenses.items()
-        },
-        "license": serialize_state(
-            licenses[DEFAULT_TASK_CLASS], context.license_service.progress(licenses[DEFAULT_TASK_CLASS])
-        ),
-        "trust": {
-            "confidence": context.config.trust_confidence,
-            "incident_cost": context.license_service.ladder.incident_cost,
-            "hourly_cost": context.license_service.ladder.hourly_cost,
-            "break_even": {
-                str(level): round(context.license_service.ladder.step(level).target_rate, 4)
-                for level in range(context.license_service.ladder.top)
-            },
-        },
-        "config": {
-            "l2_auto_refund_ceiling": context.config.l2_auto_refund_ceiling,
-            "ceilings": {key: context.config.ceiling_for(key) for key in TASK_CLASSES},
-        },
-        "stats": _stats(context),
-        "economics": economics.workspace_economics(
-            context.conn,
-            {key: int(state.effective_level) for key, state in licenses.items()},
-            stored,
-        ),
-        "observability": _observability(context),
-        "orders": orders,
-        "runs": runs,
-        "intakes": intakes,
-        "tickets": tickets_repo.list_recent(context.conn, limit=60),
         "events": events,
-        "armed_faults": armed,
-        "armed_fault": armed[DEFAULT_TASK_CLASS],
-        "packet": serialize_packet(context, selected),
+        "observability": _observability(context),
     }
-
-
-def make_idempotency_key(namespace: str, *parts: object) -> str:
-    normalized = "\x1f".join(str(part).strip().lower() for part in parts)
-    return f"{namespace}:{sha256(normalized.encode('utf-8')).hexdigest()[:32]}"
-
-
-def _run(context: AppContext, order_id: str, amount: float | None, reason: str,
-         *, task_class: str = DEFAULT_TASK_CLASS, approved: bool = False,
-         idempotency_key: str | None = None, actor: Actor):
-    order = orders_repo.get_order(context.conn, order_id)
-    if order is None:
-        raise HTTPException(status_code=404, detail=f"Order {order_id} not found.")
-    remaining = orders_repo.remaining_balance(order)
-    value = remaining if amount is None else float(amount)
-    if value <= 0:
-        raise HTTPException(status_code=422, detail=f"{order_id} has nothing left to pay out.")
-    if value > remaining + 1e-9:
-        raise HTTPException(
-            status_code=422,
-            detail=f"${value:.2f} exceeds the ${remaining:.2f} still payable on {order_id}.",
-        )
-    return context.worker.run_refund(
-        RefundRequest(order["order_id"], order["customer"], value, reason),
-        task_class=task_class,
-        approved=approved,
-        idempotency_key=idempotency_key,
-        actor=actor,
-    )
 
 
 # --- session ----------------------------------------------------------------
@@ -552,7 +229,7 @@ def session_info() -> dict:
 def start_demo_session(payload: DemoSessionPayload) -> dict:
     """Local demo only (SOLO_DEMO_MODE=1): issue a short-lived admin session so
     a judge can try the product without a deployment token. The name is
-    recorded as the actor on every run and license change."""
+    recorded as the actor on every license change."""
     with _lock:
         context = get_context()
         if not context.config.demo_mode:
@@ -576,12 +253,9 @@ def whoami(actor: Actor = Depends(current_actor)) -> dict:
 # --- read -----------------------------------------------------------------
 
 @app.get("/api/dashboard")
-def get_dashboard(
-    run_id: int | None = None,
-    actor: Actor = Depends(require_role(Role.OPERATOR)),
-) -> dict:
+def get_dashboard(actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
     with _lock:
-        return dashboard_payload(get_context(), run_id)
+        return dashboard_payload(get_context())
 
 
 @app.get("/api/settings")
@@ -590,371 +264,7 @@ def get_settings(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
         return serialize_settings(get_context())
 
 
-# --- agent ----------------------------------------------------------------
-
-@app.post("/api/refunds")
-@app.post("/api/runs")
-def run_action(
-    payload: RefundPayload, actor: Actor = Depends(require_role(Role.OPERATOR))
-) -> dict:
-    with _lock:
-        context = get_context()
-        task_class = _task_class(payload.task_class)
-        order_id = payload.order_id.strip().upper()
-        key = payload.idempotency_key or make_idempotency_key(
-            "manual", task_class, order_id, payload.amount or "", payload.reason
-        )
-        result = _run(context, order_id, payload.amount, payload.reason,
-                      task_class=task_class, idempotency_key=key, actor=actor)
-        return dashboard_payload(context, result.run_id)
-
-
-def _handle_ticket(context: AppContext, ticket_id: int, actor: Actor) -> dict:
-    ticket = tickets_repo.get(context.conn, ticket_id)
-    outcome = context.agent.handle(
-        ticket["body"],
-        sender=ticket["sender"],
-        ticket_id=ticket_id,
-        idempotency_key=make_idempotency_key("ticket", ticket_id),
-        actor=actor,
-    )
-    tickets_repo.record_outcome(context.conn, ticket_id, outcome)
-    intake = outcome.intake
-    context.conn.execute(
-        "INSERT INTO intakes (message, order_id, amount, reason, source, run_id)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
-        (ticket["body"], outcome.order_id, outcome.amount,
-         intake.reason if intake else None, intake.source if intake else "agent", outcome.run_id),
-    )
-    context.conn.commit()
-    return {
-        "ticket_id": ticket_id,
-        "status": outcome.status,
-        "summary": outcome.summary,
-        "reply": outcome.reply,
-        "steps": [s.as_dict() for s in outcome.steps],
-        "order_id": outcome.order_id,
-        "amount": outcome.amount,
-        "task_class": outcome.task_class,
-        "run_id": outcome.run_id,
-        "trace_id": outcome.trace_id,
-        "source": intake.source if intake else None,
-        "confidence": intake.confidence if intake else None,
-        "note": intake.note if intake else "",
-    }
-
-
-@app.post("/api/intake")
-def intake(
-    payload: IntakePayload, actor: Actor = Depends(require_role(Role.OPERATOR))
-) -> dict:
-    """A pasted customer message, handled end to end by the ticket agent."""
-    with _lock:
-        context = get_context()
-        if not payload.run:
-            parsed = parse_message(payload.message, context.config, context.conn)
-            body = dashboard_payload(context)
-            body["intake"] = {"order_id": parsed.order_id, "amount": parsed.amount,
-                              "task_class": parsed.task_class, "source": parsed.source,
-                              "needs_human": parsed.needs_human, "note": parsed.note}
-            return body
-        ticket_id = tickets_repo.insert(context.conn, source="paste", sender=payload.sender, body=payload.message)
-        result = _handle_ticket(context, ticket_id, actor)
-        body = dashboard_payload(context, result["run_id"])
-        body["intake"] = result
-        return body
-
-
-@app.post("/api/tickets/{ticket_id}/handle")
-def handle_ticket(ticket_id: int, actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
-    with _lock:
-        context = get_context()
-        if tickets_repo.get(context.conn, ticket_id) is None:
-            raise HTTPException(status_code=404, detail="Message not found.")
-        result = _handle_ticket(context, ticket_id, actor)
-        body = dashboard_payload(context, result["run_id"])
-        body["intake"] = result
-        return body
-
-
-@app.post("/api/tickets/handle-new")
-def handle_new_tickets(actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
-    """Let the agent work through every unhandled message in the inbox."""
-    with _lock:
-        context = get_context()
-        handled = [_handle_ticket(context, t["id"], actor) for t in tickets_repo.list_new(context.conn)]
-        body = dashboard_payload(context)
-        body["handled"] = handled
-        return body
-
-
-def _inbox_secret(context: AppContext) -> str:
-    """The shared secret for the inbox webhook, created on first use."""
-    if context.config.inbox_secret:
-        return context.config.inbox_secret
-    stored = settings_repo.get_all(context.conn).get("inbox_secret_hint")
-    if stored:
-        return stored
-    secret = "inb_" + secrets.token_urlsafe(18)
-    settings_repo.set_many(context.conn, {"inbox_secret_hint": secret})
-    context.conn.commit()
-    return secret
-
-
-@app.get("/api/inbox/secret")
-def inbox_secret(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
-    """The webhook URL path and secret a helpdesk or email forwarder posts to."""
-    with _lock:
-        context = get_context()
-        return {"path": "/api/inbox", "secret": _inbox_secret(context)}
-
-
-@app.post("/api/inbox")
-def inbox_webhook(
-    payload: InboxPayload,
-    key: str | None = Query(default=None),
-    x_solo_inbox_key: str | None = Header(default=None),
-) -> dict:
-    """Public webhook: a helpdesk trigger, Zapier/Make step or email forwarder
-    posts a customer message here; the agent handles it at once and returns
-    the reply to send. Authenticated by the workspace's inbox secret."""
-    with _lock:
-        context = get_context()
-        given = x_solo_inbox_key or key or ""
-        if not given or not secrets.compare_digest(given, _inbox_secret(context)):
-            raise HTTPException(status_code=401, detail="Invalid inbox key.")
-        if len(payload.content) < 3:
-            raise HTTPException(status_code=422, detail="The message is empty.")
-        ticket_id = tickets_repo.insert(
-            context.conn, source="webhook", sender=payload.from_address or None,
-            subject=payload.subject or None, body=payload.content,
-        )
-        actor = Actor(actor_id="inbox:webhook", role=Role.OPERATOR)
-        result = _handle_ticket(context, ticket_id, actor)
-        return {k: result[k] for k in ("ticket_id", "status", "summary", "reply", "run_id", "trace_id")}
-
-
-@app.post("/api/runs/{run_id}/reject")
-def reject_run(run_id: int, actor: Actor = Depends(require_role(Role.APPROVER))) -> dict:
-    """A person says the agent's proposal was wrong. Counted as a failure in
-    the job type's evidence, so it needs more successes to climb."""
-    with _lock:
-        context = get_context()
-        run = runs_repo.get_run(context.conn, run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail="Run not found.")
-        if run["status"] not in ("pending_approval", "suggested"):
-            raise HTTPException(status_code=409, detail="Run is not awaiting approval.")
-        context.license_service.apply_rejection(run["task_class"])
-        context.conn.execute("UPDATE runs SET status = ? WHERE id = ?", (RunStatus.REJECTED.value, run_id))
-        context.conn.commit()
-        return dashboard_payload(context, run_id)
-
-
-@app.post("/api/runs/{run_id}/approve")
-def approve_run(
-    run_id: int, actor: Actor = Depends(require_role(Role.APPROVER))
-) -> dict:
-    """Human approves a draft (L1 / over the L2 ceiling) or acts on an L0
-    suggestion. The approved execution is still verified and, when clean,
-    earns track-record credit — that is how a class climbs off L0."""
-    with _lock:
-        context = get_context()
-        run = runs_repo.get_run(context.conn, run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail="Run not found.")
-        if run["status"] not in ("pending_approval", "suggested"):
-            raise HTTPException(status_code=409, detail="Run is not awaiting approval.")
-        task_class = run["task_class"]
-        if context.license_service.get_or_create(task_class).quarantined:
-            raise HTTPException(status_code=409, detail="The class is quarantined. Restore it before approving runs.")
-        result = _run(context, run["order_id"], run["requested_amount"],
-                      "approved by human", task_class=task_class, approved=True,
-                      idempotency_key=make_idempotency_key("approval", run_id),
-                      actor=actor)
-        context.conn.execute(
-            "UPDATE runs SET status = ? WHERE id = ?",
-            (RunStatus.APPROVED.value, run_id),
-        )
-        context.conn.commit()
-        return dashboard_payload(context, result.run_id)
-
-
-@app.post("/api/faults")
-def arm_fault(
-    payload: FaultPayload, actor: Actor = Depends(require_role(Role.ADMIN))
-) -> dict:
-    with _lock:
-        context = get_context()
-        context.fault_injector.arm(_task_class(payload.task_class), payload.mode)
-        return dashboard_payload(context)
-
-
-@app.post("/api/restore")
-def restore_license(
-    payload: RestorePayload, actor: Actor = Depends(require_role(Role.APPROVER))
-) -> dict:
-    with _lock:
-        context = get_context()
-        try:
-            target = LicenseLevel(payload.level)
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail="Unknown license level.") from error
-        context.license_service.restore_license(
-            _task_class(payload.task_class), target, reason=payload.reason, actor=actor
-        )
-        return dashboard_payload(context)
-
-
-# --- orders ---------------------------------------------------------------
-
-def _insert_order(context: AppContext, payload: OrderPayload) -> None:
-    order_id = payload.order_id.strip().upper()
-    if not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{2,31}", order_id):
-        raise HTTPException(status_code=422, detail="Order id may use letters, digits and dashes.")
-    if orders_repo.get_order(context.conn, order_id) is not None:
-        raise HTTPException(status_code=409, detail=f"{order_id} already exists.")
-    context.conn.execute(
-        "INSERT INTO orders (order_id, customer, amount) VALUES (?, ?, ?)",
-        (order_id, payload.customer.strip(), round(payload.amount, 2)),
-    )
-
-
-@app.post("/api/orders")
-def add_order(
-    payload: OrderPayload, actor: Actor = Depends(require_role(Role.OPERATOR))
-) -> dict:
-    with _lock:
-        context = get_context()
-        _insert_order(context, payload)
-        context.conn.commit()
-        return dashboard_payload(context)
-
-
-@app.post("/api/orders/import")
-def import_orders(payload: CsvPayload, actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
-    """Load orders from a CSV export (Shopify, WooCommerce, a spreadsheet …)."""
-    with _lock:
-        context = get_context()
-        records, problems = parse_orders_csv(payload.csv)
-        if not records:
-            raise HTTPException(status_code=422, detail=" ".join(problems) or "No orders found in the file.")
-        added, updated = orders_repo.upsert_orders(context.conn, records)
-        context.conn.commit()
-        body = dashboard_payload(context)
-        body["import"] = {"added": added, "updated": updated, "problems": problems[:20]}
-        return body
-
-
-@app.get("/api/orders/export", response_class=PlainTextResponse)
-def export_orders(actor: Actor = Depends(require_role(Role.OPERATOR))) -> str:
-    with _lock:
-        context = get_context()
-        return orders_to_csv([dict(r) for r in orders_repo.list_orders(context.conn)])
-
-
-@app.get("/api/runs/export", response_class=PlainTextResponse)
-def export_runs(actor: Actor = Depends(require_role(Role.OPERATOR))) -> str:
-    """Every run with its verified numbers — for an accountant or an audit."""
-    import csv
-    import io
-
-    with _lock:
-        context = get_context()
-        rows = [dict(r) for r in context.conn.execute("SELECT * FROM runs ORDER BY id").fetchall()]
-    out = io.StringIO()
-    if rows:
-        writer = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-    return out.getvalue()
-
-
-def _stripe(context: AppContext):
-    try:
-        return context.connectors.stripe()
-    except ConnectorError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-
-
-@app.post("/api/connectors/stripe/test")
-def test_stripe(payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
-    """Try a Stripe key from the form before saving it."""
-    from sololicense.connectors.stripe import StripeConnector
-
-    key = str(payload.values.get("stripe_secret_key") or "").strip()
-    with _lock:
-        context = get_context()
-        if not key or key.startswith("••"):
-            key = context.config.stripe_secret_key
-        api_base = context.config.stripe_api_base
-    if not key:
-        return {"ok": False, "message": "Paste a Stripe secret key first (Developers → API keys)."}
-    try:
-        connector = StripeConnector(key, api_base=api_base, allow_live=os.environ.get("SOLO_ALLOW_LIVE_STRIPE") == "1")
-        return {"ok": True, "message": connector.check()}
-    except ConnectorError as error:
-        return {"ok": False, "message": str(error)}
-
-
-@app.post("/api/connectors/stripe/sync")
-def sync_stripe(actor: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
-    """Import recent paid Stripe charges as orders (refunds as Stripe reports them)."""
-    with _lock:
-        context = get_context()
-        try:
-            records = _stripe(context).list_orders()
-        except ConnectorError as error:
-            raise HTTPException(status_code=502, detail=str(error)) from error
-        added, updated = orders_repo.upsert_orders(context.conn, records)
-        context.conn.commit()
-        body = dashboard_payload(context)
-        body["import"] = {"added": added, "updated": updated, "problems": []}
-        return body
-
-
-@app.post("/api/connectors/stripe/sample")
-def stripe_sample_orders(
-    payload: StripeSamplePayload, actor: Actor = Depends(require_role(Role.ADMIN))
-) -> dict:
-    """Create the sample orders as paid charges in a Stripe *test* account, then sync."""
-    if not payload.confirm_test_mode:
-        raise HTTPException(status_code=422, detail="Confirm that this is a Stripe test account.")
-    with _lock:
-        context = get_context()
-        samples = [{"order_id": o.order_id, "customer": o.customer, "email": o.email, "amount": o.amount}
-                   for o in SEED_ORDERS]
-        try:
-            stripe = _stripe(context)
-            stripe.create_sample_orders(samples)
-            records = stripe.list_orders()
-        except ConnectorError as error:
-            raise HTTPException(status_code=502, detail=str(error)) from error
-        added, updated = orders_repo.upsert_orders(context.conn, records)
-        context.conn.commit()
-        body = dashboard_payload(context)
-        body["import"] = {"added": added, "updated": updated, "problems": []}
-        return body
-
-
-@app.delete("/api/orders/{order_id}")
-def delete_order(
-    order_id: str, actor: Actor = Depends(require_role(Role.OPERATOR))
-) -> dict:
-    with _lock:
-        context = get_context()
-        order_id = order_id.strip().upper()
-        used = context.conn.execute(
-            "SELECT 1 FROM runs WHERE order_id = ? LIMIT 1", (order_id,)
-        ).fetchone()
-        if used:
-            raise HTTPException(status_code=409, detail="Order has runs on record and cannot be deleted.")
-        context.conn.execute("DELETE FROM orders WHERE order_id = ?", (order_id,))
-        context.conn.commit()
-        return dashboard_payload(context)
-
-
-# --- settings & onboarding ------------------------------------------------
+# --- settings ---------------------------------------------------------------
 
 def _clean_values(values: dict) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -965,32 +275,13 @@ def _clean_values(values: dict) -> dict[str, str]:
         if key in SECRET_KEYS and (not text or text.startswith("••")):
             continue  # blank / masked -> keep the stored secret
         out[key] = text
-    if "llm_provider" in out and out["llm_provider"] not in PROVIDERS:
-        raise HTTPException(status_code=422, detail="Unknown LLM provider.")
-    if out.get("compat_base_url") and not out["compat_base_url"].startswith("https://"):
-        raise HTTPException(status_code=422, detail="The OpenAI-compatible base URL must use https://.")
-    if out.get("orders_source") and out["orders_source"] not in ORDER_SOURCES:
-        raise HTTPException(status_code=422, detail="Unknown orders source.")
-    if out.get("stripe_secret_key"):
-        from sololicense.connectors.stripe import key_mode
-
-        mode = key_mode(out["stripe_secret_key"])
-        if mode is None:
-            raise HTTPException(status_code=422, detail="That does not look like a Stripe secret key (sk_test_…).")
-        if mode == "live" and os.environ.get("SOLO_ALLOW_LIVE_STRIPE") != "1":
-            raise HTTPException(status_code=422, detail="Use a Stripe test-mode key (sk_test_…).")
-    if out.get("alert_webhook_url") and not valid_webhook_url(out["alert_webhook_url"]):
-        raise HTTPException(status_code=422, detail="The alert webhook must be an https:// URL.")
-    try:
-        for key in _NUMERIC_KEYS:
-            if key in out and float(out[key]) < 0:
-                raise ValueError
-        if "trust_confidence" in out and not 0.5 <= float(out["trust_confidence"]) <= 0.999:
-            raise ValueError
-        if "refund_window_days" in out:
-            out["refund_window_days"] = str(int(float(out["refund_window_days"])))
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail="Invalid numeric setting.") from error
+    if "trust_confidence" in out:
+        try:
+            valid = 0.5 <= float(out["trust_confidence"]) <= 0.999
+        except ValueError:
+            valid = False
+        if not valid:
+            raise HTTPException(status_code=422, detail="Invalid numeric setting.")
     return out
 
 
@@ -1025,140 +316,489 @@ def _config_with_form(context: AppContext, cleaned: dict[str, str]):
     return replace(context.config, **changes)
 
 
-@app.post("/api/settings/test-llm")
-def test_llm(
-    payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
-) -> dict:
-    """Try a provider/key (from the form, before saving) with a tiny call."""
-    with _lock:
-        context = get_context()
-        cfg = _config_with_form(context, _clean_values(payload.values))
-    if cfg.llm_provider == "deterministic":
-        return {"ok": True, "message": "Built-in rules need no key."}
-    if not cfg.llm_enabled:
-        return {"ok": False, "message": "Add an API key (and base URL) for this provider first."}
-    try:
-        reply = complete(cfg, "Reply with the single word: ready", max_tokens=256)
-        return {"ok": True, "message": f"Connected to {cfg.llm_model}. Model replied: {reply[:40]}"}
-    except Exception as error:  # surfaced to the operator; key never echoed
-        return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
-
-
 @app.post("/api/settings/test-neatlogs")
 def test_neatlogs(
     payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
 ) -> dict:
-    """Send neatlogs' own doctor probe trace with the (unsaved) key."""
+    """Doctor-probe neatlogs from an isolated child process.
+
+    The live tracer in this process stays untouched (re-initialising it is
+    what the SDK refuses); the probe runs out of process with the unsaved
+    key passed through the child's environment, and the answer is a safe,
+    structured result the frontend can explain.
+    """
     with _lock:
         context = get_context()
         cfg = _config_with_form(context, _clean_values(payload.values))
     if not cfg.neatlogs_api_key:
-        return {"ok": False, "message": "Add a neatlogs API key first."}
-    try:
-        import neatlogs
-
-        report = neatlogs.doctor_probe_v2(
-            api_key=cfg.neatlogs_api_key, endpoint=cfg.neatlogs_endpoint, timeout_seconds=12,
-        )
-    except Exception as error:
-        return {"ok": False, "message": f"{type(error).__name__}: {str(error)[:200]}"}
-    if report.get("status") == "pass":
-        return {"ok": True, "message": "Connected. A probe trace was ingested and read back."}
-    failure = report.get("first_failure") or "unknown"
-    stages = [check.get("details", {}) for check in report.get("checks", [])]
-    accepted = any(stage.get("last_successful_stage") for stage in stages)
-    if accepted:
-        return {"ok": True, "message": "Connected. neatlogs accepted the probe trace (still processing)."}
-    return {"ok": False, "message": f"neatlogs probe failed: {failure}"}
+        return {
+            "ok": False,
+            "code": "CREDENTIAL_MISSING",
+            "message": "Add a neatlogs API key first.",
+        }
+    report = run_doctor_probe(cfg.neatlogs_api_key, cfg.neatlogs_endpoint)
+    return response_for(report, secret=cfg.neatlogs_api_key)
 
 
-@app.post("/api/settings/test-alert")
-def test_alert(
-    payload: SettingsPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+# --- coding agents: Claude Code hooks ------------------------------------------
+
+_HOOK_EVENTS = {
+    "user-prompt": "UserPromptSubmit",
+    "pre-tool": "PreToolUse",
+    "permission": "PermissionRequest",
+    "post-tool": "PostToolUse",
+    "post-tool-failure": "PostToolUseFailure",
+    "stop": "Stop",
+}
+
+
+def _client_fields(body: dict) -> dict:
+    """Drop gate-internal keys (``_agent``, ``_prompt_only``, ...) a caller
+    might send: who an event came from is decided by the route, never the body."""
+    return {k: v for k, v in body.items() if not str(k).startswith("_")}
+
+
+def _hook_secret(context: AppContext) -> str:
+    """Shared secret for hook calls that do not come from this machine."""
+    stored = settings_repo.get_all(context.conn).get("hook_secret_hint")
+    if stored:
+        return stored
+    secret = "hook_" + secrets.token_urlsafe(18)
+    settings_repo.set_many(context.conn, {"hook_secret_hint": secret})
+    context.conn.commit()
+    return secret
+
+
+def _hook_allowed(context: AppContext, request: Request, given: str | None) -> bool:
+    # Claude Code runs on the developer's machine and calls the local API.
+    host = request.client.host if request.client else ""
+    if host in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return True
+    return bool(given) and secrets.compare_digest(given, _hook_secret(context))
+
+
+@app.post("/api/hooks/{event}")
+def coding_hook(
+    event: str,
+    request: Request,
+    body: dict = Body(default_factory=dict),
+    x_solo_hook_key: str | None = Header(default=None),
 ) -> dict:
+    """One endpoint per Claude Code hook. The response is the hook's JSON
+    output: a PermissionRequest decision, or a Stop block with the reason the
+    turn's checks failed. Unknown or failing calls answer ``{}``, which leaves
+    Claude Code's own behaviour unchanged (it asks the person)."""
+    if event not in _HOOK_EVENTS:
+        raise HTTPException(status_code=404, detail="Unknown hook event.")
     with _lock:
         context = get_context()
-        cfg = _config_with_form(context, _clean_values(payload.values))
-        business = settings_repo.get_all(context.conn).get("business_name", "")
-    notifier = AlertNotifier(url=cfg.alert_webhook_url, business=business)
-    if not notifier.enabled:
-        return {"ok": False, "message": "Add an https:// webhook URL first."}
-    ok, status = notifier.send(
-        f"✅ {business or 'Solo License'} alerts are connected. You'll hear here when an agent loses its license."
-    )
-    return {"ok": ok, "message": f"Delivered ({status})." if ok else f"Delivery failed ({status})."}
+        if not _hook_allowed(context, request, x_solo_hook_key):
+            raise HTTPException(status_code=401, detail="Invalid hook key.")
+        gate = context.coding_gate
+        if gate is None:
+            return {}
+        # This route is Claude Code's: its PermissionRequest fires only when a
+        # person would be asked. Every other agent uses /api/hooks/{agent}/...
+        # Server-set keys always replace anything the caller sent.
+        body = {**_client_fields(body), "_agent": "claude-code", "_prompt_only": True}
+        if event == "user-prompt":
+            return gate.user_prompt(body)
+        if event == "pre-tool":
+            return gate.pre_tool(body)
+        if event == "permission":
+            return gate.permission(body)
+        if event == "stop":
+            return gate.stop(body)
+        return gate.tool_result(body, failed=event == "post-tool-failure")
 
 
-@app.post("/api/onboarding/complete")
-def complete_onboarding(
-    payload: OnboardingPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+@app.get("/api/hooks/secret")
+def hook_secret(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    with _lock:
+        return {"header": "X-Solo-Hook-Key", "secret": _hook_secret(get_context())}
+
+
+def coding_savings(context: AppContext, repo: str | None = None) -> dict:
+    """What the gate did, in developer time: every auto-allowed action is a
+    prompt nobody had to answer (the L0 minutes of the coding ladder)."""
+    from sololicense.coding.ladder import DEVELOPER_HOURLY_COST, MINUTES_BY_LEVEL
+
+    where, args = ("WHERE repo = ?", (repo,)) if repo else ("", ())
+    d = context.conn.execute(
+        f"""SELECT COALESCE(SUM(decision = 'allow'), 0) AS allowed,
+                   COALESCE(SUM(decision = 'deny'), 0) AS denied,
+                   COALESCE(SUM(decision = 'ask'), 0) AS asked
+              FROM agent_decisions {where}""", args).fetchone()
+    verified = context.conn.execute(
+        f"SELECT COUNT(*) AS n FROM agent_turns {where} {'AND' if repo else 'WHERE'} status = 'verified'", args,
+    ).fetchone()["n"]
+    # A turn sent back once leaves a turn.blocked span on its trace.
+    sent_back = context.conn.execute(
+        "SELECT COUNT(DISTINCT trace_id) AS n FROM spans WHERE name = 'turn.blocked'"
+        + (" AND trace_id IN (SELECT trace_id FROM agent_turns WHERE repo = ?)" if repo else ""), args,
+    ).fetchone()["n"]
+    minutes = int(d["allowed"]) * (MINUTES_BY_LEVEL[0] - MINUTES_BY_LEVEL[2])
+    return {
+        "auto_allowed": int(d["allowed"]),
+        "asked": int(d["asked"]),
+        "blocked": int(d["denied"]),
+        "sent_back": int(sent_back),
+        "verified_turns": int(verified),
+        "minutes_saved": round(minutes, 1),
+        "usd_saved": round(minutes / 60.0 * DEVELOPER_HOURLY_COST, 2),
+    }
+
+
+def coding_payload(context: AppContext, repo: str | None = None) -> dict:
+    """Everything the agent dashboard shows: licenses, decisions, turns."""
+    gate = context.coding_gate
+    licenses = []
+    for row in agent_repo.list_licenses(context.conn, repo):
+        spec = ACTION_CLASSES.get(row["action_class"])
+        if spec is None:
+            continue
+        progress = gate.ladder.progress(spec.key, row["level"], row["successes"], row["failures"],
+                                        row["successes_at_level"],
+                                        ceiling=gate.ceiling(row["repo"], spec.key)) if gate else {}
+        licenses.append({
+            "repo": row["repo"], "action_class": spec.key, "label": spec.label, "level": row["level"],
+            "max_level": spec.max_level, "successes": row["successes"], "failures": row["failures"],
+            "demoted_from": row["demoted_from"], "updated_at": row["updated_at"], **progress,
+        })
+    decisions = [dict(r) for r in agent_repo.recent_decisions(context.conn, 60)
+                 if repo is None or r["repo"] == repo]
+    turns = [dict(r) for r in agent_repo.recent_turns(context.conn, 30) if repo is None or r["repo"] == repo]
+    counts = {k: sum(1 for d in decisions if d["decision"] == k) for k in ("allow", "ask", "deny")}
+    savings = coding_savings(context, repo)
+    from sololicense.coding import policy as policy_mod
+
+    repos = [dict(r) for r in context.conn.execute("SELECT repo, path, test_command FROM agent_repos")]
+    for r in repos:
+        rules = policy_mod.effective(context.conn, r["repo"], r["path"])
+        r["frozen"], r["policy"], r["policy_source"] = rules.freeze, rules.digest, rules.source
+    return {
+        "repos": repos,
+        "licenses": licenses,
+        "decisions": decisions,
+        "turns": turns,
+        "events": [event_payload(r, getattr(context, "config", None))
+                   for r in agent_repo.list_events(context.conn, repo, 60)],
+        "remediations": [dict(r) for r in agent_repo.recent_remediations(context.conn, 30)],
+        "flags": [dict(r) for r in agent_repo.list_flags(context.conn, 30)],
+        "counts": counts,
+        "savings": savings,
+        "agents": [dict(r) for r in agent_repo.agents_seen(context.conn)],
+        "jev_enabled": bool(gate and gate.jev_client.enabled),
+        "classes": [{"key": c.key, "label": c.label, "max_level": c.max_level, "incident_cost": c.incident_cost}
+                    for c in ACTION_CLASSES.values()],
+    }
+
+
+@app.get("/api/coding")
+def coding_dashboard(
+    request: Request,
+    repo: str | None = Query(default=None, max_length=200),
+    authorization: str | None = Header(default=None),
 ) -> dict:
+    """Licenses, decisions and turns of the coding agent. Read-only; served to
+    this machine (the plugin's /trust command) and to signed-in users."""
     with _lock:
         context = get_context()
-        # Validate everything before writing anything, so a bad request can
-        # never leave a half-onboarded workspace behind.
-        values = _clean_values(payload.values)
-        levels: dict[str, LicenseLevel] = {}
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        return coding_payload(context, repo)
+
+
+class TestCommandPayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200)
+    test_command: str = Field(default="", max_length=400)
+
+
+@app.post("/api/coding/test-command")
+def set_coding_test_command(
+    payload: TestCommandPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+) -> dict:
+    """The command that verifies a turn in this repository (blank: detect)."""
+    with _lock:
+        context = get_context()
+        agent_repo.set_test_command(context.conn, payload.repo, payload.test_command.strip() or None)
+        context.conn.commit()
+        return coding_payload(context)
+
+
+@app.post("/api/coding/turns/{turn_id}/rewind")
+def rewind_coding_turn(turn_id: int, actor: Actor = Depends(require_role(Role.APPROVER))) -> dict:
+    """A person puts the repository back to how it was before a failed turn.
+    The turn's changes are stashed, never deleted."""
+    from sololicense.coding import entire
+
+    with _lock:
+        context = get_context()
+        turn = agent_repo.get_turn(context.conn, turn_id)
+        if turn is None:
+            raise HTTPException(status_code=404, detail="No such turn.")
+        result = entire.rewind(turn["cwd"], turn["base_ref"], f"solo-license: rewind turn {turn_id}")
+        if not result["ok"]:
+            raise HTTPException(status_code=409, detail=result.get("error") or "Could not rewind.")
+        agent_repo.close_turn(context.conn, turn_id, status="rewound",
+                              reason=f"Rewound by {actor.actor_id}; changes kept in `git stash list`.")
+        context.conn.commit()
+        return {"rewind": result, **coding_payload(context)}
+
+
+class CodingRestorePayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200)
+    action_class: str = Field(min_length=1, max_length=40)
+    level: int = Field(ge=0, le=2)
+    reason: str = Field(default="Reviewed and resumed.", max_length=300)
+
+
+@app.post("/api/coding/licenses/restore")
+def restore_coding_license(
+    payload: CodingRestorePayload, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
+    """A person resumes a paused action class at a level they choose."""
+    with _lock:
+        context = get_context()
+        if payload.action_class not in ACTION_CLASSES or context.coding_gate is None:
+            raise HTTPException(status_code=422, detail="Unknown action class.")
+        context.coding_gate.restore(payload.repo, payload.action_class, payload.level,
+                                    actor_id=actor.actor_id, reason=payload.reason)
+        return coding_payload(context)
+
+
+class CodingFlagPayload(BaseModel):
+    decision_id: int | None = Field(default=None, ge=1)
+    turn_id: int | None = Field(default=None, ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@app.post("/api/coding/flags")
+def flag_coding_decision(
+    payload: CodingFlagPayload, actor: Actor = Depends(require_role(Role.APPROVER))
+) -> dict:
+    """A person marks one decision or one turn as wrong: its classes go back
+    to L0 and the agent's next prompt is told what to revert."""
+    if (payload.decision_id is None) == (payload.turn_id is None):
+        raise HTTPException(status_code=422, detail="Flag exactly one decision_id or one turn_id.")
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="Say what was wrong.")
+    with _lock:
+        context = get_context()
+        if context.coding_gate is None:
+            raise HTTPException(status_code=422, detail="The coding gate is not running.")
         try:
-            for key in TASK_CLASSES:
-                levels[key] = LicenseLevel(payload.starting_levels.get(key, payload.starting_level))
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail="Unknown license level.") from error
-        for key in payload.starting_levels:
-            _task_class(key)
-
-        values["business_name"] = payload.business_name.strip()
-        values["onboarded"] = "1"
-        _save_settings(context, values)
-        reset_context()
-        context = get_context()
-        if payload.orders_csv:
-            records, problems = parse_orders_csv(payload.orders_csv)
-            if not records:
-                raise HTTPException(status_code=422, detail=" ".join(problems) or "No orders found in the file.")
-            orders_repo.upsert_orders(context.conn, records)
-        if payload.load_sample_orders and not orders_repo.list_orders(context.conn):
-            install_sample_store(context.conn)
-        for order in payload.orders:
-            if orders_repo.get_order(context.conn, order.order_id.strip().upper()) is None:
-                _insert_order(context, order)
-        for key, level in levels.items():
-            license_repo.upsert_state(context.conn, LicenseState(task_class=key, level=level))
-        context.conn.commit()
-        return dashboard_payload(context)
+            context.coding_gate.flag(decision_id=payload.decision_id, turn_id=payload.turn_id,
+                                     actor_id=actor.actor_id, reason=reason)
+        except LookupError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return coding_payload(context)
 
 
-@app.post("/api/reseed")
-def reseed_demo(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
-    """Reset runs/ledger and reinstall the sample orders (keeps settings)."""
+@app.post("/api/coding/jev/test")
+def test_jev(actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """Ask Jev to classify one command with the saved key: proves the key works."""
+    from sololicense.coding import jev
+
     with _lock:
-        context = get_context()
-        seed(context.conn, context.config)
-        return dashboard_payload(context)
+        gate = get_context().coding_gate
+        if gate is None or not gate.jev_client.enabled:
+            raise HTTPException(status_code=422, detail="No TypeSafe API key saved yet.")
+        verdict = jev.classify_command(gate.jev_client, "npm run build && npm test", ".")
+        if verdict is None:
+            raise HTTPException(status_code=502, detail="Jev did not answer. Check the key and the endpoint.")
+        return {"ok": True, "action_class": verdict.action_class, "confidence": verdict.confidence,
+                "irreversible": verdict.irreversible}
 
 
-@app.post("/api/demo/top-up")
-def top_up_demo_orders(
-    payload: TopUpPayload, actor: Actor = Depends(require_role(Role.ADMIN))
+@app.post("/api/hooks/{agent}/{native_event}")
+def agent_hook(
+    agent: Annotated[str, Path(max_length=40, pattern=r"^[a-z0-9-]+$")],
+    native_event: Annotated[str, Path(max_length=60, pattern=r"^[A-Za-z][A-Za-z0-9_.]*$")],
+    request: Request,
+    body: dict = Body(default_factory=dict),
+    envelope: bool = Query(default=False),
+    x_solo_hook_key: str | None = Header(default=None),
 ) -> dict:
-    """Add fresh under-ceiling orders so the guided demo always has work to do."""
+    """Any coding agent's native hook event. The payload is translated to the
+    gate's common event and the answer back into that agent's own format.
+    ``envelope=1`` (used by the command shim) wraps it as body + exit code."""
+    from sololicense.coding import agents
+
+    try:
+        spec = agents.resolve(agent)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     with _lock:
         context = get_context()
-        ceiling = context.config.ceiling_for(_task_class(payload.task_class))
-        base = context.conn.execute("SELECT COUNT(*) AS n FROM orders").fetchone()["n"]
-        amounts = [round(max(1.0, ceiling * f), 2) for f in (0.3, 0.5, 0.4, 0.6, 0.2, 0.7)]
-        added = 0
-        n = base
-        while added < payload.count:
-            n += 1
-            order_id = f"DEMO-{2000 + n}"
-            if orders_repo.get_order(context.conn, order_id) is not None:
-                continue
-            context.conn.execute(
-                "INSERT INTO orders (order_id, customer, amount, email, ordered_at, source)"
-                " VALUES (?, ?, ?, ?, date('now'), 'sample')",
-                (order_id, f"Demo customer {n}", amounts[added % len(amounts)], f"customer{n}@example.com"),
-            )
-            added += 1
+        if not _hook_allowed(context, request, x_solo_hook_key):
+            raise HTTPException(status_code=401, detail="Invalid hook key.")
+        gate = context.coding_gate
+        translated = agents.normalize(spec.key, native_event, body)
+        if gate is None or translated is None:
+            native = agents.Native()
+        else:
+            event, payload = translated
+            payload = _client_fields(payload)
+            payload["_agent"] = spec.key
+            # Only a hook that fires when a person would be prompted can stand
+            # for that person's yes: Claude Code's and Codex's PermissionRequest.
+            payload["_prompt_only"] = native_event == "PermissionRequest" and spec.key in ("claude-code", "codex")
+            if event == "user-prompt":
+                answer = gate.user_prompt(payload)
+            elif event == "pre-tool":
+                answer = gate.pre_tool(payload)
+            elif event == "permission":
+                answer = gate.permission(payload)
+            elif event == "stop":
+                answer = gate.stop(payload)
+            else:
+                answer = gate.tool_result(payload, failed=event == "post-tool-failure")
+            native = agents.render(spec.key, native_event, answer)
+        if envelope:
+            return native.envelope()
+        return native.body or {}
+
+
+@app.get("/api/coding/agents")
+def coding_agents() -> dict:
+    """Supported agents and how each one is installed (public: no data)."""
+    from sololicense.coding import agents
+
+    return {"agents": [
+        {"key": a.key, "label": a.label, "transport": a.transport, "config_path": a.config_path,
+         "can_send_back": a.can_send_back, "notes": a.notes, "docs": a.docs,
+         "install": f"solo-license init --agent {a.key}"}
+        for a in agents.AGENTS.values()
+    ], "unsupported": agents.UNSUPPORTED}
+
+
+@app.get("/api/coding/install")
+def coding_install(agent: str = Query(default="auto", max_length=40, pattern=r"^[a-z0-9-]+$")) -> dict:
+    """Everything a person needs to wire one agent: the one-liner, the
+    command to keep the gate running, and a prompt their agent can follow."""
+    from sololicense.cli import INSTALL_ONE_LINER, REPO_URL, agent_prompt
+
+    return {
+        "agent": agent,
+        "one_liner": INSTALL_ONE_LINER.replace("--agent auto", f"--agent {agent}"),
+        "persistent": f"uv tool install git+{REPO_URL}",
+        "init": f"solo-license init --agent {agent}",
+        "serve": "solo-license serve",
+        "doctor": "solo-license doctor",
+        "prompt": agent_prompt(agent),
+        "claude_plugin": ["/plugin marketplace add JAYATIAHUJA/Solo_license",
+                          "/plugin install solo-license@solo-license"],
+    }
+
+
+
+# --- coding policy: who decides how far an agent may go ----------------------------
+
+class CodingPolicyPayload(BaseModel):
+    repo: str = Field(min_length=1, max_length=200, pattern=r"^[^/\\]+$")   # a repo name, or "*" for all
+    classes: dict[str, int] = Field(default_factory=dict)
+    deny_commands: list[str] = Field(default_factory=list, max_length=50)
+    deny_paths: list[str] = Field(default_factory=list, max_length=50)
+    freeze: bool = False
+
+
+class FreezePayload(BaseModel):
+    repo: str = Field(default="*", min_length=1, max_length=200, pattern=r"^[^/\\]+$")
+    enabled: bool
+
+
+def coding_policy_payload(context: AppContext, repo: str) -> dict:
+    from sololicense.coding import policy as policy_mod
+
+    row = context.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
+    path = row["path"] if row else None
+    file_policy = policy_mod.from_file(path) if path else None
+    all_repos = policy_mod.local(context.conn, policy_mod.ALL_REPOS)
+    this_repo = policy_mod.local(context.conn, repo) if repo != policy_mod.ALL_REPOS else None
+    effective = policy_mod.merge(file_policy, all_repos, this_repo)
+    return {
+        "repo": repo,
+        "path": path,
+        "file": file_policy.to_json() if file_policy else None,
+        "file_path": policy_mod.POLICY_FILE.as_posix(),
+        "local_all": all_repos.to_json() if all_repos else None,
+        "local": this_repo.to_json() if this_repo else None,
+        "effective": {**effective.to_json(), "digest": effective.digest},
+        "built_in": {k: c.max_level for k, c in ACTION_CLASSES.items()},
+        "starter": policy_mod.STARTER,
+    }
+
+
+@app.get("/api/coding/policy")
+def get_coding_policy(
+    request: Request,
+    repo: str = Query(default="*", max_length=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    with _lock:
+        context = get_context()
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        return coding_policy_payload(context, repo)
+
+
+def _policy_summary(before: dict | None, after) -> str:
+    parts = []
+    if after.freeze:
+        parts.append("freeze on")
+    elif before and before.get("freeze"):
+        parts.append("freeze off")
+    if after.ceilings:
+        parts.append("ceilings " + ", ".join(f"{k}<=L{v}" for k, v in sorted(after.ceilings.items())))
+    if after.deny_commands:
+        parts.append(f"{len(after.deny_commands)} denied command(s)")
+    if after.deny_paths:
+        parts.append(f"{len(after.deny_paths)} denied path(s)")
+    return "; ".join(parts) or "no extra rules"
+
+
+@app.put("/api/coding/policy")
+def put_coding_policy(payload: CodingPolicyPayload, actor: Actor = Depends(require_role(Role.ADMIN))) -> dict:
+    """This machine's policy for one repo (or all). It can only tighten."""
+    from sololicense.coding import policy as policy_mod
+
+    with _lock:
+        context = get_context()
+        before = policy_mod.local(context.conn, payload.repo)
+        try:
+            saved = policy_mod.save_local(context.conn, payload.repo, {
+                "classes": {k: {"max": v} for k, v in payload.classes.items()},
+                "deny": {"commands": payload.deny_commands, "paths": payload.deny_paths},
+                "freeze": {"enabled": payload.freeze},
+            })
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if context.coding_gate is not None:
+            context.coding_gate.record_policy(payload.repo, _policy_summary(before.to_json() if before else None, saved),
+                                              actor.actor_id)
         context.conn.commit()
-        return dashboard_payload(context)
+        return coding_policy_payload(context, payload.repo)
+
+
+@app.post("/api/coding/freeze")
+def freeze_coding(payload: FreezePayload, actor: Actor = Depends(require_role(Role.APPROVER))) -> dict:
+    """The kill switch: every action asks, for one repo or all of them."""
+    from sololicense.coding import policy as policy_mod
+
+    with _lock:
+        context = get_context()
+        current = policy_mod.local(context.conn, payload.repo) or policy_mod.Policy()
+        raw = {"classes": {k: {"max": v} for k, v in current.ceilings.items()},
+               "deny": {"commands": list(current.deny_commands), "paths": list(current.deny_paths)},
+               "freeze": {"enabled": payload.enabled}}
+        policy_mod.save_local(context.conn, payload.repo, raw)
+        if context.coding_gate is not None:
+            where = "all repositories" if payload.repo == policy_mod.ALL_REPOS else payload.repo
+            context.coding_gate.record_policy(
+                payload.repo, f"{'freeze on' if payload.enabled else 'freeze off'} for {where}", actor.actor_id)
+        context.conn.commit()
+        return coding_payload(context)

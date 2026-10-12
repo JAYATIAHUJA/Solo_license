@@ -60,7 +60,7 @@ export function SignaturePad({ onSigned }) {
             <path d={d} className="sig-ink" />
           )}
         </svg>
-        {!ink && !auto && <span className="sig-hint hand">sign here — mouse or finger</span>}
+        {!ink && !auto && <span className="sig-hint hand">sign here - mouse or finger</span>}
       </SketchBox>
       <div className="sig-actions">
         <button className="btn btn-ghost btn-sm" onClick={() => { setStrokes([]); setAuto(false); }} disabled={!ink && !auto}>Clear</button>

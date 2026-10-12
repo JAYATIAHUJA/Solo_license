@@ -1,9 +1,9 @@
 """Composition root.
 
-The one place where concrete dependencies are constructed and wired. Both the
-Streamlit UI and the command-line scripts build their world through
-:func:`build_app`, so there is a single, consistent assembly order — and
-neatlogs is initialised here, before any agent object exists, as required."""
+The one place where concrete dependencies are constructed and wired. The API,
+the CLI and the scripts build their world through :func:`build_app`, so there
+is a single, consistent assembly order - and neatlogs is initialised here,
+before the coding gate exists, as required."""
 
 from __future__ import annotations
 
@@ -11,36 +11,27 @@ import sqlite3
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from sololicense.agent.loop import TicketAgent
-from sololicense.agent.planner import Planner
-from sololicense.connectors import Connectors
-from sololicense.agent.worker import RefundWorker
+from sololicense.coding.gate import CodingGate
+from sololicense.coding.jev import JevClient
+from sololicense.coding.ladder import CodingLadder
+from sololicense.coding.verify import check_turn
 from sololicense.config import Config, load_config, with_overrides
 from sololicense.db.repositories import settings as settings_repo
 from sololicense.db.database import init_db
-from sololicense.faults.injector import FaultInjector
 from sololicense.observability.neatlogs_client import NeatlogsClient, init_neatlogs
 from sololicense.observability.tracer import Tracer
-from sololicense.services import economics
-from sololicense.services.alerts import AlertNotifier
 from sololicense.services.git_ledger import GitLedger
-from sololicense.services.license_service import LicenseService
 
 
 @dataclass
 class AppContext:
-    """Fully wired application, ready to serve a UI or a script."""
+    """Fully wired application, ready to serve the API or a script."""
 
     config: Config
     conn: sqlite3.Connection
     neatlogs: NeatlogsClient
-    worker: RefundWorker
-    license_service: LicenseService
-    fault_injector: FaultInjector
-    alerts: AlertNotifier | None = None
+    coding_gate: CodingGate | None = None
     warnings: list[str] = field(default_factory=list)
-    connectors: Connectors | None = None
-    agent: TicketAgent | None = None
 
 
 def _local_encryption_key(db_path: Path) -> str:
@@ -84,42 +75,22 @@ def build_app(
         warnings.append(f"{error} Re-enter API keys in Settings.")
     config = with_overrides(config, revealed)
 
-    # 2. Observability — instrument before any agent logic.
+    # 2. Observability - instrument before any gate logic.
     neatlogs = init_neatlogs(config)
     tracer = Tracer(neatlogs)
 
-    # 3. Services and the agent.
-    alerts = AlertNotifier(
-        url=config.alert_webhook_url, business=stored_settings.get("business_name", "")
+    # 3. The coding gate.
+    coding_gate = CodingGate(
+        conn, tracer, GitLedger(repo_root=config.ledger_repo),
+        ladder=CodingLadder(confidence=config.trust_confidence),
+        verifier=check_turn,
+        jev_client=JevClient(api_key=config.typesafe_api_key, endpoint=config.jev_endpoint),
     )
-    license_service = LicenseService(
-        conn, GitLedger(repo_root=config.ledger_repo),
-        ladder=economics.trust_ladder(revealed, config.trust_confidence),
-        on_transition=alerts.notify,
-    )
-    fault_injector = FaultInjector(conn)
-    planner = Planner(config)
-    connectors = Connectors(conn, config)
-    worker = RefundWorker(
-        conn,
-        config,
-        tracer=tracer,
-        license_service=license_service,
-        fault_injector=fault_injector,
-        planner=planner,
-        connectors=connectors,
-    )
-    agent = TicketAgent(conn, config, tracer=tracer, worker=worker)
 
     return AppContext(
         config=config,
         conn=conn,
         neatlogs=neatlogs,
-        worker=worker,
-        license_service=license_service,
-        fault_injector=fault_injector,
-        alerts=alerts,
+        coding_gate=coding_gate,
         warnings=warnings,
-        connectors=connectors,
-        agent=agent,
     )

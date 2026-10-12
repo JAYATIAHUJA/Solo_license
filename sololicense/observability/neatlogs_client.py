@@ -8,19 +8,21 @@ still shipping real traces + detections when a key is present.
 
 Mapping (documented for judges)
 --------------------------------
-* A *trace* groups the spans of one refund run and carries a ``trace_id``.
-* A *span* is one step (plan / check-license / execute / verify) with
-  attributes such as before/after refunded amounts.
-* A *detection* is a tagged event on the trace with a severity; our custom
-  rules (state_mismatch, missing_verification, policy_breach) emit these.
+* A *trace* groups the spans of one gated agent turn and carries a ``trace_id``.
+* A *span* is one step (permission / tool result / turn check) with its
+  decision and evidence as attributes.
+* A *detection* is a tagged event on the trace with a severity.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
 from sololicense.config import Config
+from sololicense.observability.incidents import incident_kind
 
 
 @dataclass
@@ -32,14 +34,16 @@ class NeatlogsClient:
     _sdk: object | None = None
 
     def start_workflow(
-        self, trace_id: str, attributes: dict[str, Any] | None = None
+        self, trace_id: str, attributes: dict[str, Any] | None = None, *, session_id: str | None = None,
     ) -> "NeatlogsWorkflow | None":
-        """Open the remote root for one licensed run."""
+        """Open the remote root for one licensed run. ``session_id`` groups the
+        runs of one agent session (Claude Code's id, also Entire's) in neatlogs."""
         if not self.enabled or self._sdk is None:
             return None
         try:  # pragma: no cover - requires live SDK + key
-            task_class = str((attributes or {}).get("task_class", "refund"))
-            context = self._sdk.trace(f"{task_class}.run", kind="WORKFLOW")
+            task_class = str((attributes or {}).get("task_class", "agent"))
+            extra = {"session_id": session_id} if session_id else {}
+            context = self._sdk.trace(f"{task_class}.run", kind="WORKFLOW", **extra)
             root = context.__enter__()
             root.set_attribute("sololicense.trace_id", trace_id)
             for key, value in _safe_attributes(attributes or {}).items():
@@ -54,16 +58,32 @@ class NeatlogsClient:
         name: str,
         status: str,
         attributes: dict[str, Any],
+        *,
+        incident: bool | None = None,
     ) -> None:
-        """Emit one safe child span inside the active refund workflow."""
+        """Emit one safe child span inside the active workflow. ``incident``
+        (decided by :mod:`incidents`) marks it as an error neatlogs surfaces;
+        when not given, every ``error`` span is marked."""
         if workflow is None or not self.enabled or self._sdk is None:
             return
-        try:  # pragma: no cover - requires live SDK + key
-            with self._sdk.trace(name, kind=_span_kind(name)) as span:
+        try:
+            with _under(workflow), self._sdk.trace(name, kind=_span_kind(name)) as span:
                 span.set_attribute("sololicense.status", status)
                 for key, value in _safe_attributes(attributes).items():
-                    span.set_attribute(f"sololicense.{key}", value)
-                if status == "error":
+                    # OpenTelemetry GenAI semantic conventions keep their own names.
+                    span.set_attribute(key if key.startswith("gen_ai.") else f"sololicense.{key}", value)
+                if name.startswith("detection."):
+                    span.add_event("detection", {
+                        "detection.rule": name.removeprefix("detection."),
+                        "detection.severity": str(attributes.get("severity", "unknown")),
+                        "detection.message": str(attributes.get("message", ""))[:200],
+                    })
+                if incident:
+                    reason = str(attributes.get("reason") or attributes.get("message") or name)
+                    span.add_event("incident", {"incident.kind": incident_kind(name, attributes),
+                                                "incident.reason": reason[:200]})
+                    _mark_error(span, reason)
+                elif incident is None and status == "error":
                     _mark_error(span, str(attributes.get("message", name)))
         except Exception:
             return
@@ -102,6 +122,31 @@ class NeatlogsWorkflow:
             return None
 
 
+@contextmanager
+def _under(workflow: Any) -> Iterator[None]:
+    """Make the workflow's root the active neatlogs parent for one span.
+
+    A coding turn spans several hook requests; without this, spans recorded in
+    a later request have no active parent and become separate root traces."""
+    token = None
+    try:
+        from neatlogs._wrap_utils import attach_as_current  # type: ignore
+
+        token = attach_as_current(workflow.root)
+    except Exception:
+        token = None
+    try:
+        yield
+    finally:
+        if token is not None:
+            try:
+                from opentelemetry import context as otel_context
+
+                otel_context.detach(token)
+            except Exception:
+                pass
+
+
 def _mark_error(span: Any, message: str) -> None:
     """Flag the span as failed so neatlogs surfaces it as an error/incident."""
     try:  # pragma: no cover - requires the OpenTelemetry SDK span
@@ -126,7 +171,10 @@ def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | bool | int |
     """Keep telemetry scalar and ensure configuration secrets never export."""
     safe: dict[str, str | bool | int | float] = {}
     for key, value in attributes.items():
-        if any(secret in key.lower() for secret in ("api_key", "token", "password", "secret")):
+        # Token *counts* (gen_ai.usage.*_tokens) are telemetry, not credentials.
+        if not key.startswith("gen_ai.usage.") and any(
+            secret in key.lower() for secret in ("api_key", "token", "password", "secret")
+        ):
             continue
         if isinstance(value, (str, bool, int, float)):
             safe[key] = value
@@ -135,16 +183,6 @@ def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | bool | int |
 
 _ACTIVE_SDK: Any = None
 _ACTIVE_KEY: str = ""
-
-
-def wrap_llm_client(client: Any) -> Any:
-    """Auto-trace an LLM client's calls when neatlogs is live; else unchanged."""
-    if _ACTIVE_SDK is None:
-        return client
-    try:  # pragma: no cover - requires live SDK + key
-        return _ACTIVE_SDK.wrap(client)
-    except Exception:
-        return client
 
 
 def init_neatlogs(config: Config) -> NeatlogsClient:

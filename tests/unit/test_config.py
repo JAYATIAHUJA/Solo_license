@@ -1,9 +1,4 @@
-from pathlib import Path
-
-from dataclasses import replace
-
-from sololicense.config import load_config
-from sololicense.domain.models import RunStatus
+from sololicense.config import load_config, with_overrides
 
 
 def test_load_config_reads_ledger_repo(monkeypatch, tmp_path):
@@ -15,31 +10,16 @@ def test_load_config_reads_ledger_repo(monkeypatch, tmp_path):
     assert config.ledger_repo == ledger_repo
 
 
-def test_approved_status_is_a_run_status_value():
-    assert RunStatus.APPROVED.value == "approved"
+def test_saved_settings_override_the_environment():
+    config = with_overrides(load_config(), {
+        "neatlogs_project": " team-a ", "typesafe_api_key": "ts-key",
+        "trust_confidence": "2", "jev_endpoint": "",
+    })
 
-
-def test_groq_and_zcode_provider_settings_enable_the_configured_model():
-    base = load_config()
-    groq = replace(
-        base,
-        llm_provider="groq",
-        groq_api_key="groq-test-key",
-        groq_model="groq-test-model",
-    )
-    zcode = replace(
-        base,
-        llm_provider="zcode_glm",
-        zcode_api_key="zcode-test-key",
-        zcode_model="glm-test-model",
-    )
-
-    assert groq.llm_enabled is True
-    assert groq.llm_api_key == "groq-test-key"
-    assert groq.llm_model == "groq-test-model"
-    assert zcode.llm_enabled is True
-    assert zcode.llm_api_key == "zcode-test-key"
-    assert zcode.llm_model == "glm-test-model"
+    assert config.neatlogs_project == "team-a"
+    assert config.typesafe_api_key == "ts-key"
+    assert config.trust_confidence == 0.999
+    assert config.jev_endpoint == load_config().jev_endpoint
 
 
 def test_legacy_database_without_new_columns_migrates(tmp_path):
@@ -68,5 +48,7 @@ def test_legacy_database_without_new_columns_migrates(tmp_path):
 
     run_columns = {r["name"] for r in conn.execute("PRAGMA table_info(runs)")}
     order_columns = {r["name"] for r in conn.execute("PRAGMA table_info(orders)")}
+    agent_tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE name LIKE 'agent_%'")}
     assert {"idempotency_key", "actor_id"} <= run_columns
     assert "credit_issued" in order_columns
+    assert {"agent_events", "agent_licenses", "agent_decisions"} <= agent_tables

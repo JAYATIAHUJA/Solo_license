@@ -1,0 +1,9 @@
+.cp { display: grid; gap: 14px; }
+.cp-repo { max-width: 360px; }
+.cp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.cp-col { display: grid; gap: 10px; align-content: start; }
+.cp-col h3 { margin: 6px 0 0; font: 600 14px/1.3 var(--font-sans); }
+.cp-rules { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+.cp-classes { display: grid; gap: 6px; }
+.cp-class { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center; }
+.cp-freeze { display: flex; gap: 8px; align-items: flex-start; }

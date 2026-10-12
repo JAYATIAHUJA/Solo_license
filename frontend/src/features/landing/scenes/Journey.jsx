@@ -1,22 +1,20 @@
 import { useState } from 'react';
 import { AnimatePresence, motion, useMotionValueEvent, useTransform } from 'motion/react';
-import { LEVELS } from '../../../lib/format.js';
 import { ScrambleText } from '../../../components/fx/ScrambleText.jsx';
 import { Pinned } from '../Pinned.jsx';
-import { LicenseCard } from './LicenseCard.jsx';
+import { CODING_LEVELS as LEVELS, LicenseCard } from './LicenseCard.jsx';
 
 const STORY = [
-  { title: 'It starts with nothing.', body: 'At L0 the agent reads the request and recommends what to do. A person does the refund. Nothing it says touches money.', proof: 'Suggest only' },
-  { title: 'It drafts. You click.', body: 'Three verified runs in a row and it earns L1: it prepares the refund, you approve it, and the database is read back to prove it happened.', proof: 'Draft + approve' },
-  { title: 'Small refunds, on its own.', body: 'Three more clean runs and it acts alone — but only under a ceiling you set. Anything bigger still waits for a human.', proof: 'Auto under $50' },
-  { title: 'Full auto. Still watched.', body: 'At L3 it handles every refund in the class. Each run is sampled for audit, and the license can be taken back at any moment.', proof: 'Full auto, audited' },
+  { title: 'It starts with nothing.', body: 'In a new repo every kind of action asks you first, exactly like Claude Code does today. Each command you approve - and each turn whose diff and tests check out - is evidence.' },
+  { title: 'What you approved, it runs.', body: 'After 3 verified runs, the command families you already approved run on their own. `npm test` stops asking; `pytest`, which you never approved, still asks.' },
+  { title: 'The whole class, on its own.', body: 'When the evidence proves its failure rate is below the cost of one mistake, the whole class runs alone. Pushes cap at L1; deploys and database changes always ask. One failure takes it all back.' },
 ];
 
-/* Scene 03 — Moto-card style: the license card stays pinned in the middle
+/* Scene 03 - Moto-card style: the license card stays pinned in the middle
    while the story scrolls past it, earning one rung per screen. */
 export function Journey() {
   return (
-    <Pinned id="journey" length={4.4} className="sc-journey">
+    <Pinned id="journey" length={3.6} className="sc-journey">
       {(p) => <Scene p={p} />}
     </Pinned>
   );
@@ -25,9 +23,9 @@ export function Journey() {
 function Scene({ p }) {
   const [state, setState] = useState({ level: 0, runs: 0 });
   useMotionValueEvent(p, 'change', (v) => {
-    const t = Math.min(0.9999, Math.max(0, (v - 0.04) / 0.92)) * 4;
+    const t = Math.min(0.9999, Math.max(0, (v - 0.04) / 0.92)) * LEVELS.length;
     const level = Math.floor(t);
-    const runs = level >= 3 ? 3 : Math.floor((t - level) * 4);
+    const runs = level >= LEVELS.length - 1 ? 3 : Math.floor((t - level) * 4);
     setState((s) => (s.level === level && s.runs === runs ? s : { level, runs: Math.min(3, runs) }));
   });
   const rotateY = useTransform(p, [0, 0.5, 1], [-18, 10, -6]);
@@ -40,7 +38,7 @@ function Scene({ p }) {
     <div className="sc-wrap sc-journey-wrap">
       <div className="sc-journey-copy">
         <div className="sc-head">
-          <span className="mono muted">(003)</span>
+          <span className="mono muted">(004)</span>
           <ScrambleText className="mono" text="How it earns the keys" />
         </div>
         <AnimatePresence mode="wait">
@@ -63,10 +61,10 @@ function Scene({ p }) {
         <LicenseCard
           level={state.level}
           runs={state.runs}
-          stamp={promoted ? { text: `Promoted · ${LEVELS[state.level].code}`, sub: '3 clean runs', tone: 'ink', angle: -7 } : null}
+          stamp={promoted ? { text: `Promoted · ${LEVELS[state.level].code}`, sub: 'verified runs', tone: 'ink', angle: -7 } : null}
           style={{ rotateY, rotateX, y: cardY }}
         />
-        <p className="sc-card-note hand">{state.level < 3 ? `${3 - state.runs} clean run${3 - state.runs === 1 ? '' : 's'} to ${LEVELS[state.level + 1].code}` : 'top rung — audited'}</p>
+        <p className="sc-card-note hand">{state.level < LEVELS.length - 1 ? `${3 - state.runs} verified run${3 - state.runs === 1 ? '' : 's'} to ${LEVELS[state.level + 1].code}` : 'top rung - one failure away from L0'}</p>
       </div>
     </div>
   );

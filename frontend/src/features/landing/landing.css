@@ -95,6 +95,29 @@
 .lp-index-body p { margin: 8px 0 0; font-size: 16px; line-height: 1.55; max-width: 44ch; }
 .lp-index-example { font-size: 24px !important; line-height: 1.2 !important; }
 
+/* ---------- remediation ---------- */
+.lp-fix { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+.lp-fix-beat { display: flex; flex-direction: column; gap: 14px; padding: 22px 24px 8px 0; }
+.lp-fix-beat + .lp-fix-beat { padding-left: 24px; border-left: 1px solid var(--hair); }
+.lp-fix-top { display: flex; justify-content: space-between; align-items: center; }
+.lp-fix-top code { padding: 4px 8px; border: 1px solid var(--ink); font-size: 12px; }
+.lp-fix-beat h3 { font: 400 clamp(26px, 2.6vw, 38px)/1 var(--font-serif); margin: 0; }
+.lp-fix-log { margin: 0; }
+.sc-log.lp-fix-log li { grid-template-columns: minmax(140px, auto) 1fr; }
+.lp-fix-told { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--ink); }
+.lp-fix-told p { margin: 6px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-2); }
+.lp-fix-told code, .lp-fix-loop code { text-transform: none; letter-spacing: 0; }
+.lp-fix-told code { font-size: 12px; padding: 1px 4px; background: var(--sheet); border: 1px solid var(--hair); overflow-wrap: anywhere; }
+.lp-fix-loop { display: grid; gap: 10px; }
+.lp-fix-loop code { font-size: 12px; }
+.lp-fix-ticks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.lp-fix-ticks > div { display: grid; gap: 4px; justify-items: start; }
+.lp-fix-ticks i { display: block; width: 100%; height: 18px; background: var(--ink); transform-origin: bottom; }
+.lp-fix-ticks > div:nth-child(3) i { background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 6px); border: 1px solid var(--ink); }
+.lp-fix-ticks .is-alert i { background: var(--signal); }
+.lp-fix-ticks .is-alert span { color: var(--signal); }
+.lp-fix-loop-note { display: flex; justify-content: space-between; margin: 0; font-size: 12px; }
+
 /* ---------- evidence ---------- */
 .lp-evidence-grid { display: grid; grid-template-columns: 1fr 1.05fr; gap: clamp(32px, 5vw, 80px); align-items: center; }
 .lp-evidence-grid .lp-copy { margin-top: 28px; }
@@ -167,6 +190,11 @@
   .lp-index-head code { display: none; }
   .lp-index-body { grid-template-columns: 1fr; }
   .lp-index-body > div:first-child { grid-column: auto; }
+  .lp-fix { grid-template-columns: 1fr; }
+  .lp-fix-beat, .lp-fix-beat + .lp-fix-beat { padding: 20px 0; border-left: 0; }
+  .lp-fix-beat + .lp-fix-beat { border-top: 1px solid var(--hair); }
+  .sc-log.lp-fix-log li { grid-template-columns: 1fr; gap: 2px; }
+  .sc-log.lp-fix-log em { grid-column: auto; }
   .lp-footer-top { grid-template-columns: 1fr 1fr; }
   .lp-footer-top > a { grid-column: span 2; }
 }
@@ -246,6 +274,12 @@
   .lp-index-title { font-size: clamp(24px, min(3.2vw, 5vh), 46px); }
   .lp-index-body > div { padding-bottom: clamp(12px, 2.4vh, 28px); }
 
+  /* remediation */
+  .lp-fix-beat { gap: clamp(8px, 1.6vh, 14px); padding-top: clamp(12px, 2.4vh, 22px); }
+  .lp-fix-beat h3 { font-size: clamp(22px, min(2.6vw, 4.4vh), 38px); }
+  .lp-fix-told p { font-size: clamp(12.5px, 1.9vh, 14.5px); }
+  .lp-fix-log li { padding: clamp(4px, 0.9vh, 8px) 0; }
+
   /* evidence */
   .lp-packet-wrap { padding: clamp(18px, 4vh, 48px); }
   .lp-packet { padding: clamp(14px, 2.2vh, 22px); }
@@ -256,10 +290,22 @@
   /* facts */
   .lp-fact b { font-size: clamp(72px, min(11vw, 22vh), 168px); }
 
-  /* faq */
+  /* faq: an open answer can outgrow one screen, so this section grows instead of clipping */
+  .lp-faq { height: auto; min-height: 100svh; overflow: visible; }
   .lp-faq-q { padding: clamp(12px, 2.2vh, 22px) 0; font-size: clamp(16px, 2.3vh, 19px); }
 
   /* closing + footer share the last screen */
   .lp-closing { height: 100svh; min-height: 0; }
   .lp-closing-title { font-size: clamp(56px, min(10vw, 15vh), 150px); }
 }
+
+/* Install: one line, any agent */
+.lp-install-agents { display: flex; flex-wrap: wrap; gap: 8px; margin: clamp(18px, 3vw, 32px) 0 16px; }
+.lp-install-chip { padding: 8px 14px; border: 1px solid var(--ink); background: transparent; cursor: pointer; font-size: 14px; }
+.lp-install-chip.is-on { background: var(--ink); color: var(--paper); }
+.lp-install-box { display: grid; gap: 14px; padding: clamp(16px, 2.4vw, 28px); background: var(--sheet); border: 1px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); margin-bottom: 24px; }
+.lp-install-box > div { display: grid; gap: 6px; }
+.lp-install-line { display: flex; gap: 8px; align-items: center; }
+.lp-install-line code { flex: 1; min-width: 0; background: #0e0e0d; color: #e9e6df; padding: 10px 12px; font: 13px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.lp-install-note { margin: 0; font-size: 14px; }
+@media (max-width: 640px) { .lp-install-line { flex-direction: column; align-items: stretch; } }

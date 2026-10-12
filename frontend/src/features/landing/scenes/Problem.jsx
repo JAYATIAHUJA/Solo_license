@@ -6,8 +6,8 @@ import { SketchBox } from '../../../components/sketch/Sketch.jsx';
 import { ScrambleText } from '../../../components/fx/ScrambleText.jsx';
 import { Pinned } from '../Pinned.jsx';
 
-/* Scene 02 — the failure nobody sees. Scroll plays it out:
-   agent claims success → database row refuses to move → stamp. */
+/* Scene 02 - the over-edit nobody asked for. Scroll plays it out:
+   agent claims a one-line fix → the diff says otherwise → stamp. */
 export function Problem() {
   return (
     <Pinned id="problem" length={2.6} className="sc-problem">
@@ -29,51 +29,51 @@ function Scene({ p }) {
   return (
     <div className="sc-wrap">
       <div className="sc-head">
-        <span className="mono muted">(002)</span>
-        <ScrambleText className="mono" text="The failure nobody sees" />
+        <span className="mono muted">(003)</span>
+        <ScrambleText className="mono" text="The diff nobody asked for" />
       </div>
       <h2 className="sc-title serif">
-        The tool said <em className="italic">“done.”</em><br />
-        The database said <em className="italic">nothing.</em>
+        You asked for <em className="italic">one line.</em><br />
+        It changed <em className="italic">fifty.</em>
       </h2>
 
       <motion.div className="sc-problem-grid" animate={{ x: shake }} transition={{ duration: 0.45 }}>
         <motion.div style={{ y: chatY, opacity: chatO }}>
           <SketchBox className="sc-chat" seed={901}>
-            <span className="mono muted">agent · refund tool</span>
+            <span className="mono muted">you → coding agent</span>
             <div className="sc-bubble">
               <HandIcon name="check" size={18} />
-              <span>Refund processed for <b>ORD-1002</b> — <b>$40.00</b>.</span>
+              <span>Fixed the off-by-one in <b>cart.js</b>. All done!</span>
             </div>
-            <span className="sc-chat-meta mono">tool.result · ok=true</span>
+            <span className="sc-chat-meta mono">request · “fix the off-by-one in cart.js”</span>
           </SketchBox>
         </motion.div>
 
         <motion.div style={{ opacity: dbO, x: dbX }}>
           <SketchBox className="sc-db" seed={902}>
-            <span className="mono muted">sqlite · orders</span>
+            <span className="mono muted">git diff --stat</span>
             <table>
-              <thead><tr><th>order_id</th><th>amount</th><th>refunded_amount</th></tr></thead>
+              <thead><tr><th>file</th><th>asked for?</th><th>lines</th></tr></thead>
               <tbody>
-                <tr><td>ORD-1001</td><td>25.00</td><td>0.00</td></tr>
+                <tr><td>cart.js</td><td>yes</td><td>2</td></tr>
                 <tr className={stage >= 2 ? 'is-hit' : ''}>
-                  <td>ORD-1002</td><td>40.00</td>
-                  <td><motion.b key={stage >= 2 ? 'hit' : 'idle'} animate={stage >= 2 ? { scale: [1, 1.25, 1] } : {}} transition={{ duration: 0.4 }}>0.00</motion.b></td>
+                  <td>format.js</td><td>no</td>
+                  <td><motion.b key={stage >= 2 ? 'hit' : 'idle'} animate={stage >= 2 ? { scale: [1, 1.25, 1] } : {}} transition={{ duration: 0.4 }}>+38</motion.b></td>
                 </tr>
-                <tr><td>ORD-1003</td><td>15.00</td><td>0.00</td></tr>
+                <tr><td>utils.js</td><td>no</td><td>+12</td></tr>
               </tbody>
             </table>
-            {stage >= 2 && <motion.span className="sc-db-note hand" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>← still zero.</motion.span>}
+            {stage >= 2 && <motion.span className="sc-db-note hand" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>← nobody asked.</motion.span>}
           </SketchBox>
         </motion.div>
 
         <div className="sc-problem-stamp">
-          <Stamp text="Unverified" sub="claim ≠ reality" show={stage >= 3} tone="signal" size="lg" angle={-12} />
+          <Stamp text="Over-edited" sub="asked ≠ changed" show={stage >= 3} tone="signal" size="lg" angle={-12} />
         </div>
       </motion.div>
 
       <motion.p className="sc-foot" animate={{ opacity: stage >= 4 ? 1 : 0, y: stage >= 4 ? 0 : 12 }}>
-        Most agents would mark this “done” and move on. Solo License reads the database back after <b>every</b> action — and a mismatch costs the agent its license.
+        Today you either approve every command, or hand over full access and review fifty-line diffs. Solo License checks <b>every</b> turn against what you asked and runs your tests - and an agent that over-edits or breaks them loses its license.
       </motion.p>
     </div>
   );
