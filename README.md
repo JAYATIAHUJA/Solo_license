@@ -10,7 +10,7 @@ Works in Claude Code, Codex, Cursor, Gemini CLI, Antigravity, Copilot CLI, Grok 
 *Earned. Revocable. Priced.*
 
 ```bash
-uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent auto
+uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent auto
 ```
 
 Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · uses **neatlogs**, **Entire** and **cfo.ai** · by [@JAYATIAHUJA](https://github.com/JAYATIAHUJA)
@@ -80,7 +80,7 @@ hook defers - it never turns an outage into an "allow".
 ## Install - one line, any agent
 
 ```bash
-uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license onboard
+uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license onboard
 ```
 
 `onboard` does the whole setup in one go: it finds the agents you use (Claude Code, Codex, Cursor, OpenCode, ...),
@@ -90,8 +90,8 @@ background, checks it with a harmless read, and opens the dashboard already sign
 neatlogs, Jev and Entire are optional one-step connections. Or step by step:
 
 ```bash
-uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent <agent>   # in your repo
-uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve                  # keep it running
+uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent <agent>   # in your repo
+uvx --python 3.13 --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve                  # keep it running
 ```
 
 or paste the ready prompt from `solo-license prompt --agent <agent>` into your agent and let it install
