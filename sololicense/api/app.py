@@ -943,7 +943,10 @@ def dashboard_dir() -> Path | None:
 
     configured = os.environ.get("SOLO_DASHBOARD_DIR", "").strip()
     candidates = [_Path(configured)] if configured else []
+    # a source checkout's build, then the dashboard bundled inside an
+    # installed package (uvx/pip never run npm: the build ships with it)
     candidates.append(_Path(__file__).resolve().parents[2] / "frontend" / "dist")
+    candidates.append(_Path(__file__).resolve().parent / "dashboard")
     return next((c for c in candidates if (c / "index.html").is_file()), None)
 
 
