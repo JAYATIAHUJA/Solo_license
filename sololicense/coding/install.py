@@ -114,6 +114,8 @@ def _claude(repo: Path, url: str) -> Path:
 
     ours = {
         "UserPromptSubmit": [{"hooks": [http("user-prompt")]}],
+        # Every tool: a loop stop refuses any call, and MCP tools can run shell commands too.
+        "PreToolUse": [{"matcher": "*", "hooks": [http("pre-tool")]}],
         "PermissionRequest": [{"matcher": "*", "hooks": [http("permission")]}],
         "PostToolUse": [{"matcher": "*", "hooks": [http("post-tool")]}],
         "PostToolUseFailure": [{"matcher": "*", "hooks": [http("post-tool-failure")]}],
