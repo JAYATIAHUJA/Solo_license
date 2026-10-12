@@ -624,10 +624,15 @@ def budget_payload(context: AppContext) -> dict:
 
 
 @app.get("/api/coding/budget")
-def coding_budget(_: Actor = Depends(require_role(Role.OPERATOR))) -> dict:
-    """What the coding agents spent, against the caps in the policy."""
+def coding_budget(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """What the coding agents spent, against the caps in the policy. Read-only;
+    served to this machine (``solo-license budget``) and to signed-in users."""
     with _lock:
-        return budget_payload(get_context())
+        context = get_context()
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        return budget_payload(context)
 
 
 class BudgetResumePayload(BaseModel):
