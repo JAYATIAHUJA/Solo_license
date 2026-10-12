@@ -14,7 +14,6 @@ import { Crash } from './scenes/Crash.jsx';
 import { LedgerTrack } from './scenes/LedgerTrack.jsx';
 import { Detections } from './sections/Detections.jsx';
 import { Remedies } from './sections/Remedies.jsx';
-import { ProductTour } from './scenes/ProductTour.jsx';
 import { Altimeter } from './scenes/Altimeter.jsx';
 import { Facts } from './sections/Facts.jsx';
 import { Faq } from './sections/Faq.jsx';
@@ -68,7 +67,6 @@ export function LandingPage() {
         <Crash />
         <Detections />
         <Remedies />
-        <ProductTour />
         <LedgerTrack />
         <Facts />
         <Faq />

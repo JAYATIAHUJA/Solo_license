@@ -22,11 +22,24 @@ export function pointsToPath(strokes) {
   }).join(' ');
 }
 
+let current = null;
+const listeners = new Set();
+
 export function saveSignature(d) {
+  current = d;
   try { localStorage.setItem(KEY, d); } catch { /* storage unavailable */ }
+  listeners.forEach((fn) => fn());
+}
+
+/** For useSyncExternalStore: the license cards mount behind the intro, so they
+ *  must pick up the signature signed there instead of the one read at mount. */
+export function subscribeSignature(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
 export function loadSignature() {
+  if (current) return current;
   try { return localStorage.getItem(KEY) || AUTO_SIGNATURE; } catch { return AUTO_SIGNATURE; }
 }
 

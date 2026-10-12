@@ -121,13 +121,26 @@ export function Access() {
           </form>
         )}
 
+        {info && !info.demo_enabled && (
+          <div className="ax-card">
+            <div className="ax-card-head">
+              <HandIcon name="key" size={18} />
+              <div>
+                <b>Open this dashboard from your terminal</b>
+                <small>No token to copy: the command signs you in as this machine's admin.</small>
+              </div>
+            </div>
+            <p className="ax-note"><code>solo-license onboard</code></p>
+          </div>
+        )}
+
         {info && (
-          <details className="ax-card ax-token" open={!info.demo_enabled}>
+          <details className="ax-card ax-token">
             <summary>
               <HandIcon name="key" size={18} />
               <div>
-                <b>Connect with an access token</b>
-                <small>Issued by whoever deployed this workspace (SOLO_API_TOKENS)</small>
+                <b>Deployed workspace? Use an access token</b>
+                <small>Only for a shared deployment (issued by whoever set it up)</small>
               </div>
             </summary>
             <form onSubmit={useToken} className="ax-token-form">
@@ -141,12 +154,6 @@ export function Access() {
               />
               <button className="btn btn-line" disabled={busy || token.trim().length < 8}>Connect</button>
             </form>
-            {!info.token_auth && !info.demo_enabled && (
-              <p className="ax-note">
-                This API has no sign-in configured. Set <code>SOLO_DEMO_MODE=1</code> for a local demo,
-                or <code>SOLO_API_TOKENS</code> for a deployment.
-              </p>
-            )}
           </details>
         )}
 

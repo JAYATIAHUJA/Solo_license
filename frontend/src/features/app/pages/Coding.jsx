@@ -73,7 +73,7 @@ function useLevelFlash(licenses) {
   return flash;
 }
 
-/** "This was wrong": a required reason, then the flag. */
+/** "Report mistake": a required reason, then the flag. */
 function FlagBox({ target, onDone, onCancel }) {
   const [reason, setReason] = useState('');
   const [pending, setPending] = useState(false);
@@ -98,7 +98,7 @@ function FlagBox({ target, onDone, onCancel }) {
       </label>
       <span className="cd-actions">
         <button type="submit" className="btn btn-ink btn-sm" disabled={pending || !reason.trim()}>
-          {pending ? 'Flagging…' : 'Flag as wrong'}
+          {pending ? 'Reporting…' : 'Report mistake'}
         </button>
         <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={onCancel}>Cancel</button>
       </span>
@@ -128,8 +128,9 @@ function Told({ remediations }) {
 function flagRow({ id, target, flagged, flag, busy }) {
   const status = flagged ? <span className="pl-status bad">Flagged as wrong</span> : null;
   const button = flagged || flag.open === id ? status : (
-    <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => flag.setOpen(id)}>
-      This was wrong
+    <button type="button" className="btn btn-ghost btn-sm cd-report" disabled={busy} onClick={() => flag.setOpen(id)}
+      title="Tell Solo License this action went wrong. This kind of action goes back to asking you, and the agent is told what to undo.">
+      Report mistake
     </button>
   );
   const below = (
@@ -266,6 +267,8 @@ export function Coding() {
   const [busy, setBusy] = useState(false);
   const [flagOpen, setFlagOpen] = useState(null);
   const [flagResult, setFlagResult] = useState(null);
+  const [allDecisions, setAllDecisions] = useState(null);
+  const [loadingAll, setLoadingAll] = useState(false);
   const flash = useLevelFlash(coding?.licenses);
   const flagged = useMemo(() => flaggedTargets(coding?.flags), [coding]);
   const told = useMemo(() => byTurn(coding?.remediations), [coding]);
@@ -285,7 +288,9 @@ export function Coding() {
   const repos = useMemo(() => (coding?.repos || []).map((r) => r.repo), [coding]);
   const current = repo || repos[0] || '';
   const licenses = (coding?.licenses || []).filter((l) => !current || l.repo === current);
-  const decisions = (coding?.decisions || []).filter((d) => !current || d.repo === current).slice(0, 15);
+  const matching = (allDecisions || coding?.decisions || []).filter((d) => !current || d.repo === current);
+  const decisions = allDecisions ? matching : matching.slice(0, 15);
+  const hasMore = !allDecisions && (coding?.decisions || []).filter((d) => !current || d.repo === current).length > 15;
   const turns = (coding?.turns || []).filter((t) => !current || t.repo === current).slice(0, 10);
   const paused = licenses.filter((l) => l.demoted_from != null && l.level === 0);
 
@@ -301,6 +306,18 @@ export function Coding() {
       setBusy(false);
     }
   }
+
+  const viewAll = async () => {
+    setLoadingAll(true);
+    try {
+      const body = await api.codingDecisions(current);
+      setAllDecisions(body.decisions || []);
+    } catch (cause) {
+      setToast({ kind: 'error', text: cause.message, at: Date.now() });
+    } finally {
+      setLoadingAll(false);
+    }
+  };
 
   const resume = (lic, level) => act(
     () => api.codingRestore({ repo: lic.repo, principal: lic.principal || 'main', action_class: lic.action_class, level, reason: 'Reviewed the failure and resumed.' }),
@@ -413,6 +430,7 @@ export function Coding() {
 
       <section className="pl-section" aria-labelledby="h-dec">
         <h2 id="h-dec">Every permission decision</h2>
+        {allDecisions && <p className="pl-sub">Showing all {decisions.length} commands from this session. <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAllDecisions(null)}>Show latest only</button></p>}
         {!decisions.length ? <div className="pl-empty">No decisions yet.</div> : (
           <ul className="pl-list">
             {decisions.map((d) => {
@@ -440,6 +458,11 @@ export function Coding() {
               );
             })}
           </ul>
+        )}
+        {hasMore && (
+          <p><button type="button" className="btn btn-line btn-sm" disabled={loadingAll} onClick={viewAll}>
+            {loadingAll ? 'Loading…' : 'View all commands'}
+          </button></p>
         )}
       </section>
     </div>

@@ -12,7 +12,7 @@ export const CHAPTERS = [
   { key: 'onboard', kind: 'term', title: 'One command to set up', cmd: 'solo-license onboard',
     text: 'Finds your agents, writes their hooks, makes a local admin, starts the gate and opens the dashboard signed in.' },
   { key: 'levels', kind: 'app', title: 'Watch trust move, live', cmd: 'Dashboard · Coding agent',
-    text: 'Each kind of action earns its level from verified results. One click on "This was wrong" drops it to L0 and tells the agent.' },
+    text: 'Each kind of action earns its level from verified results. One click on "Report mistake" drops it to L0 and tells the agent.' },
   { key: 'budget', kind: 'app', title: 'Caps on the spend', cmd: 'Dashboard · Budget  ·  solo-license budget',
     text: 'Per session and per day. Past a cap only reading is allowed until you resume.' },
   { key: 'neatlogs', kind: 'web', title: 'Every turn is a trace', cmd: 'neatlogs',
@@ -144,7 +144,7 @@ const MOCKS = {
       <div className="pt-row">
         <code>npm install left-pad</code>
         <span className="pt-chip bad">Failed</span>
-        <span className="pt-btn pt-mark">This was wrong</span>
+        <span className="pt-btn pt-mark">Report mistake</span>
       </div>
       <div className="pt-row"><code>npm test</code><span className="pt-chip ok">Allowed · L2</span><span className="pt-chip ok">Verified</span></div>
       <div className="pt-row"><code>git push --force origin main</code><span className="pt-chip bad">Denied</span></div>

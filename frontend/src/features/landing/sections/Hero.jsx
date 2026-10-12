@@ -1,10 +1,8 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { HandIcon } from '../../../components/icons/HandIcon.jsx';
-import { SketchArrow, SketchCircle } from '../../../components/sketch/Sketch.jsx';
-import { DitherField } from '../../../components/shader/PaperBackdrop.jsx';
+import { SketchCircle } from '../../../components/sketch/Sketch.jsx';
 import { MaskWords } from '../Reveal.jsx';
-import { HeroGateFeed } from './HeroGateFeed.jsx';
 import { AskBar } from './AskBar.jsx';
 import { Magnetic } from '../../../components/fx/Magnetic.jsx';
 
@@ -42,23 +40,8 @@ export function Hero() {
           <motion.div className="lp-hero-cta" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.8 }}>
             <AskBar />
             <Magnetic><Link to="/app" className="btn btn-ink">Open the dashboard <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
-            <Magnetic><a href="#tour" className="btn btn-line">Take the product tour</a></Magnetic>
           </motion.div>
         </div>
-
-        <motion.div
-          className="lp-hero-visual"
-          initial={{ opacity: 0, clipPath: 'inset(0 0 100% 0)' }}
-          animate={{ opacity: 1, clipPath: 'inset(0 0 0% 0)' }}
-          transition={{ duration: 1.3, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <DitherField className="lp-hero-shader" shape="warp" speed={0.25} size={2.4} />
-          <HeroGateFeed />
-          <div className="lp-note lp-note-b hand">
-            <SketchArrow width={70} height={46} d="M64 42 C 44 40, 20 30, 8 6" end={[8, 6, -2.1]} delay={2} />
-            every call, judged by what it earned
-          </div>
-        </motion.div>
       </div>
 
       <div className="lp-hero-meta">

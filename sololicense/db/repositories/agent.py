@@ -165,6 +165,14 @@ def recent_decisions(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.
     return conn.execute("SELECT * FROM agent_decisions ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
 
+def all_decisions(conn: sqlite3.Connection, repo: str | None = None, limit: int = 5000) -> list[sqlite3.Row]:
+    """Every recorded decision, newest first (capped so one request stays bounded)."""
+    if repo:
+        return conn.execute("SELECT * FROM agent_decisions WHERE repo = ? ORDER BY id DESC LIMIT ?",
+                            (repo, limit)).fetchall()
+    return conn.execute("SELECT * FROM agent_decisions ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
 # --- turns ---------------------------------------------------------------
 
 def open_turn(conn: sqlite3.Connection, *, session_id: str, repo: str, cwd: str, prompt: str,

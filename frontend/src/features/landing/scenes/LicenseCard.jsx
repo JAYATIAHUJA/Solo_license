@@ -1,18 +1,18 @@
-import { useMemo } from 'react';
+import { useSyncExternalStore } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 export const CODING_LEVELS = [
   { id: 0, code: 'L0', name: 'Asks you every time' },
   { id: 1, code: 'L1', name: 'Runs what you approved' },
   { id: 2, code: 'L2', name: 'Runs on its own' },
 ];
-import { SIG_BOX, loadSignature } from '../../../lib/signature.js';
+import { SIG_BOX, loadSignature, subscribeSignature } from '../../../lib/signature.js';
 import { Stamp } from '../../../components/fx/Stamp.jsx';
 import { Logo } from '../../../components/brand/Logo.jsx';
 
 /** The physical "license" the agent carries: level, track record, holder's
  *  signature, stamps. Purely presentational - the scenes drive it. */
 export function LicenseCard({ level = 0, runs = 0, threshold = 3, quarantined = false, stamp = null, style, taskClass = 'test-run' }) {
-  const signature = useMemo(loadSignature, []);
+  const signature = useSyncExternalStore(subscribeSignature, loadSignature);
   const info = CODING_LEVELS[Math.min(level, CODING_LEVELS.length - 1)];
   return (
     <motion.div className={`lc ${quarantined ? 'is-q' : ''}`} style={style}>

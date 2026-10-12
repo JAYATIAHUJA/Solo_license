@@ -8,7 +8,7 @@ const STEPS = [
   ['Starts at zero', 'In a new repo every kind of action asks you first - run the tests, install a package, push.'],
   ['Earns from results', 'Approved and verified a few times, that kind of action runs without asking - in this repo only.'],
   ['Checked every turn', 'At the end of each turn the diff is compared with your request and the tests run. Over-edits are sent back.'],
-  ['Loses it at once', 'One failure, one over-edit or one "This was wrong" drops it back to asking - and the agent is told what to undo.'],
+  ['Loses it at once', 'One failure, one over-edit or one "Report mistake" drops it back to asking - and the agent is told what to undo.'],
   ['Never the dangerous stuff', 'Force-push to main, rm -rf, curl | sh, DROP DATABASE: denied at any level.'],
 ];
 
