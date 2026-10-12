@@ -28,6 +28,10 @@ test("a flag's reason drops the actor prefix the gate stores", () => {
   assert.equal(flagReason({ ...flag, reason: null }), '');
 });
 
+test('a flagged MCP server is named, not keyed', () => {
+  assert.equal(flagSentence({ ...flag, task_class: 'mcp:github@shop' }), 'Jayati flagged GitHub (MCP) in shop as wrong — back to L0');
+});
+
 test('a flag without a known person still reads', () => {
   assert.equal(flagSentence({ ...flag, actor_id: '' }), 'Someone flagged file-edit in shop as wrong — back to L0');
 });

@@ -210,6 +210,8 @@ class CodingGate:
                 spec = ACTION_CLASSES[key]
                 return self._pre_tool_ask(f"{spec.label} always needs a person." if spec.max_level == 0
                                           else f"{spec.label} is at L0 in {repo}: a person decides.")
+        if result.mcp_server and policy_mod.tool_ceiling(rules, tool) == 0:
+            return self._pre_tool_ask(policy_mod.tool_ask_reason(rules, tool))
         return {}
 
     @staticmethod
@@ -231,7 +233,7 @@ class CodingGate:
         rules = policy_mod.effective(self.conn, repo, root)
         lic = agent_repo.effective_license(self.conn, repo, spec.key, principal,
                                            max_level=rules.subagent_max)
-        ceiling = rules.ceilings[spec.key]
+        ceiling = policy_mod.ceiling(rules, spec.key, tool)
         level = min(int(lic["level"]), ceiling)
         forbidden = policy_mod.denied(rules, tool, tool_input, root)
         spend = budget.check(self.conn, session, repo, rules.budget)
@@ -260,7 +262,8 @@ class CodingGate:
             # Claude Code / Codex only call this when they would prompt a person;
             # other agents call it for every action and keep their own settings.
             by = "license" if event.get("_prompt_only", True) else "agent-settings"
-            decision, reason = "ask", self._ask_reason(spec.key, level, lic, ceiling)
+            decision, reason = "ask", (policy_mod.tool_ask_reason(rules, tool)
+                                       or self._ask_reason(spec.key, level, lic, ceiling))
         # Counted when calls run (tool_result); here only read, so nothing counts twice.
         repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
         halted = loops.halted(self.conn, session)
@@ -280,11 +283,12 @@ class CodingGate:
         trace.span(f"gate.{decision}", status="error" if decision == "deny" else "ok",
                    decision_id=decision_id, tool=tool, command=command, action_class=spec.key,
                    pattern=result.pattern, level=level, decided_by=by, source=result.source, reason=reason,
-                   policy=rules.digest, policy_source=rules.source, ceiling=ceiling, **via)
+                   policy=rules.digest, policy_source=rules.source, ceiling=ceiling, **result.mcp_attributes, **via)
         if decision == "deny" and by == "policy":
             # As serious as a hard deny: recorded, and the class goes back to asking.
             trace.span("detection.policy_violation", status="error", severity="critical", message=reason,
-                       reason=reason, action_class=spec.key, command=command, policy=rules.digest, **via)
+                       reason=reason, action_class=spec.key, command=command, policy=rules.digest,
+                       **result.mcp_attributes, **via)
             self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace, turn=turn,
                        principal=principal)
         elif decision == "deny" and by == "loop-guard":
@@ -340,7 +344,8 @@ class CodingGate:
             trace.span("gate.approved_by_person", decision_id=row["id"], pattern=row["pattern"], action_class=key)
         error = str(event.get("error", ""))[:300]
         answer: dict = {}
-        if failed and key not in DIAGNOSTIC and not event.get("is_interrupt"):
+        diagnostic = key in DIAGNOSTIC or self._mcp_read(repo, tool)
+        if failed and not diagnostic and not event.get("is_interrupt"):
             # A failure always counts, whoever let the action run.
             agent_repo.set_outcome(self.conn, row["id"], "failed")
             trace.span("tool.failed", status="error", decision_id=row["id"], action_class=key, error=error)
@@ -353,7 +358,7 @@ class CodingGate:
             agent_repo.set_outcome(self.conn, row["id"], "observed")
             trace.span("tool.observed", decision_id=row["id"], action_class=key,
                        note="ran under the agent's own settings; not credited")
-        elif key in DIAGNOSTIC:
+        elif diagnostic:
             agent_repo.set_outcome(self.conn, row["id"], "verified")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="error" if failed else "ok")
             self._succeed(repo, key, trace, principal=row["principal"])
@@ -763,6 +768,13 @@ class CodingGate:
         if key is not None:
             ceiling = min(ceiling, rules.ceilings[key])
         return ceiling if principal != "main" else (rules.ceilings[key] if key is not None else 2)
+    def _mcp_read(self, repo: str, tool: str) -> bool:
+        """An MCP read (list_issues) is like ``read``: it changes nothing, so it
+        counts as soon as it ran and a failure is information, not a mistake."""
+        if not tool.startswith("mcp__"):
+            return False
+        row = self.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
+        return policy_mod.tool_risk(policy_mod.effective(self.conn, repo, row["path"] if row else "."), tool) == "read"
 
     def _ask_reason(self, key: str, level: int, lic: sqlite3.Row, ceiling: int | None = None) -> str:
         spec = ACTION_CLASSES[key]

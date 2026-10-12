@@ -75,7 +75,8 @@ AGENTS: dict[str, AgentSpec] = {a.key: a for a in (
               docs="https://developers.openai.com/codex/hooks"),
     AgentSpec("cursor", "Cursor", "command", ".cursor/hooks.json",
               {"beforeSubmitPrompt": PROMPT, "beforeShellExecution": PERMISSION, "preToolUse": PERMISSION,
-               "afterShellExecution": POST, "afterFileEdit": POST, "stop": STOP,
+               "beforeMCPExecution": PERMISSION, "afterShellExecution": POST, "afterFileEdit": POST,
+               "afterMCPExecution": POST, "stop": STOP,
                "subagentStart": SUB_START, "subagentStop": SUB_STOP},
               can_ask=True, notes="Cursor also runs Claude Code hooks from .claude/settings.json.",
               docs="https://cursor.com/docs/hooks"),
@@ -186,12 +187,36 @@ def _tool(name: str, args: dict) -> tuple[str, dict]:
     return name or "unknown", args
 
 
+def _mcp_name(name: str, p: dict) -> str:
+    """The canonical ``mcp__<server>__<tool>`` name of an MCP call, or "".
+
+    Claude Code and Codex already send it. Cursor's MCP hooks send the bare
+    tool and ``mcp_server_name`` (cursor.com/docs/hooks); Gemini CLI sends
+    ``mcp_<server>_<tool>`` with the exact names in ``mcp_context``
+    (geminicli.com/docs/hooks/reference)."""
+    if name.startswith("mcp__"):
+        return name
+    server = p.get("mcp_server_name")
+    if server and name:
+        return f"mcp__{server}__{name}"
+    context = p.get("mcp_context")
+    if isinstance(context, dict) and context.get("server_name") and context.get("tool_name"):
+        return f"mcp__{context['server_name']}__{context['tool_name']}"
+    match = re.match(r"^mcp_([A-Za-z0-9-]+)_(.+)$", name)  # Gemini without context: the first "_" splits
+    return f"mcp__{match.group(1)}__{match.group(2)}" if match else ""
+
+
 def _response_failed(resp) -> bool:
+    if isinstance(resp, str):
+        try:
+            resp = json.loads(resp)
+        except ValueError:
+            return False
     if isinstance(resp, dict):
         for key in ("exit_code", "exitCode", "returncode", "code"):
             if isinstance(resp.get(key), int):
                 return resp[key] != 0
-        if resp.get("success") is False or resp.get("is_error") is True:
+        if resp.get("success") is False or resp.get("is_error") is True or resp.get("isError") is True:
             return True
     return False
 
@@ -241,6 +266,9 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     elif native_event in ("pre_run_command", "post_run_command"):
         info = p.get("tool_info") or {}
         name, args = "Bash", {"command": _first(info, "command_line", "command", default="")}
+    elif native_event in ("beforeMCPExecution", "afterMCPExecution"):
+        # ``command`` here is a stdio server's launch line, not a shell command.
+        name, args = str(p.get("tool_name", "")), _args(p.get("tool_input") or {})
     elif native_event in ("pre_write_code", "post_write_code", "afterFileEdit"):
         info = p.get("tool_info") or p
         name, args = "Edit", {"file_path": _first(info, "file_path", "filePath", default="")}
@@ -254,10 +282,11 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     else:
         name = str(_first(p, "tool_name", "toolName", "tool", default=""))
         args = _args(_first(p, "tool_input", "toolInput", "toolArgs", "args", default={}))
-    tool, tool_input = _tool(name, args)
+    mcp = _mcp_name(str(name or ""), p)
+    tool, tool_input = (mcp, args) if mcp else _tool(name, args)
     body.update(tool_name=tool, tool_input=tool_input)
     if event == POST:
-        resp = _first(p, "tool_response", "toolResult", "result", "output", default=None)
+        resp = _first(p, "tool_response", "toolResult", "result", "output", "result_json", default=None)
         if _response_failed(resp) or p.get("exit_code") not in (None, 0) or p.get("success") is False:
             event = POST_FAIL
             body["error"] = f"Exit code {p.get('exit_code', 1)}"
