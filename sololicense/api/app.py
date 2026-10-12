@@ -694,10 +694,12 @@ def coding_agents() -> dict:
 def coding_install(agent: str = Query(default="auto", max_length=40, pattern=r"^[a-z0-9-]+$")) -> dict:
     """Everything a person needs to wire one agent: the one-liner, the
     command to keep the gate running, and a prompt their agent can follow."""
-    from sololicense.cli import INSTALL_ONE_LINER, REPO_URL, agent_prompt
+    from sololicense.cli import GLOBAL_ONE_LINER, GLOBAL_STEPS, INSTALL_ONE_LINER, REPO_URL, agent_prompt
 
     return {
         "agent": agent,
+        "global_one_liner": GLOBAL_ONE_LINER,
+        "global_steps": [*GLOBAL_STEPS, "solo-license doctor"],
         "one_liner": INSTALL_ONE_LINER.replace("--agent auto", f"--agent {agent}"),
         "persistent": f"uv tool install git+{REPO_URL}",
         "init": f"solo-license init --agent {agent}",
