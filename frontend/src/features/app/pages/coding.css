@@ -28,7 +28,7 @@
 .cd-told-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .cd-told-head b { font-weight: 500; }
 .cd-told-head small { color: var(--muted); }
-.cd-told-text { margin: 0; border-left-color: var(--ink); }
+.cd-told-text { margin: 0; border-left-color: var(--ink); overflow-wrap: anywhere; }
 
 /* A level that moved since the last poll flashes once. */
 .cd-level { transition: background-color 0.4s var(--ease), color 0.4s var(--ease); }
