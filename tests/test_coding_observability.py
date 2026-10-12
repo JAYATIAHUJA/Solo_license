@@ -247,6 +247,27 @@ def test_a_loop_stop_is_an_incident_and_guidance_is_not(gate, sdk):
     assert sdk.incidents().count("detection.loop") == 1
 
 
+def test_a_forbidden_action_refused_at_pre_tool_use_is_an_incident(gate, sdk):
+    gate.user_prompt(_event(gate, prompt="ship"))
+    gate.pre_tool(_bash(gate, "git push --force origin main"))
+    denied = _spans(gate, "gate.deny")[-1].attributes
+    assert denied["hook"] == "PreToolUse" and denied["decided_by"] == "hard-deny"
+    forbidden = _spans(gate, "detection.forbidden_action")[-1].attributes
+    assert forbidden["severity"] == "critical" and forbidden["incident"] is True
+    assert forbidden["hook"] == "PreToolUse"
+    assert sdk.incidents().count("detection.forbidden_action") == 1
+
+
+def test_a_loop_halt_refused_at_pre_tool_use_is_an_incident(gate, sdk):
+    gate.user_prompt(_event(gate, prompt="x"))
+    for _ in range(4):
+        gate.tool_result(_bash(gate, "cat app.py"), failed=False)
+    gate.pre_tool(_bash(gate, "cat app.py"))
+    stop = _spans(gate, "detection.loop")[-1].attributes
+    assert stop["kind"] == "loop-stop" and stop["interrupt"] is True and stop["incident"] is True
+    assert stop["hook"] == "PreToolUse"
+
+
 def test_a_loop_stopped_after_the_run_is_an_incident_too(gate, sdk):
     gate.user_prompt(_event(gate, prompt="read it again", _agent="cursor"))
     for _ in range(5):  # never asked the gate: the agent's settings let it run

@@ -267,6 +267,7 @@ CREATE INDEX IF NOT EXISTS idx_tickets_created ON tickets (created_at DESC);
 -- person already approved here, 2 auto-allow the whole class.
 CREATE TABLE IF NOT EXISTS agent_licenses (
     repo          TEXT NOT NULL,
+    principal     TEXT NOT NULL DEFAULT 'main', -- main | subagent:<type>
     action_class  TEXT NOT NULL,
     level         INTEGER NOT NULL DEFAULT 0,
     successes     INTEGER NOT NULL DEFAULT 0,   -- verified outcomes at any level
@@ -274,7 +275,7 @@ CREATE TABLE IF NOT EXISTS agent_licenses (
     successes_at_level INTEGER NOT NULL DEFAULT 0, -- since the last level change
     demoted_from  INTEGER,
     updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (repo, action_class)
+    PRIMARY KEY (repo, principal, action_class)
 );
 
 -- Command families a person approved in a repo (what level 1 auto-allows).
@@ -291,6 +292,7 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id    TEXT NOT NULL,
     agent         TEXT NOT NULL DEFAULT 'claude-code',
+    principal     TEXT NOT NULL DEFAULT 'main', -- main | subagent:<type>
     turn_id       INTEGER,
     repo          TEXT NOT NULL,
     tool_name     TEXT NOT NULL,
@@ -313,6 +315,7 @@ CREATE TABLE IF NOT EXISTS agent_turns (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id    TEXT NOT NULL,
     agent         TEXT NOT NULL DEFAULT 'claude-code',
+    principal     TEXT NOT NULL DEFAULT 'main', -- main | subagent:<type>
     repo          TEXT NOT NULL,
     cwd           TEXT NOT NULL,
     prompt        TEXT NOT NULL DEFAULT '',
@@ -329,6 +332,19 @@ CREATE TABLE IF NOT EXISTS agent_turns (
     closed_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_agent_turns_session ON agent_turns (session_id, id DESC);
+
+-- Compact context retained for Jev and session observability.
+CREATE TABLE IF NOT EXISTS agent_sessions (
+    session_id    TEXT NOT NULL,
+    agent         TEXT NOT NULL DEFAULT 'claude-code',
+    repo          TEXT NOT NULL,
+    principal     TEXT NOT NULL DEFAULT 'main',
+    started_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    cost_usd      REAL NOT NULL DEFAULT 0,
+    model         TEXT,
+    digest        TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (session_id, principal)
+);
 
 -- Per-repository settings (the command that verifies a turn).
 CREATE TABLE IF NOT EXISTS agent_repos (
@@ -405,4 +421,39 @@ CREATE TABLE IF NOT EXISTS agent_flags (
     remediation_id INTEGER,                      -- the queued message for the agent
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     delivered_at   TEXT
+);
+
+-- What a coding session has spent, as running totals per slice: the agent's own
+-- figure ('statusline', 'msg:<id>') or an estimate from its transcript's tokens.
+CREATE TABLE IF NOT EXISTS agent_spend (
+    session_id    TEXT NOT NULL,
+    part          TEXT NOT NULL,
+    agent         TEXT NOT NULL,
+    repo          TEXT NOT NULL,
+    model         TEXT NOT NULL DEFAULT '',
+    source        TEXT NOT NULL,                 -- reported | estimate
+    cost_usd      REAL,
+    tokens        INTEGER NOT NULL DEFAULT 0,
+    unpriced      TEXT NOT NULL DEFAULT '',      -- models without a known price
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, part)
+);
+
+-- Spend per repository and local day: what each session's total moved by that day.
+CREATE TABLE IF NOT EXISTS agent_spend_days (
+    repo          TEXT NOT NULL,
+    day           TEXT NOT NULL,
+    session_id    TEXT NOT NULL,
+    cost_usd      REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (repo, day, session_id)
+);
+
+-- Once-only budget marks per scope ('session:<id>', 'day:<repo>:<day>', 'turn:<id>'):
+-- warned / capped at a given cap, sent back, or resumed by a person.
+CREATE TABLE IF NOT EXISTS agent_budget_marks (
+    scope         TEXT NOT NULL,
+    mark          TEXT NOT NULL,
+    actor_id      TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (scope, mark)
 );

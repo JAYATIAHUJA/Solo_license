@@ -9,7 +9,7 @@ export function Closing() {
     <section className="lp-closing">
       <DitherField className="lp-closing-shader" shape="ripple" speed={0.3} size={2.6} />
       <div className="lp-closing-inner">
-        <p className="mono">(013) - Start</p>
+        <p className="mono">(014) - Start</p>
         <h2 className="lp-closing-title serif">
           <MaskWords text="Let it" /> <em className="italic"><MaskWords text="earn" delay={0.1} /></em> <MaskWords text="it." delay={0.16} />
         </h2>

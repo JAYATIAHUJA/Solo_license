@@ -12,14 +12,14 @@ const QA = [
   ['How does it decide when the agent may act alone?', 'From evidence, priced by your costs. Running alone pays only when the failure rate is below the developer time an approval costs \u00f7 the cost of one mistake of that kind. Running tests earns it in a handful of runs; pushing to a remote needs hundreds; deploys and database changes always ask.'],
   ['What happens after a demotion?', 'That action class asks you before every action again. The turn shows what was asked, the diff, the tests and its Entire checkpoint; you can rewind the repo (the changes are kept in git stash) and resume the class at a level you choose. That decision is a git commit.'],
   ['Where does my data live?', 'In a local SQLite file and a git-backed ledger in your repo. Traces go to neatlogs if you add a key, and diffs to Jev only if you add a TypeSafe key.'],
-  ['What about the refund agent?', 'Same engine, first built for refunds: a support agent that earns the right to pay out from Stripe read-backs. It still runs under Payments agent in the app.'],
+  ['What happens when the agent gets it wrong?', 'It is told what to undo, not just stopped. A failed install comes back with the command that restores the manifest and lockfile. If you mark a decision as wrong, that action class drops to L0 and the agent is told to revert on its next prompt. The same call repeated gets guidance at three tries and is stopped at five. Each of these is a neatlogs incident with its Entire checkpoint.'],
 ];
 
 export function Faq() {
   const [open, setOpen] = useState(-1);
   return (
     <section className="lp-section lp-faq" id="faq">
-      <SectionHead index="012" label="Questions" />
+      <SectionHead index="013" label="Questions" />
       <div className="lp-faq-grid">
         <h2 className="lp-h2 serif">Fair <em className="italic">questions.</em></h2>
         <div>

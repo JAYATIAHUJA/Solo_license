@@ -29,7 +29,7 @@ export function AppMock() {
       <div className="am-body">
         <aside className="am-side">
           <span className="am-logo"><Logo size={14} /> Solo License</span>
-          {[['home', 'Coding agent', true], ['ledger', 'Permission history'], ['receipt', 'Payments agent']].map(([icon, label, on]) => (
+          {[['home', 'Coding agent', true], ['ledger', 'Permission history'], ['settings', 'Settings']].map(([icon, label, on]) => (
             <span key={label} className={`am-nav ${on ? 'is-on' : ''}`}><HandIcon name={icon} size={12} /> {label}</span>
           ))}
           <div className="am-dial"><span className="mono">file-edit now</span><b className="serif">L0</b><span className="am-alert">Paused</span></div>
@@ -38,9 +38,9 @@ export function AppMock() {
           <div className="am-head"><span className="mono">Turns, checked at the end</span><b className="serif">Every turn, <em className="italic">on the record.</em></b></div>
           <div className="am-cols">
             <div className="am-list">
-              {RUNS.map(([id, order, amt, status, pat, alert]) => (
+              {RUNS.map(([id, task, size, status, pat, alert]) => (
                 <div key={id} className={`am-row ${id === '#48' ? 'is-on' : ''}`}>
-                  <span className="mono">{id}</span><b>{order}</b><span>{amt}</span>
+                  <span className="mono">{id}</span><b>{task}</b><span>{size}</span>
                   <span className={`am-status ${alert ? 'is-alert' : ''}`}><i className={pat} />{status}</span>
                 </div>
               ))}

@@ -182,6 +182,16 @@ def test_the_window_caps_edit_tool_fingerprints_too(gate):
     assert len(remembered - {"edit:1:a.py"}) == loops.WINDOW
 
 
+def test_a_halt_outlives_the_window_and_an_edit(gate):
+    conn = gate.conn
+    loops.halt(conn, "s9", "stuck")
+    for i in range(loops.WINDOW + 5):
+        loops.record(conn, "s9", loops.fingerprint("Bash", {"command": f"echo {i}"}), failed=False)
+    loops.record_edit(conn, "s9", 1, "a.py")
+    assert _fingerprints(conn, "s9") == {"halt", "edit:1:a.py"}
+    assert loops.halted(conn, "s9") == "stuck"
+
+
 def test_editing_the_same_file_again_and_again_sends_the_turn_back_once(gate):
     gate.user_prompt(_event(gate, prompt="fix app.py"))
     for i in range(4):

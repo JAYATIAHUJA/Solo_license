@@ -8,41 +8,88 @@ import sqlite3
 
 # --- licenses ----------------------------------------------------------------
 
-def get_license(conn: sqlite3.Connection, repo: str, action_class: str) -> sqlite3.Row:
+def get_license(conn: sqlite3.Connection, repo: str, action_class: str, *, principal: str = "main") -> sqlite3.Row:
     conn.execute(
-        "INSERT OR IGNORE INTO agent_licenses (repo, action_class) VALUES (?, ?)", (repo, action_class)
+        "INSERT OR IGNORE INTO agent_licenses (repo, principal, action_class) VALUES (?, ?, ?)",
+        (repo, principal, action_class),
     )
     return conn.execute(
-        "SELECT * FROM agent_licenses WHERE repo = ? AND action_class = ?", (repo, action_class)
+        "SELECT * FROM agent_licenses WHERE repo = ? AND principal = ? AND action_class = ?",
+        (repo, principal, action_class),
     ).fetchone()
+
+
+def effective_license(conn: sqlite3.Connection, repo: str, action_class: str, principal: str,
+                     *, max_level: int = 1, create: bool = True) -> dict:
+    """Return a principal's license, inheriting the repo license at a ceiling.
+
+    Main-agent rows are the source of truth for the repository. A subagent gets
+    its own row once it has evidence; before that, it inherits the main row but
+    can never exceed ``max_level``.
+    """
+    if principal == "main":
+        row = conn.execute(
+            "SELECT * FROM agent_licenses WHERE repo = ? AND principal = 'main' AND action_class = ?",
+            (repo, action_class),
+        ).fetchone()
+        if row is not None:
+            return dict(row)
+        if create:
+            return dict(get_license(conn, repo, action_class))
+        return {"repo": repo, "principal": "main", "action_class": action_class,
+                "level": 0, "successes": 0, "failures": 0, "successes_at_level": 0,
+                "demoted_from": None, "updated_at": None}
+    row = conn.execute(
+        "SELECT * FROM agent_licenses WHERE repo = ? AND principal = ? AND action_class = ?",
+        (repo, principal, action_class),
+    ).fetchone()
+    if row is not None:
+        result = dict(row)
+        result["level"] = min(int(result["level"]), max_level)
+        return result
+    inherited_row = conn.execute(
+        "SELECT * FROM agent_licenses WHERE repo = ? AND principal = 'main' AND action_class = ?",
+        (repo, action_class),
+    ).fetchone()
+    if inherited_row is None and create:
+        inherited_row = get_license(conn, repo, action_class, principal="main")
+    inherited = dict(inherited_row) if inherited_row is not None else {
+        "repo": repo, "principal": "main", "action_class": action_class,
+        "level": 0, "successes": 0, "failures": 0, "successes_at_level": 0,
+        "demoted_from": None, "updated_at": None,
+    }
+    inherited["principal"] = principal
+    inherited["level"] = min(int(inherited["level"]), max_level)
+    return inherited
 
 
 def list_licenses(conn: sqlite3.Connection, repo: str | None = None) -> list[sqlite3.Row]:
     if repo is None:
-        return conn.execute("SELECT * FROM agent_licenses ORDER BY repo, action_class").fetchall()
+        return conn.execute("SELECT * FROM agent_licenses ORDER BY repo, principal, action_class").fetchall()
     return conn.execute(
-        "SELECT * FROM agent_licenses WHERE repo = ? ORDER BY action_class", (repo,)
+        "SELECT * FROM agent_licenses WHERE repo = ? ORDER BY principal, action_class", (repo,)
     ).fetchall()
 
 
-def add_evidence(conn: sqlite3.Connection, repo: str, action_class: str, *, ok: bool) -> None:
-    get_license(conn, repo, action_class)  # create the row on first evidence
+def add_evidence(conn: sqlite3.Connection, repo: str, action_class: str, *, ok: bool,
+                 principal: str = "main") -> None:
+    get_license(conn, repo, action_class, principal=principal)  # create the row on first evidence
     change = ("successes = successes + 1, successes_at_level = successes_at_level + 1"
               if ok else "failures = failures + 1")
     conn.execute(
         f"UPDATE agent_licenses SET {change}, updated_at = datetime('now') "
-        "WHERE repo = ? AND action_class = ?",
-        (repo, action_class),
+        "WHERE repo = ? AND principal = ? AND action_class = ?",
+        (repo, principal, action_class),
     )
 
 
 def set_level(conn: sqlite3.Connection, repo: str, action_class: str, level: int,
-              *, demoted_from: int | None = None) -> None:
+              *, demoted_from: int | None = None, principal: str = "main") -> None:
     conn.execute(
         "UPDATE agent_licenses SET level = ?, demoted_from = ?, successes_at_level = 0, "
         "updated_at = datetime('now') "
-        "WHERE repo = ? AND action_class = ?",
-        (level, demoted_from, repo, action_class),
+        "WHERE repo = ? AND principal = ? AND action_class = ?",
+        (level, demoted_from, repo, principal, action_class),
     )
 
 
@@ -72,7 +119,7 @@ def forget_patterns(conn: sqlite3.Connection, repo: str, action_class: str) -> N
 # --- decisions -------------------------------------------------------------
 
 DECISION_COLUMNS = frozenset({
-    "session_id", "agent", "turn_id", "repo", "tool_name", "action_class", "pattern", "command",
+    "session_id", "agent", "principal", "turn_id", "repo", "tool_name", "action_class", "pattern", "command",
     "decision", "decided_by", "level", "source", "reason", "outcome", "trace_id",
 })
 
@@ -88,16 +135,17 @@ def insert_decision(conn: sqlite3.Connection, **fields) -> int:
     return int(cur.lastrowid)
 
 
-def pending_decision(conn: sqlite3.Connection, session_id: str, tool_name: str, command: str) -> sqlite3.Row | None:
+def pending_decision(conn: sqlite3.Connection, session_id: str, tool_name: str, command: str,
+                     *, principal: str = "main") -> sqlite3.Row | None:
     """The latest gate decision this tool run belongs to (PermissionRequest
     carries no tool_use_id, so the session, tool and command identify it)."""
     return conn.execute(
         """
         SELECT * FROM agent_decisions
-         WHERE session_id = ? AND tool_name = ? AND command = ? AND outcome = 'pending'
+         WHERE session_id = ? AND principal = ? AND tool_name = ? AND command = ? AND outcome = 'pending'
          ORDER BY id DESC LIMIT 1
         """,
-        (session_id, tool_name, command),
+        (session_id, principal, tool_name, command),
     ).fetchone()
 
 
@@ -120,22 +168,43 @@ def recent_decisions(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.
 # --- turns ---------------------------------------------------------------
 
 def open_turn(conn: sqlite3.Connection, *, session_id: str, repo: str, cwd: str, prompt: str,
-              base_ref: str | None, trace_id: str | None, agent: str = "claude-code") -> int:
+              base_ref: str | None, trace_id: str | None, agent: str = "claude-code",
+              principal: str = "main") -> int:
     cur = conn.execute(
-        "INSERT INTO agent_turns (session_id, agent, repo, cwd, prompt, base_ref, trace_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (session_id, agent, repo, cwd, prompt, base_ref, trace_id),
+        "INSERT INTO agent_turns (session_id, agent, principal, repo, cwd, prompt, base_ref, trace_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (session_id, agent, principal, repo, cwd, prompt, base_ref, trace_id),
     )
     return int(cur.lastrowid)
 
 
-def current_turn(conn: sqlite3.Connection, session_id: str) -> sqlite3.Row | None:
+def current_turn(conn: sqlite3.Connection, session_id: str, *, principal: str | None = None) -> sqlite3.Row | None:
+    """Return the latest open turn for a session, optionally scoped to a principal.
+
+    Claude gives subagents their own identity while Codex may share a session,
+    so session-only lookup can accidentally attach a stop or tool result to the
+    parent turn.  The optional argument preserves callers that only have a
+    session while allowing hook paths with trusted principal metadata to stay
+    isolated.
+    """
+    if principal is None:
+        return conn.execute(
+            "SELECT * FROM agent_turns WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,)
+        ).fetchone()
     return conn.execute(
-        "SELECT * FROM agent_turns WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,)
+        "SELECT * FROM agent_turns WHERE session_id = ? AND principal = ? ORDER BY id DESC LIMIT 1",
+        (session_id, principal),
     ).fetchone()
 
 
+TURN_CLOSE_COLUMNS = frozenset({"status", "reason", "scope_score", "lines_changed", "files_changed", "tests"})
+
+
 def close_turn(conn: sqlite3.Connection, turn_id: int, **fields) -> None:
+    """Column names come only from this fixed list; values are always bound."""
+    unknown = set(fields) - TURN_CLOSE_COLUMNS
+    if unknown:
+        raise ValueError(f"unknown agent_turns columns: {sorted(unknown)}")
     sets = ", ".join(f"{k} = ?" for k in fields)
     conn.execute(f"UPDATE agent_turns SET {sets}, closed_at = datetime('now') WHERE id = ?",
                  (*fields.values(), turn_id))

@@ -25,6 +25,9 @@ from dataclasses import dataclass, field
 
 # The gate's own events (the routes under /api/hooks/<event>).
 PROMPT, PERMISSION, POST, POST_FAIL, STOP = "user-prompt", "permission", "post-tool", "post-tool-failure", "stop"
+SUB_START, SUB_STOP = "subagent-start", "subagent-stop"
+# Claude Code's PreToolUse: only refusals no permission mode may skip; already in Claude Code's shape.
+PRE_TOOL = "pre-tool"
 
 # Agents whose prompt and post-tool hooks document ``hookSpecificOutput.additionalContext``
 # (code.claude.com/docs/en/hooks, developers.openai.com/codex/hooks). Cursor's
@@ -60,17 +63,21 @@ class AgentSpec:
 
 AGENTS: dict[str, AgentSpec] = {a.key: a for a in (
     AgentSpec("claude-code", "Claude Code", "http", ".claude/settings.local.json",
-              {"UserPromptSubmit": PROMPT, "PermissionRequest": PERMISSION, "PostToolUse": POST,
-               "PostToolUseFailure": POST_FAIL, "Stop": STOP}, can_ask=True,
+              {"UserPromptSubmit": PROMPT, "PreToolUse": PRE_TOOL, "PermissionRequest": PERMISSION,
+               "PostToolUse": POST, "PostToolUseFailure": POST_FAIL, "Stop": STOP,
+               "SubagentStart": SUB_START, "SubagentStop": SUB_STOP}, can_ask=True,
               notes="Native HTTP hooks; also installable as a plugin. GLM (z.ai) runs inside Claude Code, so it is covered.",
               docs="https://code.claude.com/docs/en/hooks", aliases=("claude", "glm")),
     AgentSpec("codex", "OpenAI Codex CLI", "command", ".codex/hooks.json",
-              {"UserPromptSubmit": PROMPT, "PermissionRequest": PERMISSION, "PostToolUse": POST, "Stop": STOP},
+              {"UserPromptSubmit": PROMPT, "PermissionRequest": PERMISSION, "PostToolUse": POST, "Stop": STOP,
+               "SubagentStart": SUB_START, "SubagentStop": SUB_STOP},
               can_ask=True, notes="Trust the project hooks once with /hooks.",
               docs="https://developers.openai.com/codex/hooks"),
     AgentSpec("cursor", "Cursor", "command", ".cursor/hooks.json",
               {"beforeSubmitPrompt": PROMPT, "beforeShellExecution": PERMISSION, "preToolUse": PERMISSION,
-               "afterShellExecution": POST, "afterFileEdit": POST, "stop": STOP},
+               "beforeMCPExecution": PERMISSION, "afterShellExecution": POST, "afterFileEdit": POST,
+               "afterMCPExecution": POST, "stop": STOP,
+               "subagentStart": SUB_START, "subagentStop": SUB_STOP},
               can_ask=True, notes="Cursor also runs Claude Code hooks from .claude/settings.json.",
               docs="https://cursor.com/docs/hooks"),
     AgentSpec("gemini", "Gemini CLI", "command", ".gemini/settings.json",
@@ -152,6 +159,18 @@ def _patch_path(patch: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _principal(payload: dict) -> str:
+    """Map native subagent metadata to the gate's stable identity key."""
+    agent_type = _first(payload, "agent_type", "subagent_type", default=None)
+    agent_id = _first(payload, "agent_id", "agentId", default=None)
+    if agent_type is None and agent_id is None:
+        return "main"
+    label = str(agent_type or "unknown").strip()
+    if not label or label.lower() in {"main", "primary"}:
+        return "main"
+    return f"subagent:{label}"
+
+
 def _tool(name: str, args: dict) -> tuple[str, dict]:
     """(Claude Code tool name, tool_input) for any agent's tool call."""
     low = (name or "").lower()
@@ -168,12 +187,36 @@ def _tool(name: str, args: dict) -> tuple[str, dict]:
     return name or "unknown", args
 
 
+def _mcp_name(name: str, p: dict) -> str:
+    """The canonical ``mcp__<server>__<tool>`` name of an MCP call, or "".
+
+    Claude Code and Codex already send it. Cursor's MCP hooks send the bare
+    tool and ``mcp_server_name`` (cursor.com/docs/hooks); Gemini CLI sends
+    ``mcp_<server>_<tool>`` with the exact names in ``mcp_context``
+    (geminicli.com/docs/hooks/reference)."""
+    if name.startswith("mcp__"):
+        return name
+    server = p.get("mcp_server_name")
+    if server and name:
+        return f"mcp__{server}__{name}"
+    context = p.get("mcp_context")
+    if isinstance(context, dict) and context.get("server_name") and context.get("tool_name"):
+        return f"mcp__{context['server_name']}__{context['tool_name']}"
+    match = re.match(r"^mcp_([A-Za-z0-9-]+)_(.+)$", name)  # Gemini without context: the first "_" splits
+    return f"mcp__{match.group(1)}__{match.group(2)}" if match else ""
+
+
 def _response_failed(resp) -> bool:
+    if isinstance(resp, str):
+        try:
+            resp = json.loads(resp)
+        except ValueError:
+            return False
     if isinstance(resp, dict):
         for key in ("exit_code", "exitCode", "returncode", "code"):
             if isinstance(resp.get(key), int):
                 return resp[key] != 0
-        if resp.get("success") is False or resp.get("is_error") is True:
+        if resp.get("success") is False or resp.get("is_error") is True or resp.get("isError") is True:
             return True
     return False
 
@@ -189,9 +232,15 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     session = str(_first(p, "session_id", "sessionId", "conversation_id", "conversationId", "trajectory_id",
                          "taskId", "sessionID", "thread_id", default=""))
     roots = _first(p, "workspace_roots", "workspaceRoots", "workspacePaths", default=None)
+    info = p.get("tool_info") if isinstance(p.get("tool_info"), dict) else {}
     cwd = str(_first(p, "cwd", "workspaceRoot", "directory",
-                     default=(roots[0] if isinstance(roots, list) and roots else ".")))
-    body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd}
+                     default=_first(info, "cwd", default=(roots[0] if isinstance(roots, list) and roots else "."))))
+    body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd,
+                  "principal": _principal(p)}
+    # Where the agent keeps its session file (read for token usage by budget.py).
+    transcript = _first(p, "transcript_path", "transcriptPath")
+    if transcript:
+        body["transcript_path"] = str(transcript)
 
     if event == PROMPT:
         body["prompt"] = str(_first(p, "prompt", "user_prompt", "message", default=""))
@@ -202,6 +251,14 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
         body["stop_hook_active"] = bool(_first(p, "stop_hook_active", "stopHookActive", default=False)) or \
             int(_first(p, "loop_count", default=0) or 0) > 0
         return event, body
+    if event in (SUB_START, SUB_STOP):
+        body["subagent_type"] = str(_first(p, "agent_type", "subagent_type", default="unknown"))
+        body["subagent_model"] = str(_first(p, "subagent_model", "model", default=""))
+        if event == SUB_STOP:
+            modified = _first(p, "modified_files", "modifiedFiles", default=None)
+            if modified is not None:
+                body["modified_files"] = modified
+        return event, body
 
     # A tool call: find its name and arguments wherever this agent keeps them.
     if native_event in ("beforeShellExecution", "afterShellExecution"):
@@ -209,6 +266,9 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     elif native_event in ("pre_run_command", "post_run_command"):
         info = p.get("tool_info") or {}
         name, args = "Bash", {"command": _first(info, "command_line", "command", default="")}
+    elif native_event in ("beforeMCPExecution", "afterMCPExecution"):
+        # ``command`` here is a stdio server's launch line, not a shell command.
+        name, args = str(p.get("tool_name", "")), _args(p.get("tool_input") or {})
     elif native_event in ("pre_write_code", "post_write_code", "afterFileEdit"):
         info = p.get("tool_info") or p
         name, args = "Edit", {"file_path": _first(info, "file_path", "filePath", default="")}
@@ -222,10 +282,11 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     else:
         name = str(_first(p, "tool_name", "toolName", "tool", default=""))
         args = _args(_first(p, "tool_input", "toolInput", "toolArgs", "args", default={}))
-    tool, tool_input = _tool(name, args)
+    mcp = _mcp_name(str(name or ""), p)
+    tool, tool_input = (mcp, args) if mcp else _tool(name, args)
     body.update(tool_name=tool, tool_input=tool_input)
     if event == POST:
-        resp = _first(p, "tool_response", "toolResult", "result", "output", default=None)
+        resp = _first(p, "tool_response", "toolResult", "result", "output", "result_json", default=None)
         if _response_failed(resp) or p.get("exit_code") not in (None, 0) or p.get("success") is False:
             event = POST_FAIL
             body["error"] = f"Exit code {p.get('exit_code', 1)}"
@@ -244,7 +305,11 @@ def _gate_decision(gate_event: str, answer: dict) -> tuple[str, str]:
         return (behavior if behavior in ("allow", "deny") else "defer"), reason
     if gate_event == STOP and answer.get("decision") == "block":
         return "continue", answer.get("reason", "")
-    if gate_event in (PROMPT, POST, POST_FAIL):
+    if gate_event == SUB_STOP and answer.get("decision") == "block":
+        return "continue", answer.get("reason", "")
+    if gate_event == SUB_START and answer.get("decision") == "deny":
+        return "deny", answer.get("reason", "")
+    if gate_event in (PROMPT, POST, POST_FAIL, SUB_START):
         context = (answer.get("hookSpecificOutput") or {}).get("additionalContext")
         if context:
             return "context", context
@@ -257,10 +322,16 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
     gate_event = spec.events.get(native_event)
     if gate_event is None:
         return Native()
+    if gate_event == PRE_TOOL:
+        return Native(answer or None)
     verdict, reason = _gate_decision(gate_event, answer)
     if gate_event == PERMISSION:
         interrupt = bool(((answer or {}).get("hookSpecificOutput") or {}).get("decision", {}).get("interrupt"))
         return _render_permission(spec.key, native_event, verdict, reason, interrupt)
+    if gate_event == SUB_START and verdict == "deny":
+        # Cursor documents a structured deny; Claude/Codex still receive a
+        # clear structured response so policy blocks are not silently lost.
+        return Native({"decision": "deny", "reason": reason})
     if verdict == "continue":
         return _render_send_back(spec.key, reason)
     if verdict == "context":
@@ -271,6 +342,8 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
 def _render_context(agent: str, native_event: str, answer: dict, context: str) -> Native:
     """Text for the model next to a tool result or a prompt. The event name is
     the agent's own: a Codex PostToolUse that failed is still a PostToolUse."""
+    if agent not in TAKES_CONTEXT and native_event == "subagentStart":
+        return Native({"additional_context": context})
     if agent not in TAKES_CONTEXT:
         return _render_halt(agent, answer)  # recorded and shown in the dashboard; the turn check still applies
     body: dict = {"hookSpecificOutput": {"hookEventName": native_event, "additionalContext": context}}

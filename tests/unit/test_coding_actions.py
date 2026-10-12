@@ -7,7 +7,7 @@ import json
 import pytest
 
 from sololicense.coding import jev
-from sololicense.coding.actions import classify_command, classify_tool
+from sololicense.coding.actions import ACTION_CLASSES, classify_command, classify_tool, mcp_tool_risk
 
 
 @pytest.mark.parametrize("command, expected", [
@@ -66,7 +66,49 @@ def test_non_shell_tools():
     assert classify_tool("Edit", {"file_path": "a.py"}).action_class == "file-edit"
     assert classify_tool("Read", {"file_path": "a.py"}).action_class == "read"
     assert classify_tool("WebFetch", {"url": "https://x"}).action_class == "network-fetch"
-    assert classify_tool("mcp__github__merge", {}).action_class == "unknown"
+    assert classify_tool("Frobnicate", {}).action_class == "unknown"
+
+
+def test_mcp_tools_are_one_class_per_server():
+    result = classify_tool("mcp__github__merge_pull_request", {"pull_number": 7})
+    assert result.action_class == "mcp:github"
+    assert (result.mcp_server, result.mcp_tool) == ("github", "merge_pull_request")
+    assert result.pattern == "mcp__github__merge_pull_request"  # an L1 approval covers this one tool
+    assert result.mcp_attributes == {"mcp_server": "github", "mcp_tool": "merge_pull_request"}
+    assert classify_tool("mcp__my_db__list_tables", {}).mcp_server == "my_db"
+    assert classify_tool("Bash", {"command": "ls"}).mcp_attributes == {}
+
+
+def test_mcp_classes_exist_for_any_server_without_being_listed():
+    spec = ACTION_CLASSES["mcp:github"]
+    assert (spec.label, spec.max_level) == ("GitHub (MCP)", 2)
+    assert ACTION_CLASSES["mcp:linear-tasks"].label == "Linear Tasks (MCP)"
+    assert "mcp:github" in ACTION_CLASSES and ACTION_CLASSES.get("mcp:github") == spec
+    assert "mcp:" not in ACTION_CLASSES and ACTION_CLASSES.get("nope") is None
+    assert not any(k.startswith("mcp:") for k in ACTION_CLASSES)  # built-ins only when listed
+    with pytest.raises(KeyError):
+        ACTION_CLASSES["mcp:bad server"]
+
+
+@pytest.mark.parametrize("tool, risk", [
+    ("list_issues", "read"),
+    ("get_file_contents", "read"),
+    ("search_code", "read"),
+    ("query", "read"),
+    ("list_merge_requests", "read"),   # the first verb decides
+    ("create_issue", "write"),
+    ("add_issue_comment", "write"),
+    ("push_files", "write"),
+    ("updateIssue", "write"),
+    ("merge_pull_request", "destructive"),
+    ("delete_branch", "destructive"),
+    ("deploy_to_vercel", "destructive"),
+    ("close_issue", "destructive"),
+    ("execute_sql", "destructive"),
+    ("frobnicate", "write"),           # unknown verbs are not trusted like reads
+])
+def test_mcp_tool_risk_comes_from_its_verb(tool, risk):
+    assert mcp_tool_risk(tool) == risk
 
 
 def test_jev_without_a_key_never_answers():

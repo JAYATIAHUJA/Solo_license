@@ -6,6 +6,7 @@ import { moneyWhole, toDate, when } from '../../../lib/format.js';
 import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey, pauseCause } from '../../../lib/coding-live.js';
 import { byTurn, loopBadge, remediationView } from '../../../lib/coding-guidance.js';
 import { personName } from '../../../lib/ledger-words.js';
+import { classLabel, isMcpClass } from '../../../lib/action-classes.js';
 import './coding.css';
 
 const POLL_MS = 4000;
@@ -199,7 +200,7 @@ function LicenseCard({ lic, onResume, busy, flash, flagged }) {
   return (
     <article className={`pl-card cd-lic ${paused ? 'is-paused' : ''}`}>
       <div className="app-card-top">
-        <h3>{lic.label}</h3>
+        <h3>{lic.label} <small className="pl-muted">· {lic.principal === 'main' ? 'Main agent' : lic.principal}</small></h3>
         <span aria-live="polite"
           className={`pl-status cd-level ${paused ? 'bad' : lic.level >= 1 ? 'ok' : 'wait'}${flash ? ` is-${flash}` : ''}`}>
           L{lic.level} · {paused ? 'Paused' : words.short}
@@ -212,7 +213,10 @@ function LicenseCard({ lic, onResume, busy, flash, flagged }) {
         <div className="app-evidence" role="img" aria-label={nextSentence(lic)}><i style={{ width: `${share * 100}%` }} /></div>
       )}
       <p className="pl-small pl-muted">{nextSentence(lic)}</p>
-      <p className="pl-small pl-muted">{lic.successes} verified · {lic.failures} failed · <code>{lic.action_class}</code></p>
+      {isMcpClass(lic.action_class) && (
+        <p className="pl-small pl-muted">MCP tools: reads can run on their own, writes once you approved that tool, and destructive tools (merge, delete, deploy) always ask.</p>
+      )}
+      <p className="pl-small pl-muted">{lic.successes} verified · {lic.failures} failed · ceiling L{lic.ceiling ?? lic.max_level} · <code>{lic.action_class}</code></p>
       {paused && (
         <div className="cd-actions">
           <button type="button" className="btn btn-line btn-sm" disabled={busy} onClick={() => onResume(lic, lic.demoted_from)}>
@@ -285,7 +289,7 @@ export function Coding() {
   }
 
   const resume = (lic, level) => act(
-    () => api.codingRestore({ repo: lic.repo, action_class: lic.action_class, level, reason: 'Reviewed the failure and resumed.' }),
+    () => api.codingRestore({ repo: lic.repo, principal: lic.principal || 'main', action_class: lic.action_class, level, reason: 'Reviewed the failure and resumed.' }),
     `${lic.label} resumed at L${level}.`,
   );
   const anyFrozen = (coding?.repos || []).some((r) => r.frozen);
@@ -325,7 +329,7 @@ export function Coding() {
       )}
 
       {paused.map((l) => (
-        <div key={l.action_class} className="pl-alert app-alert-row" role="alert">
+        <div key={licenseKey(l)} className="pl-alert app-alert-row" role="alert">
           <p><b>{l.label} paused in {l.repo}.</b> {flaggedBy(coding?.events, l) || 'It failed a check'}, so it asks you again before every action of this kind.</p>
           <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => resume(l, l.demoted_from)}>Resume at L{l.demoted_from}</button>
         </div>
@@ -406,7 +410,7 @@ export function Coding() {
                 <li key={d.id} className="pl-row">
                   <span className="pl-row-main">
                     <b><code>{d.command}</code></b>
-                    <small>{when(d.created_at)} · {d.action_class} at L{d.level} · {d.reason}</small>
+                    <small>{when(d.created_at)} · {classLabel(d.action_class)} at L{d.level} · {d.reason}</small>
                   </span>
                   <span className="pl-row-side">
                     <span className={`pl-status ${s.tone}`}>{d.decided_by === 'person' ? 'You approved' : s.label}</span>

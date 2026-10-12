@@ -3,10 +3,12 @@ import test from 'node:test';
 
 import { flagRequest, flaggedTargets, levelChanges, levelsOf, pauseCause } from '../src/lib/coding-live.js';
 
-const lic = (action_class, level, repo = 'app') => ({ repo, action_class, level });
+const lic = (action_class, level, repo = 'app', principal = 'main') => ({ repo, principal, action_class, level });
 
-test('levels are keyed by repository and action class', () => {
-  assert.deepEqual(levelsOf([lic('file-edit', 1), lic('test', 2, 'api')]), { 'app:file-edit': 1, 'api:test': 2 });
+test('levels are keyed by repository, principal and action class', () => {
+  assert.deepEqual(levelsOf([lic('file-edit', 1), lic('test', 2, 'api', 'subagent:Explore')]), {
+    'app:main:file-edit': 1, 'api:subagent:Explore:test': 2,
+  });
   assert.deepEqual(levelsOf(null), {});
 });
 

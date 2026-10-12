@@ -1,20 +1,28 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
+import { classLabel, formatToolRules, isMcpClass, parseToolRules } from '../../../lib/action-classes.js';
 
 const LEVEL_LABEL = ['L0 · asks every time', 'L1 · approved commands only', 'L2 · whole class'];
 const lines = (text) => text.split('\n').map((s) => s.trim()).filter(Boolean);
 
+function toolRule(r) {
+  if (r.forbidden) return 'never allowed';
+  return [r.risk, r.ceiling != null ? `at most L${r.ceiling}` : ''].filter(Boolean).join(', ');
+}
+
 function Rules({ rules }) {
   if (!rules) return null;
   const caps = Object.entries(rules.ceilings || {});
+  const tools = Object.entries(rules.tools || {});
   return (
     <ul className="cp-rules pl-small">
       {rules.freeze && <li><b>Frozen</b>: every action asks.</li>}
-      {caps.map(([k, v]) => <li key={k}><code>{k}</code> at most L{v}</li>)}
+      {caps.map(([k, v]) => <li key={k}>{isMcpClass(k) ? classLabel(k) : <code>{k}</code>} at most L{v}</li>)}
+      {tools.map(([p, r]) => <li key={`t-${p}`}>tool <code>{p}</code>: {toolRule(r)}</li>)}
       {(rules.deny_commands || []).map((c) => <li key={`c-${c}`}>never run <code>{c}</code></li>)}
       {(rules.deny_paths || []).map((p) => <li key={`p-${p}`}>never touch <code>{p}</code></li>)}
-      {!rules.freeze && !caps.length && !(rules.deny_commands || []).length && !(rules.deny_paths || []).length && <li>No extra rules.</li>}
+      {!rules.freeze && !caps.length && !tools.length && !(rules.deny_commands || []).length && !(rules.deny_paths || []).length && <li>No extra rules.</li>}
     </ul>
   );
 }
@@ -25,7 +33,7 @@ export function CodingPolicy() {
   const [repos, setRepos] = useState([]);
   const [repo, setRepo] = useState('*');
   const [data, setData] = useState(null);
-  const [form, setForm] = useState({ classes: {}, commands: '', paths: '', freeze: false });
+  const [form, setForm] = useState({ classes: {}, commands: '', paths: '', tools: '', freeze: false });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { api.coding().then((r) => setRepos((r.repos || []).map((x) => x.repo))).catch(() => {}); }, []);
@@ -37,6 +45,7 @@ export function CodingPolicy() {
         classes: { ...(mine?.ceilings || {}) },
         commands: (mine?.deny_commands || []).join('\n'),
         paths: (mine?.deny_paths || []).join('\n'),
+        tools: formatToolRules(mine?.tools),
         freeze: Boolean(mine?.freeze),
       });
     }).catch(() => {});
@@ -46,7 +55,8 @@ export function CodingPolicy() {
     setSaving(true);
     try {
       const body = await api.saveCodingPolicy({
-        repo, classes: form.classes, deny_commands: lines(form.commands), deny_paths: lines(form.paths), freeze: form.freeze,
+        repo, classes: form.classes, deny_commands: lines(form.commands), deny_paths: lines(form.paths),
+        tools: parseToolRules(form.tools), freeze: form.freeze,
       });
       setData(body);
       setToast({ kind: 'ok', text: 'Policy saved and recorded in the ledger.', at: Date.now() });
@@ -78,7 +88,7 @@ export function CodingPolicy() {
             <p className="pl-small pl-muted">None yet. Create one with <code>solo-license policy init</code> and commit it, so privilege changes are reviewed like code.</p>
           )}
           <h3>In effect now</h3>
-          <Rules rules={{ ...data.effective, ceilings: Object.fromEntries(Object.entries(data.effective.ceilings || {}).filter(([k, v]) => v < (builtIn[k] ?? 0))) }} />
+          <Rules rules={{ ...data.effective, ceilings: Object.fromEntries(Object.entries(data.effective.ceilings || {}).filter(([k, v]) => v < (builtIn[k] ?? (isMcpClass(k) ? 2 : 0)))) }} />
           <p className="pl-small pl-muted">Policy <code>{data.effective.digest}</code> · recorded with every decision.</p>
         </div>
 
@@ -109,6 +119,11 @@ export function CodingPolicy() {
           <label className="field">
             <span>Never touch these files (globs)</span>
             <textarea className="input" rows={3} value={form.paths} onChange={(e) => setForm((f) => ({ ...f, paths: e.target.value }))} placeholder={'.env\ninfra/prod/**'} />
+          </label>
+          <label className="field">
+            <span>MCP tool rules (glob, then read / write / destructive, forbidden or ceiling=0..2)</span>
+            <textarea className="input" rows={3} value={form.tools} onChange={(e) => setForm((f) => ({ ...f, tools: e.target.value }))} placeholder={'mcp__github__* write\nmcp__aws__* forbidden'} />
+            <small className="pl-muted">Without a rule a tool's verb decides: list/get/search can reach L{data.tool_defaults?.read ?? 2}, create/update L{data.tool_defaults?.write ?? 1}, merge/delete/deploy always ask.</small>
           </label>
           <label className="cp-freeze">
             <input type="checkbox" checked={form.freeze} onChange={(e) => setForm((f) => ({ ...f, freeze: e.target.checked }))} />

@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from sololicense.bootstrap import AppContext, build_app
 from sololicense.db.repositories import agent as agent_repo
 from sololicense.db.repositories import settings as settings_repo
-from sololicense.coding.actions import ACTION_CLASSES
+from sololicense.coding.actions import ACTION_CLASSES, MCP_PREFIX
 from sololicense.observability.links import event_payload
 from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
@@ -344,10 +344,13 @@ def test_neatlogs(
 
 _HOOK_EVENTS = {
     "user-prompt": "UserPromptSubmit",
+    "pre-tool": "PreToolUse",
     "permission": "PermissionRequest",
     "post-tool": "PostToolUse",
     "post-tool-failure": "PostToolUseFailure",
     "stop": "Stop",
+    "subagent-start": "SubagentStart",
+    "subagent-stop": "SubagentStop",
 }
 
 
@@ -402,10 +405,16 @@ def coding_hook(
         body = {**_client_fields(body), "_agent": "claude-code", "_prompt_only": True}
         if event == "user-prompt":
             return gate.user_prompt(body)
+        if event == "subagent-start":
+            return gate.subagent_start(body)
+        if event == "pre-tool":
+            return gate.pre_tool(body)
         if event == "permission":
             return gate.permission(body)
         if event == "stop":
             return gate.stop(body)
+        if event == "subagent-stop":
+            return gate.subagent_stop(body)
         return gate.tool_result(body, failed=event == "post-tool-failure")
 
 
@@ -454,12 +463,15 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         spec = ACTION_CLASSES.get(row["action_class"])
         if spec is None:
             continue
+        principal = str(row["principal"] or "main")
+        ceiling = gate.ceiling_for(row["repo"], spec.key, principal) if gate else spec.max_level
         progress = gate.ladder.progress(spec.key, row["level"], row["successes"], row["failures"],
-                                        row["successes_at_level"],
-                                        ceiling=gate.ceiling(row["repo"], spec.key)) if gate else {}
+                                        row["successes_at_level"], ceiling=ceiling) if gate else {}
         licenses.append({
-            "repo": row["repo"], "action_class": spec.key, "label": spec.label, "level": row["level"],
-            "max_level": spec.max_level, "successes": row["successes"], "failures": row["failures"],
+            "repo": row["repo"], "principal": principal, "action_class": spec.key, "label": spec.label,
+            "level": row["level"], "max_level": spec.max_level, "ceiling": ceiling,
+            "successes": row["successes"], "failures": row["failures"],
+            "mcp_server": spec.key[len(MCP_PREFIX):] if spec.key.startswith(MCP_PREFIX) else None,
             "demoted_from": row["demoted_from"], "updated_at": row["updated_at"], **progress,
         })
     decisions = [dict(r) for r in agent_repo.recent_decisions(context.conn, 60)
@@ -548,6 +560,8 @@ def rewind_coding_turn(turn_id: int, actor: Actor = Depends(require_role(Role.AP
 class CodingRestorePayload(BaseModel):
     repo: str = Field(min_length=1, max_length=200)
     action_class: str = Field(min_length=1, max_length=40)
+    principal: str = Field(default="main", min_length=1, max_length=120,
+                           pattern=r"^(main|subagent:[A-Za-z0-9_.:-]+)$")
     level: int = Field(ge=0, le=2)
     reason: str = Field(default="Reviewed and resumed.", max_length=300)
 
@@ -562,7 +576,8 @@ def restore_coding_license(
         if payload.action_class not in ACTION_CLASSES or context.coding_gate is None:
             raise HTTPException(status_code=422, detail="Unknown action class.")
         context.coding_gate.restore(payload.repo, payload.action_class, payload.level,
-                                    actor_id=actor.actor_id, reason=payload.reason)
+                                    actor_id=actor.actor_id, reason=payload.reason,
+                                    principal=payload.principal)
         return coding_payload(context)
 
 
@@ -646,10 +661,16 @@ def agent_hook(
             payload["_prompt_only"] = native_event == "PermissionRequest" and spec.key in ("claude-code", "codex")
             if event == "user-prompt":
                 answer = gate.user_prompt(payload)
+            elif event == "subagent-start":
+                answer = gate.subagent_start(payload)
+            elif event == "pre-tool":
+                answer = gate.pre_tool(payload)
             elif event == "permission":
                 answer = gate.permission(payload)
             elif event == "stop":
                 answer = gate.stop(payload)
+            elif event == "subagent-stop":
+                answer = gate.subagent_stop(payload)
             else:
                 answer = gate.tool_result(payload, failed=event == "post-tool-failure")
             native = agents.render(spec.key, native_event, answer)
@@ -675,10 +696,12 @@ def coding_agents() -> dict:
 def coding_install(agent: str = Query(default="auto", max_length=40, pattern=r"^[a-z0-9-]+$")) -> dict:
     """Everything a person needs to wire one agent: the one-liner, the
     command to keep the gate running, and a prompt their agent can follow."""
-    from sololicense.cli import INSTALL_ONE_LINER, REPO_URL, agent_prompt
+    from sololicense.cli import GLOBAL_ONE_LINER, GLOBAL_STEPS, INSTALL_ONE_LINER, REPO_URL, agent_prompt
 
     return {
         "agent": agent,
+        "global_one_liner": GLOBAL_ONE_LINER,
+        "global_steps": [*GLOBAL_STEPS, "solo-license doctor"],
         "one_liner": INSTALL_ONE_LINER.replace("--agent auto", f"--agent {agent}"),
         "persistent": f"uv tool install git+{REPO_URL}",
         "init": f"solo-license init --agent {agent}",
@@ -699,6 +722,7 @@ class CodingPolicyPayload(BaseModel):
     deny_commands: list[str] = Field(default_factory=list, max_length=50)
     deny_paths: list[str] = Field(default_factory=list, max_length=50)
     freeze: bool = False
+    tools: dict[str, dict] = Field(default_factory=dict)   # glob on the tool name -> {risk, ceiling, forbidden}
 
 
 class FreezePayload(BaseModel):
@@ -724,6 +748,7 @@ def coding_policy_payload(context: AppContext, repo: str) -> dict:
         "local": this_repo.to_json() if this_repo else None,
         "effective": {**effective.to_json(), "digest": effective.digest},
         "built_in": {k: c.max_level for k, c in ACTION_CLASSES.items()},
+        "tool_defaults": dict(policy_mod.TOOL_CEILINGS),
         "starter": policy_mod.STARTER,
     }
 
@@ -754,6 +779,8 @@ def _policy_summary(before: dict | None, after) -> str:
         parts.append(f"{len(after.deny_commands)} denied command(s)")
     if after.deny_paths:
         parts.append(f"{len(after.deny_paths)} denied path(s)")
+    if after.tools:
+        parts.append(f"{len(after.tools)} tool rule(s)")
     return "; ".join(parts) or "no extra rules"
 
 
@@ -770,6 +797,7 @@ def put_coding_policy(payload: CodingPolicyPayload, actor: Actor = Depends(requi
                 "classes": {k: {"max": v} for k, v in payload.classes.items()},
                 "deny": {"commands": payload.deny_commands, "paths": payload.deny_paths},
                 "freeze": {"enabled": payload.freeze},
+                "tools": payload.tools,
             })
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -788,9 +816,7 @@ def freeze_coding(payload: FreezePayload, actor: Actor = Depends(require_role(Ro
     with _lock:
         context = get_context()
         current = policy_mod.local(context.conn, payload.repo) or policy_mod.Policy()
-        raw = {"classes": {k: {"max": v} for k, v in current.ceilings.items()},
-               "deny": {"commands": list(current.deny_commands), "paths": list(current.deny_paths)},
-               "freeze": {"enabled": payload.enabled}}
+        raw = {**current.to_raw(), "freeze": {"enabled": payload.enabled}}
         policy_mod.save_local(context.conn, payload.repo, raw)
         if context.coding_gate is not None:
             where = "all repositories" if payload.repo == policy_mod.ALL_REPOS else payload.repo

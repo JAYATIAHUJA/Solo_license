@@ -1,5 +1,7 @@
 /** Wording for the permission history. */
 
+import { classLabel } from './action-classes.js';
+
 /** "human:jayati" -> "Jayati"; the gate itself -> "Solo License". */
 export function personName(actorId) {
   if (!actorId) return '';
@@ -21,5 +23,5 @@ export function eventReason(e) {
 export function flagSentence(e) {
   const [cls, repo] = String(e.task_class || '').split('@');
   const who = personName(e.actor_id) || 'Someone';
-  return `${who} flagged ${cls}${repo ? ` in ${repo}` : ''} as wrong — back to L${e.to_level ?? 0}`;
+  return `${who} flagged ${classLabel(cls)}${repo ? ` in ${repo}` : ''} as wrong — back to L${e.to_level ?? 0}`;
 }

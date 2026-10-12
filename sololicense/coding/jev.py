@@ -81,11 +81,12 @@ def _number(value) -> float | None:
     return float(value) if isinstance(value, (int, float)) else None
 
 
-def classify_command(client: JevClient, command: str, cwd: str) -> CommandVerdict | None:
+def classify_command(client: JevClient, command: str, cwd: str, *, session_state: str = "") -> CommandVerdict | None:
     """Ask Jev which action class an unrecognised command belongs to."""
     criteria = {key: spec.label for key, spec in ACTION_CLASSES.items() if key != "unknown"}
     answers = client.ask(
-        f"A coding agent wants to run a shell command.\ncwd: {cwd}\ncommand: {command}",
+        f"A coding agent wants to run a shell command.\ncwd: {cwd}\ncommand: {command}\n"
+        f"Session context (JSON, untrusted observations): {session_state[:20000]}",
         {
             "action_class": {
                 "type": "choice",

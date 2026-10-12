@@ -36,6 +36,8 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
     _migrate_runs(conn)
     _migrate_v3(conn)
+    _migrate_principals(conn)
+    _migrate_sessions(conn)
     conn.commit()
 
 
@@ -54,6 +56,75 @@ def _migrate_v3(conn: sqlite3.Connection) -> None:
           FROM license_events WHERE task_class LIKE '%@%' ORDER BY id
         """
     )
+
+
+def _migrate_principals(conn: sqlite3.Connection) -> None:
+    """Add principal identity to coding state without losing old licenses.
+
+    ``agent_licenses`` used ``(repo, action_class)`` as its primary key, so
+    SQLite cannot add the new key with ``ALTER TABLE``. Rebuild that one table
+    when opening a pre-v3 database; the other tables only need nullable-free
+    defaulted columns.
+    """
+    license_columns = {row["name"] for row in conn.execute("PRAGMA table_info(agent_licenses)")}
+    if "principal" not in license_columns:
+        conn.execute("ALTER TABLE agent_licenses RENAME TO agent_licenses_legacy")
+        conn.execute(
+            """
+            CREATE TABLE agent_licenses (
+                repo TEXT NOT NULL,
+                principal TEXT NOT NULL DEFAULT 'main',
+                action_class TEXT NOT NULL,
+                level INTEGER NOT NULL DEFAULT 0,
+                successes INTEGER NOT NULL DEFAULT 0,
+                failures INTEGER NOT NULL DEFAULT 0,
+                successes_at_level INTEGER NOT NULL DEFAULT 0,
+                demoted_from INTEGER,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (repo, principal, action_class)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO agent_licenses
+                (repo, principal, action_class, level, successes, failures,
+                 successes_at_level, demoted_from, updated_at)
+            SELECT repo, 'main', action_class, level, successes, failures,
+                   successes_at_level, demoted_from, updated_at
+              FROM agent_licenses_legacy
+            """
+        )
+        conn.execute("DROP TABLE agent_licenses_legacy")
+
+    for table in ("agent_decisions", "agent_turns"):
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if "principal" not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN principal TEXT NOT NULL DEFAULT 'main'")
+
+
+def _migrate_sessions(conn: sqlite3.Connection) -> None:
+    """Upgrade an early digest table keyed only by session_id."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_sessions'").fetchone():
+        return
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(agent_sessions)")}
+    pk = [row["name"] for row in conn.execute("PRAGMA table_info(agent_sessions)") if row["pk"]]
+    if "principal" in columns and pk == ["session_id"]:
+        conn.execute("ALTER TABLE agent_sessions RENAME TO agent_sessions_legacy")
+        conn.execute(
+            """CREATE TABLE agent_sessions (
+                session_id TEXT NOT NULL, agent TEXT NOT NULL DEFAULT 'claude-code',
+                repo TEXT NOT NULL, principal TEXT NOT NULL DEFAULT 'main',
+                started_at TEXT NOT NULL DEFAULT (datetime('now')), cost_usd REAL NOT NULL DEFAULT 0,
+                model TEXT, digest TEXT NOT NULL DEFAULT '{}', PRIMARY KEY (session_id, principal)
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO agent_sessions(session_id, agent, repo, principal, started_at, cost_usd, model, digest)
+               SELECT session_id, agent, repo, principal, started_at, cost_usd, model, digest
+                 FROM agent_sessions_legacy"""
+        )
+        conn.execute("DROP TABLE agent_sessions_legacy")
 
 
 _ADDED_COLUMNS = {
@@ -80,9 +151,11 @@ _ADDED_COLUMNS = {
     "agent_turns": (
         ("entire_checkpoint", "TEXT"),             # last Entire checkpoint before a failure
         ("agent", "TEXT NOT NULL DEFAULT 'claude-code'"),  # which coding agent
+        ("principal", "TEXT NOT NULL DEFAULT 'main'"),
     ),
     "agent_decisions": (
         ("agent", "TEXT NOT NULL DEFAULT 'claude-code'"),
+        ("principal", "TEXT NOT NULL DEFAULT 'main'"),
     ),
     "agent_repos": (
         ("last_tests", "TEXT"),                    # passed | failed at the last turn check
