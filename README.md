@@ -66,7 +66,8 @@ uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve   
 ```
 
 or paste the ready prompt from `solo-license prompt --agent <agent>` into your agent and let it install
-itself. Claude Code can also use the plugin: `/plugin install solo-license --marketplace JAYATIAHUJA/Solo_license`.
+itself. Claude Code can also use the plugin: `/plugin marketplace add JAYATIAHUJA/Solo_license`, then
+`/plugin install solo-license@solo-license`.
 The web app's **setup guide** (`/onboarding`) walks through all of it and turns green when the first hook arrives.
 
 | Agent | Wired through | Sends a bad turn back |

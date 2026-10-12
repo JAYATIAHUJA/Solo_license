@@ -126,7 +126,7 @@ class CodingGate:
             (session, agent, repo, principal, digest.state(self.conn, session, repo=repo, principal=principal)),
         )
         if not event.get("_implicit"):  # a turn opened for an agent without a prompt hook is not a person
-            loops.clear_halt(self.conn, session)
+            loops.new_prompt(self.conn, session)
         trace.span("turn.start", turn=turn_id, prompt=str(event.get("prompt", ""))[:300])
         answer: dict = {}
         if agent in agents.TAKES_CONTEXT:
