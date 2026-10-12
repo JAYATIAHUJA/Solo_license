@@ -124,12 +124,29 @@ export function CodingSetup() {
         </div>
         {install && tab === 'terminal' && (
           <div className="su-body">
-            <p>In your repository’s root (needs <a href="https://docs.astral.sh/uv/" target="_blank" rel="noreferrer">uv</a>):</p>
-            <Copy text={install.one_liner} />
-            <p>Then keep the gate running in another terminal:</p>
-            <Copy text={`uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve`} />
+            <p>
+              <b>Recommended: every repository, gate in the background.</b> One line (needs{' '}
+              <a href="https://docs.astral.sh/uv/" target="_blank" rel="noreferrer">uv</a>) installs Solo License, adds
+              its hooks to each agent’s user-level settings on this machine, and starts the gate detached:
+            </p>
+            {install.global_one_liner && <Copy text={install.global_one_liner} />}
+            <p className="pl-small pl-muted">
+              Older Windows PowerShell has no <code>&amp;&amp;</code>: run the steps one by one. Preview first with{' '}
+              <code>solo-license init --global --dry-run</code>; undo with <code>solo-license init --global --remove</code>.
+            </p>
+            {install.global_steps && (
+              <details className="pl-more">
+                <summary>Step by step</summary>
+                {install.global_steps.map((line) => <Copy key={line} text={line} />)}
+              </details>
+            )}
             <details className="pl-more">
-              <summary>Prefer a permanent install?</summary>
+              <summary>Only this repository instead?</summary>
+              <p>In your repository’s root:</p>
+              <Copy text={install.one_liner} />
+              <p>Then keep the gate running in another terminal:</p>
+              <Copy text={`uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license serve`} />
+              <p>Or with a permanent install:</p>
               <Copy text={install.persistent} />
               <Copy text={install.init} />
               <Copy text={install.serve} />
@@ -151,7 +168,8 @@ export function CodingSetup() {
           </div>
         )}
         <p className="pl-small pl-muted">
-          What it writes: <code>{spec?.config_path}</code>{spec?.transport === 'command' ? <> and <code>.solo-license/hook.py</code></> : null}, merged with any hooks
+          What it writes: the agent’s user-level hook settings (or <code>{spec?.config_path}</code> for one repository)
+          {spec?.transport === 'command' ? <> and a small shim, <code>hook.py</code>, in <code>~/.solo-license/</code> (or the repository’s <code>.solo-license/</code>)</> : null}, merged with any hooks
           already there. If the gate is not running, your agent behaves exactly as before - Solo License never allows anything on its own.
         </p>
       </Step>

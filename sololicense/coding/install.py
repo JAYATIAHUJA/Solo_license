@@ -5,20 +5,25 @@
 Writes that agent's own hook configuration (merged with whatever is already
 there, such as Entire's hooks) and, for agents whose hooks run commands, a
 one-file shim at ``.solo-license/hook.py``. Running it twice changes nothing.
+Every write is first planned as a list of :class:`Change`, so the same plan
+can be shown as a diff (``--dry-run``) or undone (``--remove``). The
+user-level variant (``init --global``) lives in ``global_install``.
 Standard library only.
 """
 
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
 import shlex
-import shutil
 import stat
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from sololicense.coding.agents import AGENTS, AgentSpec, resolve
 
@@ -40,7 +45,11 @@ def _load(path: Path) -> dict:
 
 def _save(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    path.write_text(_json_text(data), encoding="utf-8")
+
+
+def _json_text(data: dict) -> str:
+    return json.dumps(data, indent=2) + "\n"
 
 
 def _ours(entry) -> bool:
@@ -55,14 +64,107 @@ def _merge(existing: dict, ours: dict) -> dict:
     return existing
 
 
-def _shim(repo: Path) -> Path:
-    target = repo / ".solo-license" / "hook.py"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(SHIM_SOURCE, target)
-    # Ignore the machine-specific shim; .solo-license/policy.toml is for committing.
-    (repo / ".solo-license" / ".gitignore").write_text("hook.py\n", encoding="utf-8")
-    return target
+def _unmerge(existing: dict) -> dict:
+    """``existing`` without our entries; events left empty are dropped."""
+    out = {}
+    for event, entries in existing.items():
+        kept = [e for e in entries if not _ours(e)] if isinstance(entries, list) else entries
+        if kept:
+            out[event] = kept
+    return out
 
+
+@dataclass(frozen=True)
+class Change:
+    """One file the installer would write (``text``) or delete (``text is None``)."""
+
+    path: Path
+    text: str | None
+    executable: bool = False
+    brief: bool = False        # show only a summary in a diff (the copied shim)
+
+    def before(self) -> str:
+        return self.path.read_text(encoding="utf-8", errors="replace") if self.path.is_file() else ""
+
+    @property
+    def changed(self) -> bool:
+        if self.text is None:
+            return self.path.exists()
+        return not self.path.is_file() or self.before() != self.text
+
+    @property
+    def verb(self) -> str:
+        return "remove" if self.text is None else ("update" if self.path.exists() else "create")
+
+
+def apply(changes: list[Change]) -> None:
+    for change in changes:
+        if change.text is None:
+            if change.path.is_file():
+                change.path.unlink()
+            continue
+        change.path.parent.mkdir(parents=True, exist_ok=True)
+        # Scripts keep LF line endings: a CRLF shebang does not run.
+        change.path.write_text(change.text, encoding="utf-8", newline="\n" if change.executable else None)
+        if change.executable:
+            change.path.chmod(change.path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def diff(changes: list[Change]) -> str:
+    out: list[str] = []
+    for change in changes:
+        exists = change.path.exists()
+        before, after = change.before(), change.text or ""
+        old = str(change.path) if exists else "/dev/null"
+        new = str(change.path) if change.text is not None else "/dev/null"
+        if change.brief:
+            out.append(f"--- {old}\n+++ {new}\n@@ {change.verb} ({len(after.splitlines())} lines) @@\n")
+            continue
+        for line in difflib.unified_diff(before.splitlines(True), after.splitlines(True), old, new):
+            out.append(line if line.endswith("\n") else line + "\n")
+    return "".join(out)
+
+
+# --- planners: how each kind of config file is merged ------------------------------
+
+def _events(path: Path, ours: dict, remove: bool, defaults: dict | None = None) -> list[Change]:
+    """A JSON file with a top-level ``hooks`` object of event -> list (shared with other tools)."""
+    data = _load(path)
+    hooks = data.get("hooks", {}) if isinstance(data.get("hooks"), dict) else {}
+    if remove:
+        left = _unmerge(hooks)
+        if not path.exists() or left == hooks:
+            return []
+        data = {**data, "hooks": left} if left else {k: v for k, v in data.items() if k != "hooks"}
+        if not data or data == (defaults or {}):
+            return [Change(path, None)]
+        return [Change(path, _json_text(data))]
+    new = {**(defaults or {}), **data, "hooks": _merge(json.loads(json.dumps(hooks)), ours)}
+    return [] if path.exists() and new == data else [Change(path, _json_text(new))]
+
+
+def _block(path: Path, ours: dict, remove: bool) -> list[Change]:
+    """A JSON file of named hook blocks: ours sits under the ``solo-license`` key."""
+    data = _load(path)
+    if remove:
+        if MARK not in data:
+            return []
+        data = {k: v for k, v in data.items() if k != MARK}
+        return [Change(path, _json_text(data) if data else None)]
+    if data.get(MARK) == ours:
+        return []
+    return [Change(path, _json_text({**data, MARK: ours}))]
+
+
+def _owned(path: Path, text: str, remove: bool, executable: bool = False) -> list[Change]:
+    """A file that is entirely ours."""
+    if remove:
+        current = path.read_text(encoding="utf-8", errors="ignore") if path.is_file() else ""
+        return [Change(path, None)] if MARK in current or "/api/hooks/" in current else []
+    return [Change(path, text, executable=executable)]
+
+
+# --- per agent ------------------------------------------------------------------
 
 # Hook commands are run by the agent through a shell. Inside double quotes a
 # POSIX shell still expands $(...), `...` and $VAR, and cmd.exe expands %VAR%,
@@ -90,24 +192,23 @@ def validate_url(url: str) -> str:
     return url
 
 
-def _paths(repo: Path) -> tuple[str, str]:
-    python = _safe_path(str(sys.executable), "Python")
-    hook = _safe_path(str(repo / ".solo-license" / "hook.py"), "repository")
-    return python, hook
+def _paths(hook: Path) -> tuple[str, str]:
+    return _safe_path(str(sys.executable), "Python"), _safe_path(str(hook), "hook")
 
 
-def _command(repo: Path, agent: str, event: str) -> str:
-    """``"<python>" "<repo>/.solo-license/hook.py" <agent> <event>``. Paths are
-    double-quoted for spaces (accepted by sh, bash, PowerShell and cmd) and
-    checked to hold nothing a shell would expand. The trailing comment marks
-    the entry as ours so a re-install replaces it."""
-    python, hook = _paths(repo)
-    return '"' + python + '" "' + hook + '" ' + agent + " " + event + " # " + MARK
+Command = Callable[[str], str]
 
 
-# --- per agent ------------------------------------------------------------------
+def _commander(hook: Path, agent: str) -> Command:
+    """``"<python>" "<hook.py>" <agent> <event>``. Paths are double-quoted for
+    spaces (accepted by sh, bash, PowerShell and cmd) and checked to hold
+    nothing a shell would expand. The trailing comment marks the entry as
+    ours so a re-install replaces it."""
+    python, path = _paths(hook)
+    return lambda event: '"' + python + '" "' + path + '" ' + agent + " " + event + " # " + MARK
 
-def _claude(repo: Path, url: str) -> Path:
+
+def _claude(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
     def http(event: str, timeout: int = 10) -> dict:
         return {"type": "http", "url": f"{url}/api/hooks/{event}", "timeout": timeout,
                 "headers": {"X-Solo-Hook-Key": "$SOLO_HOOK_KEY"}, "allowedEnvVars": ["SOLO_HOOK_KEY"]}
@@ -123,15 +224,12 @@ def _claude(repo: Path, url: str) -> Path:
         "SubagentStart": [{"hooks": [http("subagent-start")]}],
         "SubagentStop": [{"hooks": [http("subagent-stop", 150)]}],
     }
-    path = repo / ".claude" / "settings.local.json"
-    data = _load(path)
-    data["hooks"] = _merge(data.get("hooks", {}), ours)
-    _save(path, data)
-    return path
+    return _events(path, ours, remove)
 
 
-def _codex(repo: Path, url: str) -> Path:
-    cmd = lambda e, t=30: {"type": "command", "command": _command(repo, "codex", e), "timeout": t}  # noqa: E731
+def _codex(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "codex")
+    cmd = lambda e, t=30: {"type": "command", "command": run(e), "timeout": t}  # noqa: E731
     ours = {
         "UserPromptSubmit": [{"hooks": [cmd("UserPromptSubmit")]}],
         "PermissionRequest": [{"matcher": "*", "hooks": [cmd("PermissionRequest")]}],
@@ -140,15 +238,12 @@ def _codex(repo: Path, url: str) -> Path:
         "SubagentStart": [{"hooks": [cmd("SubagentStart")]}],
         "SubagentStop": [{"hooks": [cmd("SubagentStop", 150)]}],
     }
-    path = repo / ".codex" / "hooks.json"
-    data = _load(path)
-    data["hooks"] = _merge(data.get("hooks", {}), ours)
-    _save(path, data)
-    return path
+    return _events(path, ours, remove)
 
 
-def _cursor(repo: Path, url: str) -> Path:
-    cmd = lambda e, **kw: {"command": _command(repo, "cursor", e), **kw}  # noqa: E731
+def _cursor(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "cursor")
+    cmd = lambda e, **kw: {"command": run(e), **kw}  # noqa: E731
     ours = {
         "beforeSubmitPrompt": [cmd("beforeSubmitPrompt")],
         "beforeShellExecution": [cmd("beforeShellExecution")],
@@ -159,102 +254,84 @@ def _cursor(repo: Path, url: str) -> Path:
         "subagentStart": [cmd("subagentStart")],
         "subagentStop": [cmd("subagentStop")],
     }
-    path = repo / ".cursor" / "hooks.json"
-    data = _load(path)
-    data.setdefault("version", 1)
-    data["hooks"] = _merge(data.get("hooks", {}), ours)
-    _save(path, data)
-    return path
+    return _events(path, ours, remove, defaults={"version": 1})
 
 
-def _gemini(repo: Path, url: str) -> Path:
-    cmd = lambda e, t=30000: {"name": MARK, "type": "command", "command": _command(repo, "gemini", e), "timeout": t}  # noqa: E731
+def _gemini(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "gemini")
+    cmd = lambda e, t=30000: {"name": MARK, "type": "command", "command": run(e), "timeout": t}  # noqa: E731
     ours = {
         "BeforeAgent": [{"hooks": [cmd("BeforeAgent")]}],
         "BeforeTool": [{"matcher": "run_shell_command|write_file|replace", "hooks": [cmd("BeforeTool")]}],
         "AfterTool": [{"matcher": "run_shell_command|write_file|replace", "hooks": [cmd("AfterTool")]}],
         "AfterAgent": [{"hooks": [cmd("AfterAgent", 150000)]}],
     }
-    path = repo / ".gemini" / "settings.json"
-    data = _load(path)
-    data["hooks"] = _merge(data.get("hooks", {}), ours)
-    _save(path, data)
-    return path
+    return _events(path, ours, remove)
 
 
-def _antigravity(repo: Path, url: str) -> Path:
-    cmd = lambda e, t=30: {"type": "command", "command": _command(repo, "antigravity", e), "timeout": t}  # noqa: E731
-    path = repo / ".agents" / "hooks.json"
-    data = _load(path)
-    data[MARK] = {
+def _antigravity(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "antigravity")
+    cmd = lambda e, t=30: {"type": "command", "command": run(e), "timeout": t}  # noqa: E731
+    ours = {
         "PreToolUse": [{"matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content",
                         "hooks": [cmd("PreToolUse")]}],
         "PostToolUse": [{"matcher": "*", "hooks": [cmd("PostToolUse")]}],
         "Stop": [cmd("Stop", 150)],
     }
-    _save(path, data)
-    return path
+    return _block(path, ours, remove)
 
 
-def _copilot(repo: Path, url: str) -> Path:
+def _copilot(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "copilot")
+
     def cmd(e: str, t: int = 30) -> dict:
-        c = _command(repo, "copilot", e)
+        c = run(e)
         return {"type": "command", "bash": c, "powershell": "& " + c, "timeoutSec": t}
 
-    path = repo / ".github" / "hooks" / "solo-license.json"
-    _save(path, {"version": 1, "hooks": {
+    return _owned(path, _json_text({"version": 1, "hooks": {
         "userPromptSubmitted": [cmd("userPromptSubmitted")],
         "preToolUse": [cmd("preToolUse")],
         "postToolUse": [cmd("postToolUse")],
         "agentStop": [cmd("agentStop", 150)],
-    }})
-    return path
+    }}), remove)
 
 
-def _grok(repo: Path, url: str) -> Path:
+def _grok(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
     http = lambda e, t=30: {"type": "http", "url": f"{url}/api/hooks/grok/{e}", "timeout": t}  # noqa: E731
-    path = repo / ".grok" / "hooks" / "solo-license.json"
-    _save(path, {"hooks": {
+    return _owned(path, _json_text({"hooks": {
         "UserPromptSubmit": [{"hooks": [http("UserPromptSubmit")]}],
         "PreToolUse": [{"matcher": "*", "hooks": [http("PreToolUse")]}],
         "PostToolUse": [{"matcher": "*", "hooks": [http("PostToolUse")]}],
         "Stop": [{"hooks": [http("Stop", 150)]}],
-    }})
-    return path
+    }}), remove)
 
 
-def _windsurf(repo: Path, url: str) -> Path:
+def _windsurf(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "windsurf")
     events = ("pre_user_prompt", "pre_run_command", "pre_write_code", "post_run_command",
               "post_write_code", "post_cascade_response")
-    ours = {e: [{"command": _command(repo, "windsurf", e), "show_output": True}] for e in events}
-    path = repo / ".windsurf" / "hooks.json"
-    data = _load(path)
-    data["hooks"] = _merge(data.get("hooks", {}), ours)
-    _save(path, data)
-    return path
+    # On Windows Windsurf runs `powershell -Command`, where a quoted path only runs behind `&`.
+    ours = {e: [{"command": run(e), "powershell": "& " + run(e), "show_output": True}] for e in events}
+    return _events(path, ours, remove)
 
 
-def _kiro(repo: Path, url: str) -> Path:
-    path = repo / ".kiro" / "hooks" / "solo-license.json"
-    _save(path, {"version": "v1", "hooks": [
+def _kiro(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    run = _commander(hook, "kiro")
+    return _owned(path, _json_text({"version": "v1", "hooks": [
         {"name": f"{MARK}-{e.lower()}", "trigger": e, "matcher": "*",
-         "action": {"type": "command", "command": _command(repo, "kiro", e)}, "timeout": 150 if e == "Stop" else 60}
+         "action": {"type": "command", "command": run(e)}, "timeout": 150 if e == "Stop" else 60}
         for e in ("UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop")
-    ]})
-    return path
+    ]}), remove)
 
 
-def _cline(repo: Path, url: str) -> Path:
-    folder = repo / ".clinerules" / "hooks"
-    folder.mkdir(parents=True, exist_ok=True)
+def _cline(folder: Path, url: str, hook: Path, remove: bool) -> list[Change]:
+    python, path = _paths(hook)
+    changes: list[Change] = []
     for event in ("UserPromptSubmit", "PreToolUse", "PostToolUse", "TaskComplete"):
-        script = folder / event
-        python, hook = _paths(repo)
         # A POSIX script: single-quote each path so nothing in it is expanded.
-        script.write_text(f"#!/bin/sh\n# {MARK}\nexec {shlex.quote(python)} {shlex.quote(hook)} cline {event}\n",
-                          encoding="utf-8")
-        script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return folder
+        text = f"#!/bin/sh\n# {MARK}\nexec {shlex.quote(python)} {shlex.quote(path)} cline {event}\n"
+        changes += _owned(folder / event, text, remove, executable=True)
+    return changes
 
 
 OPENCODE_PLUGIN = """// solo-license: earned autonomy for OpenCode (any model: Groq, GLM, Claude, ...)
@@ -288,19 +365,44 @@ export const SoloLicense: Plugin = async ({ directory }) => ({
 """
 
 
-def _opencode(repo: Path, url: str) -> Path:
-    path = repo / ".opencode" / "plugins" / "solo-license.ts"
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _opencode(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
     # The URL goes in as a JSON string literal, never into a template literal.
-    path.write_text(OPENCODE_PLUGIN.replace("__URL__", json.dumps(validate_url(url))), encoding="utf-8")
-    return path
+    return _owned(path, OPENCODE_PLUGIN.replace("__URL__", json.dumps(url)), remove)
 
 
-WRITERS = {
+PLANNERS: dict[str, Callable[[Path, str, Path, bool], list[Change]]] = {
     "claude-code": _claude, "codex": _codex, "cursor": _cursor, "gemini": _gemini, "antigravity": _antigravity,
     "copilot": _copilot, "grok": _grok, "windsurf": _windsurf, "kiro": _kiro, "cline": _cline,
     "opencode": _opencode,
 }
+
+
+def plan_agent(agent: str, target: Path, url: str, hook: Path, remove: bool = False) -> list[Change]:
+    """The changes that wire (or unwire) ``agent`` through the config at ``target``."""
+    spec = resolve(agent)
+    return [c for c in PLANNERS[spec.key](target, validate_url(url), hook, remove) if c.changed]
+
+
+def shim_changes(hook: Path, remove: bool = False) -> list[Change]:
+    change = Change(hook, None if remove else SHIM_SOURCE.read_text(encoding="utf-8"), brief=True)
+    return [change] if change.changed else []
+
+
+# --- one repository ---------------------------------------------------------------
+
+def _repo_hook(repo: Path) -> Path:
+    return repo / ".solo-license" / "hook.py"
+
+
+def _shim(repo: Path) -> Path:
+    # Ignore the machine-specific shim; .solo-license/policy.toml is for committing.
+    apply(shim_changes(_repo_hook(repo)) + [Change(repo / ".solo-license" / ".gitignore", "hook.py\n")])
+    return _repo_hook(repo)
+
+
+def plan(repo: Path, base_url: str = DEFAULT_URL, agent: str = "claude-code", remove: bool = False) -> list[Change]:
+    spec = resolve(agent)
+    return plan_agent(spec.key, repo / spec.config_path, base_url, _repo_hook(repo), remove)
 
 
 def detect(repo: Path) -> list[str]:
@@ -324,10 +426,11 @@ def detect(repo: Path) -> list[str]:
 
 def install(repo: Path, base_url: str = DEFAULT_URL, agent: str = "claude-code") -> Path:
     spec: AgentSpec = resolve(agent)
-    url = validate_url(base_url)
+    validate_url(base_url)
     if spec.transport == "command":
         _shim(repo)
-    return WRITERS[spec.key](repo, url)
+    apply(plan(repo, base_url, spec.key))
+    return repo / spec.config_path
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -336,10 +439,24 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--agent", default="claude-code",
                         help=f"one of: {', '.join(AGENTS)}, or 'auto' / 'all'")
     parser.add_argument("--url", default=os.environ.get("SOLO_LICENSE_URL", DEFAULT_URL))
+    parser.add_argument("--dry-run", action="store_true", help="print the changes as a diff; write nothing")
+    parser.add_argument("--remove", action="store_true", help="take Solo License's hooks out again")
     args = parser.parse_args(argv)
     repo = args.repo.resolve()
     agents = (detect(repo) or ["claude-code"]) if args.agent == "auto" else \
         list(AGENTS) if args.agent == "all" else [args.agent]
+    if args.dry_run or args.remove:
+        changes = [c for name in agents for c in plan(repo, args.url, name, remove=args.remove)]
+        if not args.remove and any(resolve(a).transport == "command" for a in agents):
+            changes = shim_changes(_repo_hook(repo)) + changes
+        if args.dry_run:
+            print(diff(changes) or "Nothing to change.")
+            return
+        apply(changes)
+        for change in changes:
+            print(f"  {change.verb:<7} {change.path}")
+        print("Removed Solo License's hooks." if changes else "No Solo License hooks found.")
+        return
     for name in agents:
         spec = resolve(name)
         path = install(repo, args.url, spec.key)

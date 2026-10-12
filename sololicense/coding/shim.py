@@ -20,6 +20,17 @@ import urllib.parse
 import urllib.request
 
 DEFAULT_URL = "http://127.0.0.1:8000"
+_WORKSPACE_KEYS = ("cwd", "workspaceRoot", "directory", "workspace_roots", "workspaceRoots", "workspacePaths")
+
+
+def with_cwd(payload):
+    """The repository is found from the payload's working directory. One shim
+    serves every repository when installed at user level, so a payload that
+    names none gets the project directory the agent ran the hook in."""
+    if isinstance(payload, dict) and not any(payload.get(k) for k in _WORKSPACE_KEYS):
+        payload["cwd"] = (os.environ.get("CURSOR_PROJECT_DIR") or os.environ.get("CLAUDE_PROJECT_DIR")
+                          or os.environ.get("GEMINI_PROJECT_DIR") or os.getcwd())
+    return payload
 
 
 def main(argv: list[str]) -> int:
@@ -32,6 +43,7 @@ def main(argv: list[str]) -> int:
         payload = json.loads(raw) if raw.strip() else {}
     except ValueError:
         payload = {}
+    payload = with_cwd(payload)
     base = os.environ.get("SOLO_LICENSE_URL", DEFAULT_URL).rstrip("/")
     url = f"{base}/api/hooks/{urllib.parse.quote(agent)}/{urllib.parse.quote(event)}?envelope=1"
     headers = {"Content-Type": "application/json"}
