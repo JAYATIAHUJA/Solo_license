@@ -20,25 +20,29 @@ export function Reveal({ as = 'div', delay = 0, y = 28, className = '', children
   );
 }
 
-/** Split a headline into words that slide up out of a mask, one by one. */
+/** Split a headline into words that slide up out of a mask, one by one.
+ *  The in-view trigger sits on each visible mask, not on the hidden word: an
+ *  element clipped by its overflow-hidden parent never counts as in view, so
+ *  a word waiting below its mask would never be revealed. */
 export function MaskWords({ text, delay = 0, stagger = 0.06, className = '', animateOnMount = false }) {
   const words = text.split(' ');
   const trigger = animateOnMount
-    ? { animate: { y: '0%' } }
-    : { whileInView: { y: '0%' }, viewport: { once: true, margin: '-10% 0px' } };
+    ? { initial: 'hidden', animate: 'shown' }
+    : { initial: 'hidden', whileInView: 'shown', viewport: { once: true, margin: '-10% 0px' } };
   return (
     <span className={className} aria-label={text}>
       {words.map((word, i) => (
-        <span key={`${word}-${i}`} aria-hidden="true" style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top', paddingBottom: '0.08em' }}>
+        <motion.span key={`${word}-${i}`} aria-hidden="true" {...trigger}
+          style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top', paddingBottom: '0.08em',
+            marginRight: i < words.length - 1 ? '0.25em' : 0 }}>
           <motion.span
             style={{ display: 'inline-block' }}
-            initial={{ y: '110%' }}
-            {...trigger}
+            variants={{ hidden: { y: '110%' }, shown: { y: '0%' } }}
             transition={{ duration: 1, delay: delay + i * stagger, ease: EASE }}
           >
-            {word}{i < words.length - 1 ? ' ' : ''}
+            {word}
           </motion.span>
-        </span>
+        </motion.span>
       ))}
     </span>
   );
