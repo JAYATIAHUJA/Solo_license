@@ -7,6 +7,7 @@
     solo-license serve --background / stop / status
     solo-license doctor           # is the gate up, which agents are wired here
     solo-license budget           # what the agents spent today, against the caps
+    solo-license explain [turn]   # one turn's story: decisions, trace, Entire checkpoint, rewind
     solo-license prompt --agent codex   # a ready prompt that makes your agent set itself up
     solo-license hook <agent> <event>   # the command-hook shim (normally called by the agent)
 
@@ -209,6 +210,77 @@ def budget_lines(data: dict) -> list[str]:
     return lines
 
 
+def pick_turn(turns: list[dict]) -> dict | None:
+    """The newest turn that went wrong, else the newest turn."""
+    return next((t for t in turns if t.get("status") in ("failed", "blocked")), None) or (turns[0] if turns else None)
+
+
+def explain_lines(story: dict) -> list[str]:
+    """A turn's story for the terminal."""
+    t = story["turn"]
+    prompt = (t.get("prompt") or "turn without a prompt")[:140]
+    lines = [f"Turn {t['id']} in {t['repo']} ({t.get('created_at', '')}): \"{prompt}\"",
+             f"  status: {t.get('status')}"
+             + (f" | {t['lines_changed']} lines in {t['files_changed']} files" if t.get("files_changed") is not None else "")
+             + (f" | scope {t['scope_score']}/5" if t.get("scope_score") is not None else "")
+             + (f" | tests {t['tests']}" if t.get("tests") and t["tests"] != "none" else "")]
+    if t.get("reason"):
+        lines.append("  why: " + t["reason"].splitlines()[0][:200])
+    decisions = story.get("decisions") or []
+    if decisions:
+        lines.append("Decisions")
+    for d in decisions:
+        lines.append(f"  {d['decision']:<5} {d['command'][:70]} | {d['action_class']} at L{d['level']} | "
+                     f"{d.get('decided_by', '')} | {d.get('outcome', '')}")
+    for r in story.get("told") or []:
+        lines.append("Agent was told: " + (r.get("text") or "").removeprefix("Solo License: ").splitlines()[0][:200])
+    for e in story.get("events") or []:
+        lines.append(f"License: {e['action_class']} {e['kind']} L{e['from_level']} -> L{e['to_level']}"
+                     + (f" | ledger commit {e['git_sha'][:7]}" if e.get("git_sha") else ""))
+    spans = story.get("spans") or []
+    trace = t.get("trace_id")
+    if t.get("neatlogs_link"):
+        lines.append(f"neatlogs trace: {t['neatlogs_link']}")
+    elif trace:
+        lines.append(f"Trace {trace} (local only; add NEATLOGS_API_KEY to send traces to neatlogs)")
+    if spans:
+        lines.append("  " + " -> ".join(s["name"] + ("!" if s["status"] == "error" else "") for s in spans[:14])
+                     + (" ..." if len(spans) > 14 else ""))
+    entire = story.get("entire") or {}
+    lines.append(f"Entire checkpoint: {entire['explain']}" if entire.get("checkpoint")
+                 else "Entire checkpoint: none linked (install the Entire CLI in the repo: entire enable)")
+    rewind = story.get("rewind") or {}
+    if rewind.get("available"):
+        lines.append("Rewind: " + rewind["how"])
+    return lines
+
+
+def cmd_explain(args: argparse.Namespace) -> int:
+    base = args.url.rstrip("/")
+    turn_id = args.turn
+    if turn_id is None:
+        data = _get(f"{base}/api/coding")
+        if data is None:
+            print(f"The gate is not answering at {args.url}. Start it: solo-license serve --background")
+            return 1
+        turns = data.get("turns") or []
+        if args.list:
+            for t in turns[:15]:
+                print(f"  {t['id']:>5}  {t['status']:<9} {t['repo']:<20} {(t.get('prompt') or '')[:60]}")
+            return 0
+        chosen = pick_turn(turns)
+        if chosen is None:
+            print("No turns yet. Ask your agent for something in a repository with Solo License installed.")
+            return 0
+        turn_id = chosen["id"]
+    story = _get(f"{base}/api/coding/turns/{turn_id}/explain")
+    if story is None:
+        print(f"No turn {turn_id}, or the gate is not answering at {args.url}.")
+        return 1
+    print("\n".join(explain_lines(story)))
+    return 0
+
+
 def cmd_budget(args: argparse.Namespace) -> int:
     data = _get(f"{args.url.rstrip('/')}/api/coding/budget")
     if data is None:
@@ -268,6 +340,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("budget", help="what the coding agents spent today, against the caps")
     p.add_argument("--url", default=DEFAULT_URL)
     p.set_defaults(fn=cmd_budget)
+
+    p = sub.add_parser("explain", help="one turn's story: decisions, trace, Entire checkpoint, how to rewind")
+    p.add_argument("turn", type=int, nargs="?", default=None, help="turn id (default: the newest failed turn)")
+    p.add_argument("--list", action="store_true", help="list recent turns with their ids")
+    p.add_argument("--url", default=DEFAULT_URL)
+    p.set_defaults(fn=cmd_explain)
 
     p = sub.add_parser("policy", help="write a starter .solo-license/policy.toml for this repository")
     p.add_argument("action", choices=["init"])

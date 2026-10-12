@@ -46,3 +46,5 @@
   .cd-level { transition: none; }
   .cd-level.is-up, .cd-level.is-down { animation: none; outline: 2px solid currentColor; outline-offset: 2px; }
 }
+.cd-links { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.cd-links code { font-size: 12px; }
