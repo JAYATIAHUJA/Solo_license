@@ -349,6 +349,8 @@ _HOOK_EVENTS = {
     "post-tool": "PostToolUse",
     "post-tool-failure": "PostToolUseFailure",
     "stop": "Stop",
+    "subagent-start": "SubagentStart",
+    "subagent-stop": "SubagentStop",
 }
 
 
@@ -403,12 +405,16 @@ def coding_hook(
         body = {**_client_fields(body), "_agent": "claude-code", "_prompt_only": True}
         if event == "user-prompt":
             return gate.user_prompt(body)
+        if event == "subagent-start":
+            return gate.subagent_start(body)
         if event == "pre-tool":
             return gate.pre_tool(body)
         if event == "permission":
             return gate.permission(body)
         if event == "stop":
             return gate.stop(body)
+        if event == "subagent-stop":
+            return gate.subagent_stop(body)
         return gate.tool_result(body, failed=event == "post-tool-failure")
 
 
@@ -457,12 +463,14 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
         spec = ACTION_CLASSES.get(row["action_class"])
         if spec is None:
             continue
+        principal = str(row["principal"] or "main")
+        ceiling = gate.ceiling_for(row["repo"], spec.key, principal) if gate else spec.max_level
         progress = gate.ladder.progress(spec.key, row["level"], row["successes"], row["failures"],
-                                        row["successes_at_level"],
-                                        ceiling=gate.ceiling(row["repo"], spec.key)) if gate else {}
+                                        row["successes_at_level"], ceiling=ceiling) if gate else {}
         licenses.append({
-            "repo": row["repo"], "action_class": spec.key, "label": spec.label, "level": row["level"],
-            "max_level": spec.max_level, "successes": row["successes"], "failures": row["failures"],
+            "repo": row["repo"], "principal": principal, "action_class": spec.key, "label": spec.label,
+            "level": row["level"], "max_level": spec.max_level, "ceiling": ceiling,
+            "successes": row["successes"], "failures": row["failures"],
             "demoted_from": row["demoted_from"], "updated_at": row["updated_at"], **progress,
         })
     decisions = [dict(r) for r in agent_repo.recent_decisions(context.conn, 60)
@@ -550,6 +558,8 @@ def rewind_coding_turn(turn_id: int, actor: Actor = Depends(require_role(Role.AP
 class CodingRestorePayload(BaseModel):
     repo: str = Field(min_length=1, max_length=200)
     action_class: str = Field(min_length=1, max_length=40)
+    principal: str = Field(default="main", min_length=1, max_length=120,
+                           pattern=r"^(main|subagent:[A-Za-z0-9_.:-]+)$")
     level: int = Field(ge=0, le=2)
     reason: str = Field(default="Reviewed and resumed.", max_length=300)
 
@@ -564,7 +574,8 @@ def restore_coding_license(
         if payload.action_class not in ACTION_CLASSES or context.coding_gate is None:
             raise HTTPException(status_code=422, detail="Unknown action class.")
         context.coding_gate.restore(payload.repo, payload.action_class, payload.level,
-                                    actor_id=actor.actor_id, reason=payload.reason)
+                                    actor_id=actor.actor_id, reason=payload.reason,
+                                    principal=payload.principal)
         return coding_payload(context)
 
 
@@ -648,12 +659,16 @@ def agent_hook(
             payload["_prompt_only"] = native_event == "PermissionRequest" and spec.key in ("claude-code", "codex")
             if event == "user-prompt":
                 answer = gate.user_prompt(payload)
+            elif event == "subagent-start":
+                answer = gate.subagent_start(payload)
             elif event == "pre-tool":
                 answer = gate.pre_tool(payload)
             elif event == "permission":
                 answer = gate.permission(payload)
             elif event == "stop":
                 answer = gate.stop(payload)
+            elif event == "subagent-stop":
+                answer = gate.subagent_stop(payload)
             else:
                 answer = gate.tool_result(payload, failed=event == "post-tool-failure")
             native = agents.render(spec.key, native_event, answer)

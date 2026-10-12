@@ -120,6 +120,8 @@ def _claude(repo: Path, url: str) -> Path:
         "PostToolUse": [{"matcher": "*", "hooks": [http("post-tool")]}],
         "PostToolUseFailure": [{"matcher": "*", "hooks": [http("post-tool-failure")]}],
         "Stop": [{"hooks": [http("stop", 150)]}],
+        "SubagentStart": [{"hooks": [http("subagent-start")]}],
+        "SubagentStop": [{"hooks": [http("subagent-stop", 150)]}],
     }
     path = repo / ".claude" / "settings.local.json"
     data = _load(path)
@@ -135,6 +137,8 @@ def _codex(repo: Path, url: str) -> Path:
         "PermissionRequest": [{"matcher": "*", "hooks": [cmd("PermissionRequest")]}],
         "PostToolUse": [{"matcher": "*", "hooks": [cmd("PostToolUse")]}],
         "Stop": [{"hooks": [cmd("Stop", 150)]}],
+        "SubagentStart": [{"hooks": [cmd("SubagentStart")]}],
+        "SubagentStop": [{"hooks": [cmd("SubagentStop", 150)]}],
     }
     path = repo / ".codex" / "hooks.json"
     data = _load(path)
@@ -152,6 +156,8 @@ def _cursor(repo: Path, url: str) -> Path:
         "afterShellExecution": [cmd("afterShellExecution")],
         "afterFileEdit": [cmd("afterFileEdit")],
         "stop": [cmd("stop")],
+        "subagentStart": [cmd("subagentStart")],
+        "subagentStop": [cmd("subagentStop")],
     }
     path = repo / ".cursor" / "hooks.json"
     data = _load(path)

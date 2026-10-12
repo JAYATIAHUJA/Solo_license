@@ -174,7 +174,7 @@ function LicenseCard({ lic, onResume, busy, flash }) {
   return (
     <article className={`pl-card cd-lic ${paused ? 'is-paused' : ''}`}>
       <div className="app-card-top">
-        <h3>{lic.label}</h3>
+        <h3>{lic.label} <small className="pl-muted">· {lic.principal === 'main' ? 'Main agent' : lic.principal}</small></h3>
         <span aria-live="polite"
           className={`pl-status cd-level ${paused ? 'bad' : lic.level >= 1 ? 'ok' : 'wait'}${flash ? ` is-${flash}` : ''}`}>
           L{lic.level} · {paused ? 'Paused' : words.short}
@@ -185,7 +185,7 @@ function LicenseCard({ lic, onResume, busy, flash }) {
         <div className="app-evidence" role="img" aria-label={nextSentence(lic)}><i style={{ width: `${share * 100}%` }} /></div>
       )}
       <p className="pl-small pl-muted">{nextSentence(lic)}</p>
-      <p className="pl-small pl-muted">{lic.successes} verified · {lic.failures} failed · <code>{lic.action_class}</code></p>
+      <p className="pl-small pl-muted">{lic.successes} verified · {lic.failures} failed · ceiling L{lic.ceiling ?? lic.max_level} · <code>{lic.action_class}</code></p>
       {paused && (
         <div className="cd-actions">
           <button type="button" className="btn btn-line btn-sm" disabled={busy} onClick={() => onResume(lic, lic.demoted_from)}>
@@ -256,7 +256,7 @@ export function Coding() {
   }
 
   const resume = (lic, level) => act(
-    () => api.codingRestore({ repo: lic.repo, action_class: lic.action_class, level, reason: 'Reviewed the failure and resumed.' }),
+    () => api.codingRestore({ repo: lic.repo, principal: lic.principal || 'main', action_class: lic.action_class, level, reason: 'Reviewed the failure and resumed.' }),
     `${lic.label} resumed at L${level}.`,
   );
   const anyFrozen = (coding?.repos || []).some((r) => r.frozen);
@@ -296,7 +296,7 @@ export function Coding() {
       )}
 
       {paused.map((l) => (
-        <div key={l.action_class} className="pl-alert app-alert-row" role="alert">
+        <div key={licenseKey(l)} className="pl-alert app-alert-row" role="alert">
           <p><b>{l.label} paused in {l.repo}.</b> It failed a check, so it asks you again before every action of this kind.</p>
           <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => resume(l, l.demoted_from)}>Resume at L{l.demoted_from}</button>
         </div>

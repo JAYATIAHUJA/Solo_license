@@ -267,6 +267,7 @@ CREATE INDEX IF NOT EXISTS idx_tickets_created ON tickets (created_at DESC);
 -- person already approved here, 2 auto-allow the whole class.
 CREATE TABLE IF NOT EXISTS agent_licenses (
     repo          TEXT NOT NULL,
+    principal     TEXT NOT NULL DEFAULT 'main', -- main | subagent:<type>
     action_class  TEXT NOT NULL,
     level         INTEGER NOT NULL DEFAULT 0,
     successes     INTEGER NOT NULL DEFAULT 0,   -- verified outcomes at any level
@@ -274,7 +275,7 @@ CREATE TABLE IF NOT EXISTS agent_licenses (
     successes_at_level INTEGER NOT NULL DEFAULT 0, -- since the last level change
     demoted_from  INTEGER,
     updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (repo, action_class)
+    PRIMARY KEY (repo, principal, action_class)
 );
 
 -- Command families a person approved in a repo (what level 1 auto-allows).
@@ -291,6 +292,7 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id    TEXT NOT NULL,
     agent         TEXT NOT NULL DEFAULT 'claude-code',
+    principal     TEXT NOT NULL DEFAULT 'main', -- main | subagent:<type>
     turn_id       INTEGER,
     repo          TEXT NOT NULL,
     tool_name     TEXT NOT NULL,
@@ -313,6 +315,7 @@ CREATE TABLE IF NOT EXISTS agent_turns (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id    TEXT NOT NULL,
     agent         TEXT NOT NULL DEFAULT 'claude-code',
+    principal     TEXT NOT NULL DEFAULT 'main', -- main | subagent:<type>
     repo          TEXT NOT NULL,
     cwd           TEXT NOT NULL,
     prompt        TEXT NOT NULL DEFAULT '',

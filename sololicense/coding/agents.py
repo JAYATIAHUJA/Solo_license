@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 
 # The gate's own events (the routes under /api/hooks/<event>).
 PROMPT, PERMISSION, POST, POST_FAIL, STOP = "user-prompt", "permission", "post-tool", "post-tool-failure", "stop"
+SUB_START, SUB_STOP = "subagent-start", "subagent-stop"
 # Claude Code's PreToolUse: only refusals no permission mode may skip; already in Claude Code's shape.
 PRE_TOOL = "pre-tool"
 
@@ -63,16 +64,19 @@ class AgentSpec:
 AGENTS: dict[str, AgentSpec] = {a.key: a for a in (
     AgentSpec("claude-code", "Claude Code", "http", ".claude/settings.local.json",
               {"UserPromptSubmit": PROMPT, "PreToolUse": PRE_TOOL, "PermissionRequest": PERMISSION,
-               "PostToolUse": POST, "PostToolUseFailure": POST_FAIL, "Stop": STOP}, can_ask=True,
+               "PostToolUse": POST, "PostToolUseFailure": POST_FAIL, "Stop": STOP,
+               "SubagentStart": SUB_START, "SubagentStop": SUB_STOP}, can_ask=True,
               notes="Native HTTP hooks; also installable as a plugin. GLM (z.ai) runs inside Claude Code, so it is covered.",
               docs="https://code.claude.com/docs/en/hooks", aliases=("claude", "glm")),
     AgentSpec("codex", "OpenAI Codex CLI", "command", ".codex/hooks.json",
-              {"UserPromptSubmit": PROMPT, "PermissionRequest": PERMISSION, "PostToolUse": POST, "Stop": STOP},
+              {"UserPromptSubmit": PROMPT, "PermissionRequest": PERMISSION, "PostToolUse": POST, "Stop": STOP,
+               "SubagentStart": SUB_START, "SubagentStop": SUB_STOP},
               can_ask=True, notes="Trust the project hooks once with /hooks.",
               docs="https://developers.openai.com/codex/hooks"),
     AgentSpec("cursor", "Cursor", "command", ".cursor/hooks.json",
               {"beforeSubmitPrompt": PROMPT, "beforeShellExecution": PERMISSION, "preToolUse": PERMISSION,
-               "afterShellExecution": POST, "afterFileEdit": POST, "stop": STOP},
+               "afterShellExecution": POST, "afterFileEdit": POST, "stop": STOP,
+               "subagentStart": SUB_START, "subagentStop": SUB_STOP},
               can_ask=True, notes="Cursor also runs Claude Code hooks from .claude/settings.json.",
               docs="https://cursor.com/docs/hooks"),
     AgentSpec("gemini", "Gemini CLI", "command", ".gemini/settings.json",
@@ -154,6 +158,18 @@ def _patch_path(patch: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _principal(payload: dict) -> str:
+    """Map native subagent metadata to the gate's stable identity key."""
+    agent_type = _first(payload, "agent_type", "subagent_type", default=None)
+    agent_id = _first(payload, "agent_id", "agentId", default=None)
+    if agent_type is None and agent_id is None:
+        return "main"
+    label = str(agent_type or "unknown").strip()
+    if not label or label.lower() in {"main", "primary"}:
+        return "main"
+    return f"subagent:{label}"
+
+
 def _tool(name: str, args: dict) -> tuple[str, dict]:
     """(Claude Code tool name, tool_input) for any agent's tool call."""
     low = (name or "").lower()
@@ -193,7 +209,8 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     roots = _first(p, "workspace_roots", "workspaceRoots", "workspacePaths", default=None)
     cwd = str(_first(p, "cwd", "workspaceRoot", "directory",
                      default=(roots[0] if isinstance(roots, list) and roots else ".")))
-    body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd}
+    body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd,
+                  "principal": _principal(p)}
 
     if event == PROMPT:
         body["prompt"] = str(_first(p, "prompt", "user_prompt", "message", default=""))
@@ -203,6 +220,12 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     if event == STOP:
         body["stop_hook_active"] = bool(_first(p, "stop_hook_active", "stopHookActive", default=False)) or \
             int(_first(p, "loop_count", default=0) or 0) > 0
+        return event, body
+    if event in (SUB_START, SUB_STOP):
+        body["subagent_type"] = str(_first(p, "agent_type", "subagent_type", default="unknown"))
+        body["subagent_model"] = str(_first(p, "subagent_model", "model", default=""))
+        if event == SUB_STOP:
+            body["modified_files"] = _first(p, "modified_files", "modifiedFiles", default=[])
         return event, body
 
     # A tool call: find its name and arguments wherever this agent keeps them.
@@ -246,7 +269,11 @@ def _gate_decision(gate_event: str, answer: dict) -> tuple[str, str]:
         return (behavior if behavior in ("allow", "deny") else "defer"), reason
     if gate_event == STOP and answer.get("decision") == "block":
         return "continue", answer.get("reason", "")
-    if gate_event in (PROMPT, POST, POST_FAIL):
+    if gate_event == SUB_STOP and answer.get("decision") == "block":
+        return "continue", answer.get("reason", "")
+    if gate_event == SUB_START and answer.get("decision") == "deny":
+        return "deny", answer.get("reason", "")
+    if gate_event in (PROMPT, POST, POST_FAIL, SUB_START):
         context = (answer.get("hookSpecificOutput") or {}).get("additionalContext")
         if context:
             return "context", context
@@ -265,6 +292,10 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
     if gate_event == PERMISSION:
         interrupt = bool(((answer or {}).get("hookSpecificOutput") or {}).get("decision", {}).get("interrupt"))
         return _render_permission(spec.key, native_event, verdict, reason, interrupt)
+    if gate_event == SUB_START and verdict == "deny":
+        if spec.key == "cursor":
+            return Native({"decision": "deny", "reason": reason})
+        return Native()
     if verdict == "continue":
         return _render_send_back(spec.key, reason)
     if verdict == "context":
@@ -275,6 +306,8 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
 def _render_context(agent: str, native_event: str, answer: dict, context: str) -> Native:
     """Text for the model next to a tool result or a prompt. The event name is
     the agent's own: a Codex PostToolUse that failed is still a PostToolUse."""
+    if agent not in TAKES_CONTEXT and native_event == "subagentStart":
+        return Native({"additional_context": context})
     if agent not in TAKES_CONTEXT:
         return _render_halt(agent, answer)  # recorded and shown in the dashboard; the turn check still applies
     body: dict = {"hookSpecificOutput": {"hookEventName": native_event, "additionalContext": context}}
