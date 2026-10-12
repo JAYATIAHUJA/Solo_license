@@ -946,7 +946,7 @@ def dashboard_dir() -> Path | None:
     # a source checkout's build, then the dashboard bundled inside an
     # installed package (uvx/pip never run npm: the build ships with it)
     candidates.append(_Path(__file__).resolve().parents[2] / "frontend" / "dist")
-    candidates.append(_Path(__file__).resolve().parent / "dashboard")
+    candidates.append(_Path(__file__).resolve().parents[1] / "dashboard")
     return next((c for c in candidates if (c / "index.html").is_file()), None)
 
 
