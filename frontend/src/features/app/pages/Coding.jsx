@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole, toDate, when } from '../../../lib/format.js';
-import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey } from '../../../lib/coding-live.js';
+import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey, pauseCause } from '../../../lib/coding-live.js';
+import { personName } from '../../../lib/ledger-words.js';
 import './coding.css';
 
 const POLL_MS = 4000;
@@ -114,7 +115,7 @@ function flagRow({ id, target, flagged, flag, busy }) {
   );
   const below = (
     <>
-      {flag.open === id && (
+      {flag.open === id && !flagged && (
         <FlagBox target={target} onDone={(body) => flag.done(id, body)} onCancel={() => flag.setOpen(null)} />
       )}
       {flag.result?.id === id && <p className="cd-flag-done" role="status">{flag.result.text}</p>}
@@ -166,7 +167,13 @@ function Setup({ open }) {
   );
 }
 
-function LicenseCard({ lic, onResume, busy, flash }) {
+/** "Jayati flagged it as wrong", or "" when the class was paused by a failure. */
+function flaggedBy(events, lic) {
+  const cause = pauseCause(events, lic);
+  return cause.flagged ? `${personName(cause.actorId) || 'A person'} flagged it as wrong` : '';
+}
+
+function LicenseCard({ lic, onResume, busy, flash, flagged }) {
   const paused = lic.demoted_from != null && lic.level === 0;
   const total = lic.successes + (lic.runs_needed || 0);
   const share = lic.runs_needed ? Math.min(1, lic.successes / Math.max(1, total)) : 1;
@@ -180,7 +187,9 @@ function LicenseCard({ lic, onResume, busy, flash }) {
           L{lic.level} · {paused ? 'Paused' : words.short}
         </span>
       </div>
-      <p>{paused ? `Lost L${lic.demoted_from} after a failure. It asks you again until it earns it back.` : words.long}</p>
+      <p>{!paused ? words.long : flagged
+        ? `${flagged}, so it lost L${lic.demoted_from}. It asks you again until it earns it back.`
+        : `Lost L${lic.demoted_from} after a failure. It asks you again until it earns it back.`}</p>
       {!lic.always_asks && lic.next_level != null && (
         <div className="app-evidence" role="img" aria-label={nextSentence(lic)}><i style={{ width: `${share * 100}%` }} /></div>
       )}
@@ -297,7 +306,7 @@ export function Coding() {
 
       {paused.map((l) => (
         <div key={l.action_class} className="pl-alert app-alert-row" role="alert">
-          <p><b>{l.label} paused in {l.repo}.</b> It failed a check, so it asks you again before every action of this kind.</p>
+          <p><b>{l.label} paused in {l.repo}.</b> {flaggedBy(coding?.events, l) || 'It failed a check'}, so it asks you again before every action of this kind.</p>
           <button type="button" className="btn btn-ink btn-sm" disabled={busy} onClick={() => resume(l, l.demoted_from)}>Resume at L{l.demoted_from}</button>
         </div>
       ))}
@@ -312,7 +321,8 @@ export function Coding() {
         ) : (
           <div className="pl-grid">
             {licenses.map((l) => (
-              <LicenseCard key={licenseKey(l)} lic={l} onResume={resume} busy={busy} flash={flash[licenseKey(l)]} />
+              <LicenseCard key={licenseKey(l)} lic={l} onResume={resume} busy={busy} flash={flash[licenseKey(l)]}
+                flagged={flaggedBy(coding?.events, l)} />
             ))}
           </div>
         )}

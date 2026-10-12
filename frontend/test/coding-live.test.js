@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { flagRequest, flaggedTargets, levelChanges, levelsOf } from '../src/lib/coding-live.js';
+import { flagRequest, flaggedTargets, levelChanges, levelsOf, pauseCause } from '../src/lib/coding-live.js';
 
 const lic = (action_class, level, repo = 'app') => ({ repo, action_class, level });
 
@@ -45,6 +45,24 @@ test('flagged decisions and turns are known from the flags list', () => {
   assert.ok(flagged.turns.has(9));
   assert.equal(flagged.turns.has(4), false);
   assert.equal(flaggedTargets(undefined).decisions.size, 0);
+});
+
+const ev = (kind, action_class, extra = {}) => ({ repo: 'app', action_class, kind, actor_id: 'system:gate', reason: '', ...extra });
+
+test("a class paused by a person's flag says who flagged it", () => {
+  const events = [
+    ev('promote', 'test'),
+    ev('flag', 'file-edit', { actor_id: 'demo:jayati', reason: 'demo:jayati: wrong framework' }),
+    ev('demote', 'file-edit'),
+  ];
+  assert.deepEqual(pauseCause(events, lic('file-edit', 0)), { flagged: true, actorId: 'demo:jayati' });
+});
+
+test('a class paused by a failure, or with no history, is not a flag', () => {
+  const events = [ev('demote', 'file-edit'), ev('flag', 'file-edit', { actor_id: 'demo:jayati' })];
+  assert.deepEqual(pauseCause(events, lic('file-edit', 0)), { flagged: false, actorId: '' });
+  assert.deepEqual(pauseCause(undefined, lic('file-edit', 0)), { flagged: false, actorId: '' });
+  assert.deepEqual(pauseCause([ev('flag', 'file-edit', { repo: 'other' })], lic('file-edit', 0)), { flagged: false, actorId: '' });
 });
 
 test("flagging one decision does not mark its whole turn as flagged", () => {

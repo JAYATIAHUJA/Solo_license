@@ -10,8 +10,8 @@ export function personName(actorId) {
   return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : 'Someone';
 }
 
-/** Why a person flagged it. The gate stores "<actor_id>: <reason>". */
-export function flagReason(e) {
+/** Why it changed. A person's change is stored as "<actor_id>: <reason>". */
+export function eventReason(e) {
   const reason = String(e.reason ?? '');
   const prefix = `${e.actor_id}: `;
   return (e.actor_id && reason.startsWith(prefix) ? reason.slice(prefix.length) : reason).trim();
