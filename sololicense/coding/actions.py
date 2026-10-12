@@ -27,7 +27,27 @@ class ActionClass:
     incident_cost: float  # USD cost of one unattended mistake, for the trust ladder
 
 
-ACTION_CLASSES: dict[str, ActionClass] = {c.key: c for c in (
+class _Classes(dict):
+    """The built-in classes, plus one ``mcp:<server>`` class for any MCP server
+    on demand: each server earns its own license without being listed here."""
+
+    def __missing__(self, key):
+        spec = mcp_class(key)
+        if spec is None:
+            raise KeyError(key)
+        return spec
+
+    def __contains__(self, key) -> bool:
+        return dict.__contains__(self, key) or mcp_class(key) is not None
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+ACTION_CLASSES: dict[str, ActionClass] = _Classes({c.key: c for c in (
     ActionClass("read", "Read files and status", 0, 2, 0.5),
     ActionClass("test-run", "Run tests", 1, 2, 1.0),
     ActionClass("lint-format", "Lint and format", 1, 2, 1.0),
@@ -41,7 +61,56 @@ ACTION_CLASSES: dict[str, ActionClass] = {c.key: c for c in (
     ActionClass("deploy", "Deploy or publish", 5, 0, 2000.0),
     ActionClass("db-migrate", "Change a database", 5, 0, 2000.0),
     ActionClass("unknown", "Unrecognised command", 5, 0, 500.0),
-)}
+)})
+
+# MCP tools are named mcp__<server>__<tool> (Claude Code, Codex; agents.py maps
+# the other agents' names onto it). The server is the class, so a license is
+# earned per server; how far one tool may go is its risk (:mod:`policy`).
+MCP_PREFIX = "mcp:"
+MCP_RISKS = ("read", "write", "destructive")
+_MCP_TOOL = re.compile(r"^mcp__([A-Za-z0-9_.-]+?)__(.+)$")
+_MCP_KEY = re.compile(r"^mcp:[a-z0-9_.-]+$")
+_MCP_VERBS = {
+    "read": {"get", "list", "search", "read", "fetch", "query", "find", "describe", "show", "view", "lookup"},
+    "write": {"create", "update", "comment", "push", "add", "edit", "write", "set", "put", "post", "insert",
+              "upload", "send", "patch", "rename", "move", "assign", "label", "reply", "open", "fork"},
+    "destructive": {"delete", "remove", "drop", "merge", "deploy", "close", "force", "destroy", "purge",
+                    "truncate", "revoke", "terminate", "reset", "publish", "wipe", "kill", "execute", "exec"},
+}
+_SERVER_NAMES = {"github": "GitHub", "gitlab": "GitLab", "aws": "AWS", "gcp": "GCP", "postgres": "Postgres",
+                 "mysql": "MySQL", "sqlite": "SQLite", "supabase": "Supabase", "vercel": "Vercel", "jira": "Jira",
+                 "slack": "Slack", "linear": "Linear", "notion": "Notion", "sentry": "Sentry", "figma": "Figma"}
+
+
+def mcp_parts(tool_name: str) -> tuple[str, str] | None:
+    """(server, tool) of an MCP tool name, or ``None``."""
+    match = _MCP_TOOL.match(tool_name or "")
+    return (match.group(1), match.group(2)) if match else None
+
+
+def server_label(server: str) -> str:
+    """"github" -> "GitHub", "linear-tasks" -> "Linear Tasks"."""
+    words = [w for w in re.split(r"[-_.\s]+", server) if w]
+    return " ".join(_SERVER_NAMES.get(w.lower(), w[:1].upper() + w[1:]) for w in words) or server
+
+
+def mcp_class(key) -> ActionClass | None:
+    """The class of one MCP server (``mcp:github``). Up to L2, but only reads
+    reach it: writes stop at L1 and destructive tools at L0 (:mod:`policy`),
+    so the incident cost prices an unattended read."""
+    if not isinstance(key, str) or not _MCP_KEY.match(key):
+        return None
+    return ActionClass(key, f"{server_label(key[len(MCP_PREFIX):])} (MCP)", 3, 2, 2.0)
+
+
+def mcp_tool_risk(tool: str) -> str:
+    """read | write | destructive, from the tool's first verb. A tool with no
+    known verb is treated as a write: it never inherits what reads earned."""
+    for word in re.split(r"[-_.\s]+|(?<=[a-z0-9])(?=[A-Z])", tool or ""):
+        for risk in ("read", "write", "destructive"):
+            if word.lower() in _MCP_VERBS[risk]:
+                return risk
+    return "write"
 
 
 @dataclass(frozen=True)
@@ -52,10 +121,17 @@ class Classification:
     confidence: float = 1.0
     hard_deny: str = ""     # non-empty: never allowed, whatever the license says
     irreversible: float | None = None  # Jev's probability, when it was asked
+    mcp_server: str = ""
+    mcp_tool: str = ""
 
     @property
     def spec(self) -> ActionClass:
         return ACTION_CLASSES[self.action_class]
+
+    @property
+    def mcp_attributes(self) -> dict:
+        """Span attributes naming the MCP server and tool (empty for other tools)."""
+        return {"mcp_server": self.mcp_server, "mcp_tool": self.mcp_tool} if self.mcp_server else {}
 
 
 # Never allowed: these destroy data outside git or run code nobody reviewed.
@@ -147,6 +223,10 @@ def classify_command(command: str) -> Classification:
 
 def classify_tool(tool_name: str, tool_input: dict) -> Classification:
     """Classify any Claude Code tool call."""
+    mcp = mcp_parts(tool_name)
+    if mcp:
+        server, tool = mcp
+        return Classification(f"{MCP_PREFIX}{server.lower()}", tool_name, "rules", mcp_server=server, mcp_tool=tool)
     if tool_name in _SHELL_TOOLS:
         return classify_command(str(tool_input.get("command", "")))
     if tool_name in _READ_TOOLS:

@@ -49,6 +49,48 @@ def test_native_tool_calls_become_the_gates_common_shape(agent, event, payload, 
     assert body["session_id"]
 
 
+@pytest.mark.parametrize("agent, event, payload", [
+    # Claude Code and Codex already use the canonical name.
+    ("codex", "PermissionRequest", {"tool_name": "mcp__github__list_issues", "tool_input": {"repo": "shop"}}),
+    ("grok", "PreToolUse", {"toolName": "mcp__github__list_issues", "toolInput": {"repo": "shop"}}),
+    # Gemini CLI: mcp_<server>_<tool>, with the exact names in mcp_context.
+    ("gemini", "BeforeTool", {"tool_name": "mcp_github_list_issues", "tool_input": {"repo": "shop"},
+                              "mcp_context": {"server_name": "github", "tool_name": "list_issues",
+                                              "command": "npx", "args": ["-y", "server-github"]}}),
+    ("gemini", "BeforeTool", {"tool_name": "mcp_github_list_issues", "tool_input": {"repo": "shop"}}),
+    # Cursor: beforeMCPExecution names the server from mcp.json; tool_input is a JSON string,
+    # and a stdio server's launch `command` must not turn the call into a shell command.
+    ("cursor", "beforeMCPExecution", {"conversation_id": "c", "tool_name": "list_issues",
+                                      "tool_input": '{"repo": "shop"}', "mcp_server_name": "github",
+                                      "command": "npx -y @modelcontextprotocol/server-github"}),
+])
+def test_mcp_calls_from_every_agent_get_the_canonical_name(agent, event, payload):
+    gate_event, body = agents.normalize(agent, event, payload)
+    assert gate_event == "permission"
+    assert body["tool_name"] == "mcp__github__list_issues"
+    assert body["tool_input"] == {"repo": "shop"}
+
+
+def test_cursor_mcp_results_are_reported_and_errors_are_failures():
+    ok = {"conversation_id": "c", "tool_name": "list_issues", "tool_input": "{}", "mcp_server_name": "github",
+          "result_json": '{"content": [{"type": "text", "text": "[]"}]}', "duration": 40}
+    assert agents.normalize("cursor", "afterMCPExecution", ok)[0] == "post-tool"
+    bad = {**ok, "result_json": '{"isError": true, "content": []}'}
+    event, body = agents.normalize("cursor", "afterMCPExecution", bad)
+    assert (event, body["tool_name"]) == ("post-tool-failure", "mcp__github__list_issues")
+    codex = {"tool_name": "mcp__github__create_issue", "tool_input": {}, "tool_response": {"isError": True}}
+    assert agents.normalize("codex", "PostToolUse", codex)[0] == "post-tool-failure"
+
+
+def test_install_routes_mcp_calls_for_cursor_and_gemini(tmp_path):
+    install(tmp_path, "http://127.0.0.1:8000", "cursor")
+    install(tmp_path, "http://127.0.0.1:8000", "gemini")
+    cursor = json.loads((tmp_path / ".cursor" / "hooks.json").read_text())["hooks"]
+    assert "beforeMCPExecution" in cursor and "afterMCPExecution" in cursor
+    gemini = json.loads((tmp_path / ".gemini" / "settings.json").read_text())["hooks"]
+    assert all("mcp_.*" in gemini[e][0]["matcher"] for e in ("BeforeTool", "AfterTool"))
+
+
 def test_a_failed_tool_result_is_reported_as_a_failure():
     event, body = agents.normalize("codex", "PostToolUse", {"tool_name": "Bash", "tool_input": {"command": "npm i"},
                                                             "tool_response": {"exit_code": 1}})

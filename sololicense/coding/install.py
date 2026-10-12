@@ -248,8 +248,10 @@ def _cursor(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
         "beforeSubmitPrompt": [cmd("beforeSubmitPrompt")],
         "beforeShellExecution": [cmd("beforeShellExecution")],
         "preToolUse": [cmd("preToolUse", matcher="Write|Delete")],
+        "beforeMCPExecution": [cmd("beforeMCPExecution")],
         "afterShellExecution": [cmd("afterShellExecution")],
         "afterFileEdit": [cmd("afterFileEdit")],
+        "afterMCPExecution": [cmd("afterMCPExecution")],
         "stop": [cmd("stop")],
         "subagentStart": [cmd("subagentStart")],
         "subagentStop": [cmd("subagentStop")],
@@ -262,8 +264,8 @@ def _gemini(path: Path, url: str, hook: Path, remove: bool) -> list[Change]:
     cmd = lambda e, t=30000: {"name": MARK, "type": "command", "command": run(e), "timeout": t}  # noqa: E731
     ours = {
         "BeforeAgent": [{"hooks": [cmd("BeforeAgent")]}],
-        "BeforeTool": [{"matcher": "run_shell_command|write_file|replace", "hooks": [cmd("BeforeTool")]}],
-        "AfterTool": [{"matcher": "run_shell_command|write_file|replace", "hooks": [cmd("AfterTool")]}],
+        "BeforeTool": [{"matcher": "run_shell_command|write_file|replace|mcp_.*", "hooks": [cmd("BeforeTool")]}],
+        "AfterTool": [{"matcher": "run_shell_command|write_file|replace|mcp_.*", "hooks": [cmd("AfterTool")]}],
         "AfterAgent": [{"hooks": [cmd("AfterAgent", 150000)]}],
     }
     return _events(path, ours, remove)

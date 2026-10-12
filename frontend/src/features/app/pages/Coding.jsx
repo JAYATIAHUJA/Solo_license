@@ -4,6 +4,7 @@ import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole, toDate, when } from '../../../lib/format.js';
 import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey } from '../../../lib/coding-live.js';
+import { classLabel, isMcpClass } from '../../../lib/action-classes.js';
 import './coding.css';
 
 const POLL_MS = 4000;
@@ -185,6 +186,9 @@ function LicenseCard({ lic, onResume, busy, flash }) {
         <div className="app-evidence" role="img" aria-label={nextSentence(lic)}><i style={{ width: `${share * 100}%` }} /></div>
       )}
       <p className="pl-small pl-muted">{nextSentence(lic)}</p>
+      {isMcpClass(lic.action_class) && (
+        <p className="pl-small pl-muted">MCP tools: reads can run on their own, writes once you approved that tool, and destructive tools (merge, delete, deploy) always ask.</p>
+      )}
       <p className="pl-small pl-muted">{lic.successes} verified · {lic.failures} failed · ceiling L{lic.ceiling ?? lic.max_level} · <code>{lic.action_class}</code></p>
       {paused && (
         <div className="cd-actions">
@@ -373,7 +377,7 @@ export function Coding() {
                 <li key={d.id} className="pl-row">
                   <span className="pl-row-main">
                     <b><code>{d.command}</code></b>
-                    <small>{when(d.created_at)} · {d.action_class} at L{d.level} · {d.reason}</small>
+                    <small>{when(d.created_at)} · {classLabel(d.action_class)} at L{d.level} · {d.reason}</small>
                   </span>
                   <span className="pl-row-side">
                     <span className={`pl-status ${s.tone}`}>{d.decided_by === 'person' ? 'You approved' : s.label}</span>

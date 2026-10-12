@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../../../lib/store.jsx';
 import { eventLinks } from '../../../lib/event-links.js';
 import { flagReason, flagSentence, personName } from '../../../lib/ledger-words.js';
+import { classLabel, isMcpClass } from '../../../lib/action-classes.js';
 import { toDate, when } from '../../../lib/format.js';
 import '../components/activity.css';
 
@@ -51,7 +52,7 @@ function sentence(e) {
     return <>Policy for <b>{repo === '*' ? 'all repositories' : repo}</b> changed{why ? <> - {why}</> : ''}</>;
   }
   const level = e.kind === 'demote' ? `L${e.from_level}` : `L${e.to_level}`;
-  return <><code>{cls}</code> in <b>{repo}</b> {VERBS[e.kind] || 'changed to'} <b>{level}</b>{why ? <> - {why}</> : ''}</>;
+  return <>{isMcpClass(cls) ? <b>{classLabel(cls)}</b> : <code>{cls}</code>} in <b>{repo}</b> {VERBS[e.kind] || 'changed to'} <b>{level}</b>{why ? <> - {why}</> : ''}</>;
 }
 
 /** Permission history: every change to what the coding agent may do. */

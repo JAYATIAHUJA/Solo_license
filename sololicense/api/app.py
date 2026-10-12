@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from sololicense.bootstrap import AppContext, build_app
 from sololicense.db.repositories import agent as agent_repo
 from sololicense.db.repositories import settings as settings_repo
-from sololicense.coding.actions import ACTION_CLASSES
+from sololicense.coding.actions import ACTION_CLASSES, MCP_PREFIX
 from sololicense.observability.links import event_payload
 from sololicense.observability.neatlogs_probe import response_for, run_doctor_probe
 from sololicense.security import Actor, Role, TokenAuthenticator, permits
@@ -471,6 +471,7 @@ def coding_payload(context: AppContext, repo: str | None = None) -> dict:
             "repo": row["repo"], "principal": principal, "action_class": spec.key, "label": spec.label,
             "level": row["level"], "max_level": spec.max_level, "ceiling": ceiling,
             "successes": row["successes"], "failures": row["failures"],
+            "mcp_server": spec.key[len(MCP_PREFIX):] if spec.key.startswith(MCP_PREFIX) else None,
             "demoted_from": row["demoted_from"], "updated_at": row["updated_at"], **progress,
         })
     decisions = [dict(r) for r in agent_repo.recent_decisions(context.conn, 60)
@@ -720,6 +721,7 @@ class CodingPolicyPayload(BaseModel):
     deny_commands: list[str] = Field(default_factory=list, max_length=50)
     deny_paths: list[str] = Field(default_factory=list, max_length=50)
     freeze: bool = False
+    tools: dict[str, dict] = Field(default_factory=dict)   # glob on the tool name -> {risk, ceiling, forbidden}
 
 
 class FreezePayload(BaseModel):
@@ -745,6 +747,7 @@ def coding_policy_payload(context: AppContext, repo: str) -> dict:
         "local": this_repo.to_json() if this_repo else None,
         "effective": {**effective.to_json(), "digest": effective.digest},
         "built_in": {k: c.max_level for k, c in ACTION_CLASSES.items()},
+        "tool_defaults": dict(policy_mod.TOOL_CEILINGS),
         "starter": policy_mod.STARTER,
     }
 
@@ -775,6 +778,8 @@ def _policy_summary(before: dict | None, after) -> str:
         parts.append(f"{len(after.deny_commands)} denied command(s)")
     if after.deny_paths:
         parts.append(f"{len(after.deny_paths)} denied path(s)")
+    if after.tools:
+        parts.append(f"{len(after.tools)} tool rule(s)")
     return "; ".join(parts) or "no extra rules"
 
 
@@ -791,6 +796,7 @@ def put_coding_policy(payload: CodingPolicyPayload, actor: Actor = Depends(requi
                 "classes": {k: {"max": v} for k, v in payload.classes.items()},
                 "deny": {"commands": payload.deny_commands, "paths": payload.deny_paths},
                 "freeze": {"enabled": payload.freeze},
+                "tools": payload.tools,
             })
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -809,9 +815,7 @@ def freeze_coding(payload: FreezePayload, actor: Actor = Depends(require_role(Ro
     with _lock:
         context = get_context()
         current = policy_mod.local(context.conn, payload.repo) or policy_mod.Policy()
-        raw = {"classes": {k: {"max": v} for k, v in current.ceilings.items()},
-               "deny": {"commands": list(current.deny_commands), "paths": list(current.deny_paths)},
-               "freeze": {"enabled": payload.enabled}}
+        raw = {**current.to_raw(), "freeze": {"enabled": payload.enabled}}
         policy_mod.save_local(context.conn, payload.repo, raw)
         if context.coding_gate is not None:
             where = "all repositories" if payload.repo == policy_mod.ALL_REPOS else payload.repo
