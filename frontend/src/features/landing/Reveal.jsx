@@ -36,7 +36,7 @@ export function MaskWords({ text, delay = 0, stagger = 0.06, className = '', ani
           style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top', paddingBottom: '0.08em',
             marginRight: i < words.length - 1 ? '0.25em' : 0 }}>
           <motion.span
-            style={{ display: 'inline-block' }}
+            style={{ display: 'block' }}
             variants={{ hidden: { y: '110%' }, shown: { y: '0%' } }}
             transition={{ duration: 1, delay: delay + i * stagger, ease: EASE }}
           >
