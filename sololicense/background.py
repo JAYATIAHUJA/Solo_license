@@ -70,10 +70,25 @@ def _alive(pid: int) -> bool:
     try:
         # A detached child can briefly remain as a zombie after it exits;
         # treat that as stopped even though kill(pid, 0) still succeeds.
+        try:
+            if os.waitpid(pid, os.WNOHANG)[1] != 0:
+                return False  # our own child, and it has exited
+        except ChildProcessError:
+            pass  # not our child; continue with the other checks
         stat = Path(f"/proc/{pid}/stat")
         if stat.is_file():
             fields = stat.read_text(encoding="ascii", errors="ignore").split()
             if len(fields) > 2 and fields[2] == "Z":
+                return False
+        else:
+            # POSIX without /proc (macOS): a zombie still answers kill(0).
+            completed = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "stat="],
+                capture_output=True, text=True, timeout=10, check=False,
+            )
+            if completed.returncode != 0:
+                return False
+            if completed.stdout.strip().startswith("Z"):
                 return False
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -109,6 +124,9 @@ def _process_matches(pid: int, state: dict) -> bool:
         finally:
             kernel32.CloseHandle(handle)
     proc = Path(f"/proc/{pid}")
+    if not proc.exists():
+        # macOS and other POSIX without /proc: ask ps for the command line.
+        return _matches_via_ps(pid, expected, command)
     try:
         actual = os.path.realpath((proc / "exe").readlink())
         if expected and actual != os.path.realpath(expected):
@@ -119,6 +137,36 @@ def _process_matches(pid: int, state: dict) -> bool:
         return True
     except (OSError, ValueError):
         return False
+
+
+def _matches_via_ps(pid: int, expected: str, command: list[str]) -> bool:
+    """Confirm *pid*'s command line via ps, where /proc is unavailable."""
+    try:
+        completed = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if completed.returncode != 0:
+        return False
+    line = completed.stdout.strip()
+    if not line:
+        return False
+    # ps renders the command as one line with quoting stripped. On macOS a
+    # venv python reports as its resolved framework binary, so accept the
+    # recorded executable, its realpath, or a case-insensitive basename.
+    first, _, rest = line.partition(" ")
+    argv0 = command[0] if command else expected
+    if argv0:
+        candidates = {argv0, os.path.realpath(argv0)}
+        if first not in candidates:
+            bases = {os.path.basename(c).lower() for c in candidates}
+            if os.path.basename(first).lower() not in bases:
+                return False
+    if len(command) > 1:
+        return rest.startswith(" ".join(command[1:]))
+    return True
 
 
 def read_state() -> dict | None:
@@ -223,7 +271,7 @@ def _kill(pid: int, state: dict | None = None) -> bool:
         return False
     for _ in range(40):
         if not _alive(pid):
-            return
+            return True
         time.sleep(0.25)
     try:
         os.killpg(pid, signal.SIGKILL)

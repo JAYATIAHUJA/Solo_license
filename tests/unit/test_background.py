@@ -132,3 +132,37 @@ def test_a_real_background_gate_starts_answers_and_stops(tmp_path, monkeypatch):
     assert stopped["status"] == "stopped"
     assert not background._alive(state["pid"])
     assert not (tmp_path / "solo" / "gate.pid").exists()
+
+
+def test_process_matches_our_spawned_process_on_this_platform():
+    """_process_matches must work on macOS too, which has no /proc."""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        state = {
+            "executable": sys.executable,
+            "command": [sys.executable, "-c", "import time; time.sleep(30)"],
+        }
+        assert background._process_matches(proc.pid, state)
+    finally:
+        proc.terminate()
+        proc.wait()
+
+
+def test_process_matches_rejects_a_different_command():
+    """A reused pid running something else must not be matched."""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        state = {
+            "executable": sys.executable,
+            "command": [sys.executable, "-m", "sololicense.cli", "serve"],
+        }
+        assert not background._process_matches(proc.pid, state)
+    finally:
+        proc.terminate()
+        proc.wait()
