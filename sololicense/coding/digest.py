@@ -72,6 +72,17 @@ def encode(digest: dict) -> str:
         value["goal"] = goal[:64]
         value["turn"] = {"files_touched": [], "diff_stat": "", "failures": []}
         value["current_call"] = {"principal": value.get("current_call", {}).get("principal", "main")}
+        # The reductions above are the final fallback.  Rebuild a fixed-size
+        # minimal shape so a future schema addition cannot reintroduce an
+        # oversized or invalid result at this terminal path.
+        minimal = {
+            "goal": str(value.get("goal", ""))[:64],
+            "turn": {"files_touched": [], "diff_stat": "", "failures": []},
+            "recent_calls": [],
+            "trust": [],
+            "current_call": {"principal": value.get("current_call", {}).get("principal", "main")},
+        }
+        return json.dumps(minimal, separators=(",", ":"), ensure_ascii=True)
 
 
 def state(conn: sqlite3.Connection, session_id: str, *, repo: str = "", principal: str = "main",

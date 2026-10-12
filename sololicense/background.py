@@ -76,6 +76,44 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def _process_matches(pid: int, state: dict) -> bool:
+    """Confirm that *pid* is still the gate process before terminating it."""
+    expected = str(state.get("executable") or "")
+    command = [str(part) for part in (state.get("command") or [])]
+    if os.name == "nt":
+        # QueryFullProcessImageName is handle-based, so it cannot silently
+        # follow a reused PID after the handle is opened.
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            buf = ctypes.create_unicode_buffer(32768)
+            size = wintypes.DWORD(len(buf))
+            if not kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return False
+            actual = os.path.normcase(buf.value)
+            if expected and actual != os.path.normcase(expected):
+                return False
+            return True
+        finally:
+            kernel32.CloseHandle(handle)
+    proc = Path(f"/proc/{pid}")
+    try:
+        actual = os.path.realpath((proc / "exe").readlink())
+        if expected and actual != os.path.realpath(expected):
+            return False
+        if command:
+            argv = [part.decode(errors="replace") for part in (proc / "cmdline").read_bytes().split(b"\0") if part]
+            return argv[:len(command)] == command
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def read_state() -> dict | None:
     try:
         state = json.loads(pidfile().read_text(encoding="utf-8"))
@@ -115,6 +153,8 @@ def start(host: str = "127.0.0.1", port: int | None = None, *, wait: float = 30.
             env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONPATH": pythonpath}, **_detach_kwargs(),
         )
     state = {"pid": process.pid, "host": host, "port": port, "url": url, "log": str(log),
+             "executable": sys.executable,
+             "command": [sys.executable, "-m", "sololicense.cli", "serve", "--host", host, "--port", str(port)],
              "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     pidfile().write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     deadline = time.monotonic() + wait
@@ -155,6 +195,9 @@ def stop() -> dict:
     if not _alive(pid):
         pidfile().unlink(missing_ok=True)
         return {"status": "stale", **state}
+    if not _process_matches(pid, state):
+        pidfile().unlink(missing_ok=True)
+        return {"status": "pid-reused", **state}
     _kill(pid)
     for _ in range(40):
         if not _alive(pid):
