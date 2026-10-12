@@ -154,6 +154,18 @@ def _patch_path(patch: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _principal(payload: dict) -> str:
+    """Map native subagent metadata to the gate's stable identity key."""
+    agent_type = _first(payload, "agent_type", "subagent_type", default=None)
+    agent_id = _first(payload, "agent_id", "agentId", default=None)
+    if agent_type is None and agent_id is None:
+        return "main"
+    label = str(agent_type or "unknown").strip()
+    if not label or label.lower() in {"main", "primary"}:
+        return "main"
+    return f"subagent:{label}"
+
+
 def _tool(name: str, args: dict) -> tuple[str, dict]:
     """(Claude Code tool name, tool_input) for any agent's tool call."""
     low = (name or "").lower()
@@ -193,7 +205,8 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     roots = _first(p, "workspace_roots", "workspaceRoots", "workspacePaths", default=None)
     cwd = str(_first(p, "cwd", "workspaceRoot", "directory",
                      default=(roots[0] if isinstance(roots, list) and roots else ".")))
-    body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd}
+    body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd,
+                  "principal": _principal(p)}
 
     if event == PROMPT:
         body["prompt"] = str(_first(p, "prompt", "user_prompt", "message", default=""))

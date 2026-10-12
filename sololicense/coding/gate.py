@@ -57,6 +57,11 @@ def _who(repo: str, agent: str = "", principal: str = "main") -> dict:
     return {"repo": repo, "principal": principal, **({"agent": agent} if agent else {})}
 
 
+def _principal(event: dict | None) -> str:
+    """Read the trusted principal set by the native-hook normaliser."""
+    return str((event or {}).get("_principal") or (event or {}).get("principal") or "main")
+
+
 def turn_reason(conn: sqlite3.Connection, turn_id: int) -> str | None:
     row = agent_repo.get_turn(conn, turn_id)
     return row["reason"] if row else None
@@ -104,12 +109,13 @@ class CodingGate:
         repo, root = repo_of(cwd)
         agent_repo.ensure_repo(self.conn, repo, root)
         agent = str(event.get("_agent") or "claude-code")
-        trace = self.tracer.start_trace("coding.turn", defaults=_who(repo, agent), session_id=session or None,
+        principal = _principal(event)
+        trace = self.tracer.start_trace("coding.turn", defaults=_who(repo, agent, principal), session_id=session or None,
                                         session=session[:12])
         turn_id = agent_repo.open_turn(
             self.conn, session_id=session, repo=repo, cwd=root,
             prompt=str(event.get("prompt", ""))[:8000], base_ref=snapshot(root), trace_id=trace.trace_id,
-            agent=agent,
+            agent=agent, principal=principal,
         )
         self._traces[turn_id] = trace
         if not event.get("_implicit"):  # a turn opened for an agent without a prompt hook is not a person
@@ -138,6 +144,7 @@ class CodingGate:
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
         repo, root = repo_of(cwd)
+        principal = _principal(event)
         result = classify_tool(tool, tool_input)
         rules = policy_mod.effective(self.conn, repo, root)
         repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
@@ -157,9 +164,9 @@ class CodingGate:
         if result.action_class in ASK_FIRST:
             key = result.action_class
             # Read without creating the license row: a pass-through or an ask writes nothing.
-            row = self.conn.execute("SELECT level FROM agent_licenses WHERE repo = ? AND action_class = ?",
-                                    (repo, key)).fetchone()
-            if min(int(row["level"]) if row else 0, rules.ceilings[key]) < 1:
+            lic = agent_repo.effective_license(self.conn, repo, key, principal,
+                                               max_level=rules.subagent_max, create=False)
+            if min(int(lic["level"]), rules.ceilings[key]) < 1:
                 spec = ACTION_CLASSES[key]
                 return self._pre_tool_ask(f"{spec.label} always needs a person." if spec.max_level == 0
                                           else f"{spec.label} is at L0 in {repo}: a person decides.")
@@ -172,16 +179,18 @@ class CodingGate:
 
     def permission(self, event: dict) -> dict:
         self._agent = str(event.get("_agent") or "claude-code")
+        principal = _principal(event)
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
         repo, root = repo_of(cwd)
-        turn = self._turn(session, repo, root)
+        turn = self._turn(session, repo, root, principal=principal)
         trace = self._trace(turn)
         command = describe(tool, tool_input)
         result = self._classify(tool, tool_input, root)
         spec = ACTION_CLASSES[result.action_class]
-        lic = agent_repo.get_license(self.conn, repo, spec.key)
         rules = policy_mod.effective(self.conn, repo, root)
+        lic = agent_repo.effective_license(self.conn, repo, spec.key, principal,
+                                           max_level=rules.subagent_max)
         ceiling = rules.ceilings[spec.key]
         level = min(int(lic["level"]), ceiling)
         forbidden = policy_mod.denied(rules, tool, tool_input, root)
@@ -215,7 +224,7 @@ class CodingGate:
                       ).removeprefix("Solo License: ")
 
         decision_id = agent_repo.insert_decision(
-            self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
+            self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"), principal=principal,
             turn_id=turn["id"], repo=repo, tool_name=tool,
             action_class=spec.key, pattern=result.pattern, command=command, decision=decision,
             decided_by=by, level=level, source=result.source, reason=reason,
@@ -230,7 +239,8 @@ class CodingGate:
             # As serious as a hard deny: recorded, and the class goes back to asking.
             trace.span("detection.policy_violation", status="error", severity="critical", message=reason,
                        reason=reason, action_class=spec.key, command=command, policy=rules.digest, **via)
-            self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace, turn=turn)
+            self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace, turn=turn,
+                       principal=principal)
         elif decision == "deny" and by == "loop-guard":
             # A halt, not evidence: the class keeps its level.
             trace.span("detection.loop", status="error", severity="critical", message=reason, reason=reason,
@@ -241,7 +251,8 @@ class CodingGate:
         elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
                        message=reason, reason=reason, action_class=spec.key, command=command, **via)
-            self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace, turn=turn)
+            self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace, turn=turn,
+                       principal=principal)
         interrupt = False
         if decision == "deny":
             denials = sum(1 for d in agent_repo.decisions_for_turn(self.conn, turn["id"]) if d["decision"] == "deny")
@@ -260,7 +271,8 @@ class CodingGate:
         session = str(event.get("session_id", ""))
         tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
         loop_note, halt = self._watch_loops(session, tool, tool_input, event, failed)
-        row = agent_repo.pending_decision(self.conn, session, tool, describe(tool, tool_input))
+        row = agent_repo.pending_decision(self.conn, session, tool, describe(tool, tool_input),
+                                          principal=_principal(event))
         if row is None:  # never went through the gate (already allowed by settings)
             self.conn.commit()
             return self._with_loop_note({}, loop_note, halt, failed)
@@ -282,7 +294,7 @@ class CodingGate:
             agent_repo.set_outcome(self.conn, row["id"], "failed")
             trace.span("tool.failed", status="error", decision_id=row["id"], action_class=key, error=error)
             why = f"{row['command']} failed: {error.splitlines()[0] if error else 'error'}"
-            was = self._fail(repo, key, why, trace, turn=turn)
+            was = self._fail(repo, key, why, trace, turn=turn, principal=row["principal"])
             checkpoint = self._checkpoint_for(turn) if was > 0 else None
             answer = self._remedy_failed_tool(row, tool_input, demoted=was > 0, trace=trace, reason=why,
                                               level=was, checkpoint=checkpoint)
@@ -293,7 +305,7 @@ class CodingGate:
         elif key in DIAGNOSTIC:
             agent_repo.set_outcome(self.conn, row["id"], "verified")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="error" if failed else "ok")
-            self._succeed(repo, key, trace)
+            self._succeed(repo, key, trace, principal=row["principal"])
         else:  # changed the repo: evidence once the turn's checks pass
             agent_repo.set_outcome(self.conn, row["id"], "ran")
             trace.span("tool.ran", decision_id=row["id"], action_class=key, exit="ok")
@@ -376,10 +388,11 @@ class CodingGate:
         changed = [d for d in decisions if d["outcome"] == "ran"]
         demoted: list[str] = []
         checkpoint_id = None
+        principal = str(turn["principal"] or "main") if turn else "main"
         if ok:
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "verified")
-                self._succeed(d["repo"], d["action_class"], trace)
+                self._succeed(d["repo"], d["action_class"], trace, principal=principal)
         else:
             checkpoint_id = self._checkpoint_for(turn, fresh=True)
             evidence = reason
@@ -387,7 +400,8 @@ class CodingGate:
                 details["entire_checkpoint"] = checkpoint_id
                 evidence = f"{reason}\nEntire: {entire.explain_command(checkpoint_id)}"
             for key in sorted({d["action_class"] for d in changed} | set(details.get("blame", ()))):
-                if self._fail(turn["repo"], key, evidence, trace, checkpoint=checkpoint_id) > 0:
+                if self._fail(turn["repo"], key, evidence, trace, checkpoint=checkpoint_id,
+                              principal=principal) > 0:
                     demoted.append(key)
             for d in changed:
                 agent_repo.set_outcome(self.conn, d["id"], "failed")
@@ -433,25 +447,38 @@ class CodingGate:
 
     # --- license changes -------------------------------------------------------
 
-    def _succeed(self, repo: str, key: str, trace: Trace) -> None:
-        agent_repo.add_evidence(self.conn, repo, key, ok=True)
-        lic = agent_repo.get_license(self.conn, repo, key)
+    def _succeed(self, repo: str, key: str, trace: Trace, *, principal: str = "main") -> None:
+        lic = agent_repo.effective_license(self.conn, repo, key, principal,
+                                           max_level=self._subagent_ceiling(repo, principal))
+        explicit = self.conn.execute(
+            "SELECT 1 FROM agent_licenses WHERE repo = ? AND principal = ? AND action_class = ?",
+            (repo, principal, key),
+        ).fetchone()
+        if not explicit:
+            agent_repo.get_license(self.conn, repo, key, principal=principal)
+            if principal != "main" and lic["level"]:
+                agent_repo.set_level(self.conn, repo, key, int(lic["level"]), principal=principal)
+        agent_repo.add_evidence(self.conn, repo, key, ok=True, principal=principal)
+        lic = agent_repo.get_license(self.conn, repo, key, principal=principal)
         target = self.ladder.next_level(key, lic["level"], lic["successes"], lic["failures"],
-                                        lic["successes_at_level"], ceiling=self.ceiling(repo, key))
+                                        lic["successes_at_level"],
+                                        ceiling=self._subagent_ceiling(repo, principal, key))
         if target is not None:
             self._change(repo, key, "promote", lic["level"], target,
                          f"{lic['successes']} verified, {lic['failures']} failed: the failure rate is below "
-                         f"break-even for {ACTION_CLASSES[key].label.lower()} in {repo}.", trace)
+                         f"break-even for {ACTION_CLASSES[key].label.lower()} in {repo}.", trace,
+                         principal=principal)
 
     def _fail(self, repo: str, key: str, reason: str, trace: Trace, *, turn: sqlite3.Row | None = None,
-              checkpoint: str | None = None) -> int:
+              checkpoint: str | None = None, principal: str = "main") -> int:
         """Evidence against a class: back to L0. Returns the level it had. A
         demotion is linked to the turn's Entire checkpoint (looked up only then)."""
-        agent_repo.add_evidence(self.conn, repo, key, ok=False)
-        lic = agent_repo.get_license(self.conn, repo, key)
+        lic = agent_repo.effective_license(self.conn, repo, key, principal,
+                                           max_level=self._subagent_ceiling(repo, principal, key))
+        agent_repo.add_evidence(self.conn, repo, key, ok=False, principal=principal)
         if lic["level"] > 0:
             self._change(repo, key, "demote", lic["level"], 0, reason, trace,
-                         checkpoint=checkpoint or self._checkpoint_for(turn))
+                         checkpoint=checkpoint or self._checkpoint_for(turn), principal=principal)
         agent_repo.forget_patterns(self.conn, repo, key)
         return int(lic["level"])
 
@@ -498,12 +525,19 @@ class CodingGate:
             raise ValueError("Flag a decision or a turn.")
 
         agent = (decision["agent"] if decision_id is not None else None) or (turn["agent"] if turn else "")
+        principal = (decision["principal"] if decision_id is not None else None) or (turn["principal"] if turn else "main")
         checkpoint = turn["entire_checkpoint"] if turn else None
-        trace = self.tracer.start_trace("coding.flag", defaults=_who(repo, agent), session_id=session or None)
+        trace = self.tracer.start_trace("coding.flag", defaults=_who(repo, agent, principal), session_id=session or None)
         for key in classes:
-            lic = agent_repo.get_license(self.conn, repo, key)
+            rules = policy_mod.effective(self.conn, repo, turn["cwd"] if turn else ".")
+            lic = agent_repo.effective_license(self.conn, repo, key, principal,
+                                               max_level=rules.subagent_max)
+            if not self.conn.execute(
+                    "SELECT 1 FROM agent_licenses WHERE repo = ? AND principal = ? AND action_class = ?",
+                    (repo, principal, key)).fetchone():
+                agent_repo.get_license(self.conn, repo, key, principal=principal)
             self._change(repo, key, "flag", lic["level"], 0, f"{actor_id}: {reason}", trace, actor_id=actor_id,
-                         checkpoint=checkpoint)
+                         checkpoint=checkpoint, principal=principal)
             agent_repo.forget_patterns(self.conn, repo, key)
         fix = remediation.compose("flagged", reason=reason, action_class=action_class, command=command,
                                   files=files, classes=classes, base_ref=turn["base_ref"] if turn else None,
@@ -535,19 +569,21 @@ class CodingGate:
         return sha
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
-                actor_id: str = GATE_ACTOR, checkpoint: str | None = None) -> None:
+                actor_id: str = GATE_ACTOR, checkpoint: str | None = None,
+                principal: str = "main") -> None:
         lost = kind in ("demote", "flag")
-        agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if lost else None)
+        agent_repo.set_level(self.conn, repo, key, new, demoted_from=old if lost else None, principal=principal)
         event_id = agent_repo.insert_event(self.conn, repo=repo, action_class=key, kind=kind,
                                            from_level=old, to_level=new, reason=reason, actor_id=actor_id,
-                                           trace_id=trace.trace_id, entire_checkpoint=checkpoint)
+                                           principal=principal, trace_id=trace.trace_id,
+                                           entire_checkpoint=checkpoint)
         sha = self.ledger.record(LedgerEntry(f"{key}@{repo}", kind, old, new, reason, None, trace.trace_id,
                                              entire_checkpoint=checkpoint))
         if sha:
             agent_repo.set_event_sha(self.conn, event_id, sha)
         trace.span(f"license.{kind}", status="error" if lost else "ok", action_class=key,
                    repo=repo, from_level=old, to_level=new, reason=reason, git_sha=sha or "",
-                   actor_id=actor_id, entire_checkpoint=checkpoint or "")
+                   actor_id=actor_id, principal=principal, entire_checkpoint=checkpoint or "")
 
     # --- helpers -----------------------------------------------------------
 
@@ -566,6 +602,15 @@ class CodingGate:
         row = self.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
         rules = policy_mod.effective(self.conn, repo, row["path"] if row else ".")
         return rules.ceilings[key]
+
+    def _subagent_ceiling(self, repo: str, principal: str, key: str | None = None) -> int:
+        """Return the effective ceiling for one principal and action class."""
+        row = self.conn.execute("SELECT path FROM agent_repos WHERE repo = ?", (repo,)).fetchone()
+        rules = policy_mod.effective(self.conn, repo, row["path"] if row else ".")
+        ceiling = rules.subagent_max
+        if key is not None:
+            ceiling = min(ceiling, rules.ceilings[key])
+        return ceiling if principal != "main" else (rules.ceilings[key] if key is not None else 2)
 
     def _ask_reason(self, key: str, level: int, lic: sqlite3.Row, ceiling: int | None = None) -> str:
         spec = ACTION_CLASSES[key]
@@ -605,10 +650,11 @@ class CodingGate:
             started = None
         return [c.path for c in changed_files(turn["cwd"], turn["base_ref"], since=started)]
 
-    def _turn(self, session: str, repo: str, root: str) -> sqlite3.Row:
+    def _turn(self, session: str, repo: str, root: str, *, principal: str = "main") -> sqlite3.Row:
         turn = agent_repo.current_turn(self.conn, session)
         if turn is None or turn["status"] != "open":
             self.user_prompt({"session_id": session, "cwd": root, "prompt": "", "_agent": self._agent,
+                              "_principal": principal,
                               "_implicit": True})
             turn = agent_repo.current_turn(self.conn, session)
         return turn
@@ -618,7 +664,7 @@ class CodingGate:
             return self._traces[turn["id"]]
         if turn is None:
             return self.tracer.start_trace("coding.turn", resumed=True)
-        trace = self.tracer.start_trace("coding.turn", defaults=_who(turn["repo"], turn["agent"]),
+        trace = self.tracer.start_trace("coding.turn", defaults=_who(turn["repo"], turn["agent"], turn["principal"]),
                                         session_id=turn["session_id"] or None, resumed=True)
         self._traces[turn["id"]] = trace
         return trace

@@ -61,6 +61,11 @@ paths = [".env", ".env.*"]
 [freeze]
 # true: every action asks, whatever has been earned.
 enabled = false
+
+[subagents]
+# Subagents inherit the repo license, capped at this level until they earn
+# their own evidence. The cap can only be tightened by policy.
+max = 1
 """
 
 
@@ -73,10 +78,12 @@ class Policy:
     deny_paths: tuple[str, ...] = ()
     freeze: bool = False
     source: str = "built-in"
+    subagent_max: int = 1
 
     def to_json(self) -> dict:
         return {"ceilings": dict(self.ceilings), "deny_commands": list(self.deny_commands),
-                "deny_paths": list(self.deny_paths), "freeze": self.freeze, "source": self.source}
+                "deny_paths": list(self.deny_paths), "freeze": self.freeze,
+                "subagent_max": self.subagent_max, "source": self.source}
 
     @property
     def digest(self) -> str:
@@ -98,7 +105,11 @@ def _clean(raw: dict, source: str) -> Policy:
     commands = tuple(str(c).strip() for c in deny.get("commands", []) if str(c).strip())
     paths = tuple(str(p).strip().replace("\\", "/") for p in deny.get("paths", []) if str(p).strip())
     freeze = raw.get("freeze") or {}
-    return Policy(ceilings, commands, paths, bool(freeze.get("enabled", False)), source)
+    subagents = raw.get("subagents") or {}
+    max_level = subagents.get("max", 1)
+    if not isinstance(max_level, int) or not 0 <= max_level <= 2:
+        raise ValueError(f"{source}: subagents.max must be 0, 1 or 2")
+    return Policy(ceilings, commands, paths, bool(freeze.get("enabled", False)), source, max_level)
 
 
 def from_file(root: str | Path) -> Policy | None:
@@ -130,7 +141,8 @@ def save_local(conn: sqlite3.Connection, repo: str, raw: dict) -> Policy:
         "ON CONFLICT (repo) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
         (repo, json.dumps({"classes": {k: {"max": v} for k, v in policy.ceilings.items()},
                            "deny": {"commands": list(policy.deny_commands), "paths": list(policy.deny_paths)},
-                           "freeze": {"enabled": policy.freeze}})),
+                           "freeze": {"enabled": policy.freeze},
+                           "subagents": {"max": policy.subagent_max}})),
     )
     return policy
 
@@ -145,12 +157,14 @@ def merge(*layers: Policy | None) -> Policy:
     freeze = any(p.freeze for p in present)
     if freeze:
         ceilings = {key: 0 for key in ceilings}
+    subagent_max = min((p.subagent_max for p in present), default=1)
     return Policy(
         ceilings=ceilings,
         deny_commands=tuple(dict.fromkeys(c for p in present for c in p.deny_commands)),
         deny_paths=tuple(dict.fromkeys(x for p in present for x in p.deny_paths)),
         freeze=freeze,
         source=" + ".join(["built-in", *[p.source for p in present]]),
+        subagent_max=subagent_max,
     )
 
 
