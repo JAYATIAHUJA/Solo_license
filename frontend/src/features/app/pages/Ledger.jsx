@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../../lib/store.jsx';
 import { eventLinks } from '../../../lib/event-links.js';
-import { flagReason, flagSentence, personName } from '../../../lib/ledger-words.js';
+import { eventReason, flagSentence, personName } from '../../../lib/ledger-words.js';
 import { classLabel, isMcpClass } from '../../../lib/action-classes.js';
 import { toDate, when } from '../../../lib/format.js';
 import '../components/activity.css';
@@ -46,7 +46,7 @@ const VERBS = { promote: 'earned', demote: 'lost', restore: 'was resumed at' };
 /** One permission change as a sentence. */
 function sentence(e) {
   const [cls, repo] = e.task_class.split('@');
-  const why = (e.reason || '').split('\n')[0];
+  const why = eventReason(e).split('\n')[0];
   if (e.kind === 'flag') return flagSentence(e);
   if (e.kind === 'policy') {
     return <>Policy for <b>{repo === '*' ? 'all repositories' : repo}</b> changed{why ? <> - {why}</> : ''}</>;
@@ -81,7 +81,7 @@ export function Ledger() {
             return (
               <li key={e.id} className="hist-row">
                 <b>{sentence(e)}</b>
-                {e.kind === 'flag' && flagReason(e) && <p className="hist-reason">“{flagReason(e)}”</p>}
+                {e.kind === 'flag' && eventReason(e) && <p className="hist-reason">“{eventReason(e)}”</p>}
                 <small>
                   <span title={date ? date.toLocaleString() : undefined}>{when(e.created_at)}</span>
                   {who ? ` · by ${who}` : ''}

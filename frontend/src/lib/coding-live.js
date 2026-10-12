@@ -33,6 +33,14 @@ export function flagRequest(target, reason) {
   return hasDecision ? { decision_id: target.decision_id, reason: why } : { turn_id: target.turn_id, reason: why };
 }
 
+/** Why a paused class lost its level: the newest flag or demotion for it
+ *  (events come newest first). A flag names the person who flagged it. */
+export function pauseCause(events, lic) {
+  const last = (events || []).find((e) => e.repo === lic.repo && e.action_class === lic.action_class
+    && (e.kind === 'flag' || e.kind === 'demote'));
+  return last?.kind === 'flag' ? { flagged: true, actorId: last.actor_id || '' } : { flagged: false, actorId: '' };
+}
+
 /** Which decisions and turns a person has already flagged. */
 export function flaggedTargets(flags) {
   const decisions = new Set();

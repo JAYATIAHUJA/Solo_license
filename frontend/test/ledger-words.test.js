@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { flagReason, flagSentence, personName } from '../src/lib/ledger-words.js';
+import { eventReason, flagSentence, personName } from '../src/lib/ledger-words.js';
 
 const flag = {
   kind: 'flag',
@@ -22,10 +22,12 @@ test('a flag reads as a person saying the class was wrong', () => {
   assert.equal(flagSentence(flag), 'Jayati flagged file-edit in shop as wrong — back to L0');
 });
 
-test("a flag's reason drops the actor prefix the gate stores", () => {
-  assert.equal(flagReason(flag), 'deleted the migrations folder');
-  assert.equal(flagReason({ ...flag, reason: 'no prefix here' }), 'no prefix here');
-  assert.equal(flagReason({ ...flag, reason: null }), '');
+test("a person's reason drops the actor prefix the gate stores", () => {
+  assert.equal(eventReason(flag), 'deleted the migrations folder');
+  assert.equal(eventReason({ kind: 'restore', actor_id: 'demo:jayati', reason: 'demo:jayati: Trusted after review.' }),
+    'Trusted after review.');
+  assert.equal(eventReason({ ...flag, reason: 'no prefix here' }), 'no prefix here');
+  assert.equal(eventReason({ ...flag, reason: null }), '');
 });
 
 test('a flagged MCP server is named, not keyed', () => {
