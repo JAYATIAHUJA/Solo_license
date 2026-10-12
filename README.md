@@ -20,6 +20,11 @@ Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · u
 ---
 
 **Every feature, and where to find it (CLI, dashboard, plugin): [docs/FEATURES.md](docs/FEATURES.md).**
+**The cfo.ai financial model: [cfo.ai/s/0dIxb9IUbPUqQKft](https://cfo.ai/s/0dIxb9IUbPUqQKft).**
+
+| Contents |
+|---|
+| [The problem](#the-problem) · [What it does](#what-it-does-inside-your-agent) · [Install](#install---one-line-any-agent) · [Tech stack](#tech-stack) · [How trust is earned](#how-trust-is-earned) · [End-of-turn check](#the-end-of-turn-check) · [Control layer](#the-control-layer) · [Results](#results) · [Compared with the alternatives](#compared-with-the-alternatives) · [Hackathon tools](#how-the-three-hackathon-tools-are-used) · [Entire: logs, checkpoints, trails](#entire-logs-checkpoints-and-trails) · [neatlogs](#neatlogs-one-trace-per-turn) · [Build log](#build-log) · [Evidence](#evidence-for-judges) · [Run locally](#run-it-locally) · [Architecture](#architecture) |
 
 ## The problem
 
@@ -117,6 +122,21 @@ The web app's **setup guide** (`/onboarding`) walks through all of it and turns 
 one-file standard-library shim `.solo-license/hook.py` for command-hook agents. Paths a shell would
 expand are refused. Aider (no pre-action hooks) and Roo Code (discontinued) are not supported.
 
+## Tech stack
+
+| Layer | What we used | Why |
+|---|---|---|
+| Gate + API | Python 3.11-3.13, **FastAPI**, Uvicorn | one small process that every agent's hooks can call over HTTP or a shim |
+| Storage | **SQLite** per repo + a **git repository as the license ledger** | decisions are queryable; every level change is a commit you can `git log` |
+| Hook shim | one standard-library file (`.solo-license/hook.py`) | command-hook agents need nothing installed |
+| Security | `cryptography`, OS keychain / `0600` credentials file, role tokens (`operator` < `approver` < `admin`) | the dashboard and API are locked outside demo mode |
+| Frontend | React + Vite (`frontend/`), bundled into the Python package | `solo-license serve` ships the dashboard with no Node at runtime |
+| Observability | **neatlogs** SDK (local span recorder fallback) | one trace per agent turn |
+| History | **Entire** (checkpoints, Trails, Gates, Graph) | the session behind every change and every failed turn |
+| Business model | **cfo.ai** | the license level as a margin driver |
+| Judging turns | **Jev** (optional) | calibrated 1-5 over-editing score; a size-and-spread rule runs without a key |
+| Distribution | `uvx` one-liner, Claude Code plugin marketplace | install in any repo in one command |
+
 ## How trust is earned
 
 Trust is kept per **(repository, action class)**: `npm test`, `pytest` and `cargo test` all build the
@@ -193,12 +213,68 @@ can be explained after the fact.
 A correct one-line fix whose repo already had an unrelated failing test is reported as
 *failing before and after* - not blamed.
 
+```mermaid
+xychart-beta
+    title "Permission prompts per day (demo replay)"
+    x-axis ["Day 1", "Day 2", "Day 3"]
+    y-axis "Prompts" 0 --> 10
+    bar [9, 2, 1]
+```
+
+```mermaid
+xychart-beta
+    title "Before vs after, one replayed session"
+    x-axis ["Prompts answered", "Ran without prompt", "Over-edited lines reviewed"]
+    y-axis "Count" 0 --> 160
+    bar [21, 0, 157]
+    bar [11, 19, 0]
+```
+
 ### The business (cfo.ai)
 
+Full model on cfo.ai: **[cfo.ai/s/0dIxb9IUbPUqQKft](https://cfo.ai/s/0dIxb9IUbPUqQKft)**.
 Per developer per month ([`planning/cfo/coding_business_model.md`](planning/cfo/coding_business_model.md),
 `make cfo`): ask-every-time **$1,300** · full access **$330** · Solo License **$283**. That is $1,017 saved
 per developer against asking every time, about 68× the $15 Team price; $0.48 unit cost (Jev + hosting),
 96.8% gross margin, break-even at 276 seats.
+
+```mermaid
+xychart-beta
+    title "Cost per developer per month (USD, cfo.ai model)"
+    x-axis ["Ask every time", "Full access", "Solo License"]
+    y-axis "USD" 0 --> 1400
+    bar [1300, 330, 283]
+```
+
+## Compared with the alternatives
+
+| | Ask before changes | Full access / YOLO | Risk classifier (e.g. auto mode) | **Solo License** |
+|---|:-:|:-:|:-:|:-:|
+| Stops prompt fatigue | no | yes | partly | **yes, once earned** |
+| Blocks force-push / `rm -rf ~` | if you read the prompt | no | yes | **yes, at every level** |
+| Learns from verified outcomes in *this* repo | no | no | no | **yes** |
+| Takes autonomy back after a failure | - | no | no | **yes, one failure → L0** |
+| Catches over-editing | no | no | no | **yes, turn sent back** |
+| Works across 11 agents | per agent | per agent | one agent | **one gate** |
+| Explains each decision (trace + checkpoint) | no | no | partly | **neatlogs + Entire** |
+| Fails safe if it is down | - | - | - | **every hook defers** |
+
+```mermaid
+quadrantChart
+    title Safety vs interruptions
+    x-axis Many prompts --> Few prompts
+    y-axis Unsafe --> Safe
+    quadrant-1 Goal
+    quadrant-2 Safe but slow
+    quadrant-3 Worst
+    quadrant-4 Fast but risky
+    Ask before changes: [0.1, 0.7]
+    Full access: [0.95, 0.1]
+    Risk classifier: [0.65, 0.6]
+    Solo License: [0.85, 0.88]
+```
+
+*Positions are our qualitative reading of the table above, not a measurement.*
 
 ## How the three hackathon tools are used
 
@@ -218,7 +294,230 @@ entire checkpoint list                                 # the sessions behind the
 ```
 
 **cfo.ai - the plan.** The license level is a margin driver: review time saved by earned autonomy
-against the incident bill of blind autonomy. Model and plan: [`planning/cfo/`](planning/cfo).
+against the incident bill of blind autonomy. Details below.
+
+## How we used cfo.ai
+
+The live model is on cfo.ai: **[cfo.ai/s/0dIxb9IUbPUqQKft](https://cfo.ai/s/0dIxb9IUbPUqQKft)**. The same figures can be
+reproduced offline with `make cfo` ([`planning/cfo/coding_model.py`](planning/cfo/coding_model.py)), and the full plan is in
+[`coding_business_model.md`](planning/cfo/coding_business_model.md).
+
+**1 · The thesis became a model.** A permission prompt costs developer time, and a mistake costs an incident.
+We set up the inputs on cfo.ai:
+
+| Input | Value |
+|---|---|
+| Developer cost | $75 / hour |
+| Prompts in ask mode | 40 / day, 1 min each |
+| Over-edited turns | 5 / week, 12 min review each |
+| Incidents with full access | 0.05 / month × $600 |
+| Share answered by an earned license | 75% (replaced by the measured share once real data exists) |
+| Over-edits caught / incidents prevented | 90% / 90% |
+
+**2 · Three ways to run an agent, compared** (per developer per month):
+
+| Mode | Approvals | Over-edit review | Incident risk | **Total** |
+|---|---|---|---|---|
+| Ask before every change | 800 min | 240 min | $0 | **$1,300** |
+| Full access | 0 min | 240 min | $30 | **$330** |
+| **Solo License** | 200 min | 24 min | $3 | **$283** |
+
+That is $1,017 saved against asking every time. Against full access it is only $47. That small number is the
+honest one: compared with full access, what you are buying is a ceiling on risk.
+
+**3 · Pricing and unit economics.** Plugin free · Team $15/dev/month · Enterprise custom. Cost $0.48/dev/month
+(Jev grading $0.08 + hosting $0.40) → **96.8% gross margin**.
+
+**4 · Runway.** $4,000/month fixed costs, $25,000 cash, 50 seats at launch, +30%/month →
+**break-even at 276 seats, profitable from month 8**, cash bottoms around $9,800 in month 7, and by month 12
+about 896 seats and $13.4k MRR.
+
+```mermaid
+xychart-beta
+    title "Seats vs break-even (cfo.ai plan)"
+    x-axis ["M1","M2","M3","M4","M5","M6","M7","M8","M9","M10","M11","M12"]
+    y-axis "Seats" 0 --> 950
+    line [50, 65, 85, 110, 143, 186, 241, 313, 407, 529, 688, 896]
+    line [276, 276, 276, 276, 276, 276, 276, 276, 276, 276, 276, 276]
+```
+
+**5 · The model drives the product.** The cfo.ai numbers are not just in a slide. They are used in the code:
+
+| Plan line | Where it lives in the code |
+|---|---|
+| Developer rate, minutes per prompt | `sololicense/coding/ladder.py` (`DEVELOPER_HOURLY_COST`, `MINUTES_BY_LEVEL`). The same numbers decide promotion. |
+| Cost of a mistake per action class | `sololicense/coding/actions.py` (`ACTION_CLASSES[*].incident_cost`) |
+| Break-even rule | a class is promoted only when `P(failure) × incident cost < approval cost` |
+| Measured savings | `GET /api/coding` → `savings`, from real hook decisions |
+
+So the business model and the trust engine use the same equation. The cfo.ai plan says when autonomy pays
+for itself, and the gate promotes a class only at that point.
+
+## neatlogs: one trace per turn
+
+Every agent turn is one trace ([`sololicense/observability/tracer.py`](sololicense/observability/tracer.py)).
+Spans go to neatlogs when `NEATLOGS_API_KEY` is set and are always mirrored to the local SQLite `spans` table,
+so the dashboard can explain a decision even offline. The before/after replay produced 15 traces
+(ids in [`coding_before_after.json`](evidence/benchmarks/coding_before_after.json), e.g. `ac6365e9aee54817b5b8f439712e7b76`).
+
+**Span mix from a recorded preview session** (`data/preview.db`, 3 traces, 25 spans):
+
+| Span | Status | Count |
+|---|---|---|
+| `turn.start` / `turn.end` / `trace.start` | ok | 3 each |
+| `tool.ran` | ok | 4 |
+| `gate.ask` / `gate.approved_by_person` | ok | 3 each |
+| `gate.allow` | ok | 1 |
+| `license.promote` | ok | 1 |
+| `gate.deny` | error | 1 |
+| `detection.forbidden_action` | error | 1 |
+| `turn.blocked` | error | 2 |
+
+```mermaid
+flowchart LR
+    A[turn.start] --> B{gate}
+    B -->|earned| C[gate.allow]
+    B -->|not earned| D[gate.ask]
+    B -->|forbidden| E[gate.deny + detection.forbidden_action]
+    C --> F[tool.ran / tool.failed]
+    D --> F
+    F --> G{Stop: diff + tests}
+    G -->|pass| H[license.promote]
+    G -->|fail| I[turn.blocked + license.demote]
+    H --> J[turn.end]
+    I --> J
+```
+
+Detections (`forbidden_action`, loops) are error spans, so they surface as incidents in neatlogs;
+each dashboard history row deep-links to its trace.
+
+## Entire: logs, checkpoints and trails
+
+### How we used Entire
+
+Entire has two jobs here. **Inside the product** it is the history behind every license change. **During the
+build** it recorded how the product was made.
+
+**In the product**
+
+1. **The session id is the same everywhere.** The agent's hook `session_id` is Entire's session id, so a Solo
+   License turn and an Entire session line up with no mapping table.
+2. **A failed turn points at its checkpoint.** When the `Stop` check fails, `CodingGate._fail` calls
+   [`sololicense/coding/entire.py`](sololicense/coding/entire.py) `last_checkpoint()`, which runs
+   `entire checkpoint list --json` and stores the last checkpoint of that session on the turn. The dashboard
+   shows it next to **Rewind**, and `solo-license explain` prints `entire checkpoint explain <id>`.
+3. **Rewind without losing work.** `rewind()` stashes the turn's changes back to the turn's base ref. Nothing is deleted.
+4. **Hooks live side by side.** `solo-license init` merges its hooks with Entire's in each agent's config, so both run on every turn.
+5. **The ledger follows the same idea.** Each promote, demote, flag and resume is a git commit carrying the reason and the neatlogs trace id.
+
+**In the build**
+
+1. **Checkpoints on every session.** `.entire/settings.json` is enabled with `git-refs` checkpoints. Every
+   Claude Code and Codex turn on this repo was saved to a shadow branch (`entire/<sha>-…`), and commits carry an
+   `Entire-Checkpoint:` trailer that links code to the prompts that wrote it.
+2. **Trails + Entire Gates on every PR.** One branch and one PR per feature. Each PR was merged only after CI
+   and the Entire Gates check (approvals, CI, agent review findings, up to date) were green. Review findings fixed
+   before merge include injection in hook paths, trust credited from an agent's own settings, a cached verdict
+   that hid regressions, and a fail-open in the Windows background stop.
+3. **Entire Graph before edits.** `entire graph search / impact` was used to trace symbols before changing them.
+   For example, `impact --symbol _fail` showed that all four ways of losing trust go through one method. That is
+   why one demotion rule holds for all eleven agents.
+
+```mermaid
+flowchart LR
+    S[Agent session<br/>Entire session id] --> T[Turn]
+    T --> CP[Entire checkpoint<br/>shadow branch]
+    T --> G{Solo License<br/>Stop check}
+    G -->|fail| D[demote + store checkpoint id]
+    D --> R[Rewind / entire checkpoint explain]
+    G -->|pass| P[promote → ledger commit]
+    CP --> C[commit with Entire-Checkpoint trailer]
+    C --> PR[PR → Trail → Entire Gates] --> M[merge]
+```
+
+### The numbers
+
+Entire ran on this repository for the whole build. Numbers below come from `.entire/logs/entire.log`,
+`entire checkpoint list` and `git log` on 2026-10-13.
+
+| Metric | Value |
+|---|---|
+| Entire log events | 2,570 |
+| Agent sessions recorded | 15 session folders in `.entire/metadata/`, 11 session starts in the current log |
+| Turns tracked (`TurnStart`) | 386 |
+| Checkpoints saved (log) / listed on `main` | 59 / 31 |
+| Commits carrying an `Entire-Checkpoint:` trailer | 28 |
+| Pull requests through Trails + Entire Gates | 80+ (122 merge commits) |
+| Median Entire hook time | `stop` 1.9 s (38 runs) · `user-prompt-submit` 3.4 s · `pre-push` 4.5 s |
+
+**A turn, as Entire logs it** (trimmed from `.entire/logs/entire.log`):
+
+```text
+00:56:52  INFO  turn-start          agent=claude-code  session=72c62de9…
+00:56:53  INFO  phase transition    idle -> active
+00:57:38  INFO  turn-end            agent=claude-code
+00:57:42  INFO  committed changes to shadow branch   entire/6737152-e3b0c4
+00:57:42  INFO  checkpoint saved    type=session  count=24  modified_files=4
+00:57:42  INFO  phase transition    active -> idle
+00:57:42  WARN  perf op=stop 3746ms (write_temporary_checkpoint 2009ms)
+```
+
+**Checkpoints → commits** (`git log --format='%h %s | %(trailers:key=Entire-Checkpoint,valueonly)'`):
+
+```text
+bfe32a1 docs: the problem section cites verified sources       | 01M4R7Y04GKCP08RZ6YDZCX711
+323e862 fix(coding): credential writes and +refspec force-push  | 01M4R7RB6GNV5W0TDA9VJD7TGD
+1a46f10 fix(web): masked headline words sit on one line         | 01M4R761HTSJXVTEPT4ZJJMQSJ
+408592b feat(coding): MCP tools earn a license per server       | 01M4R1TMHGFAAGTADDEE7AX76V
+```
+
+**License ledger trail** (the product's own audit log, [`evidence/benchmarks/coding_ledger_commits.txt`](evidence/benchmarks/coding_ledger_commits.txt)):
+
+```text
+15b0848 license(test-run@shop-api): promote L0 -> L1
+5cec4d3 license(read@shop-api):     promote L0 -> L1
+553b8cf license(test-run@shop-api): promote L1 -> L2
+1e505bb license(read@shop-api):     promote L1 -> L2
+```
+
+**Trails with Gates:** [trail 48](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/48) (PR #54) ·
+[trail 58](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/58) (PR #64) ·
+[trail 59](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/59) (PR #65). Review findings fixed before
+merge include injection in hook paths, trust credited from an agent's own settings, and regressions hidden by a cached verdict.
+
+**Graph - where a demotion lands:** `entire graph impact --repo . --symbol _fail` shows every path that takes
+trust away (forbidden attempt, failed tool, failed turn, subagent stop) going through `CodingGate._fail`.
+More: [`evidence/entire.md`](evidence/entire.md).
+
+### Checkpoints you can replay
+
+```bash
+entire checkpoint list                       # sessions behind the code
+entire checkpoint explain <id>               # prompts, transcript, files of one turn
+solo-license explain                         # last failed turn + its Entire checkpoint
+git -C ~/.solo-license/ledger log --oneline  # every promote / demote
+```
+
+## Build log
+
+```mermaid
+xychart-beta
+    title "Commits per hackathon day"
+    x-axis ["Oct 10", "Oct 11", "Oct 12"]
+    y-axis "Commits" 0 --> 200
+    bar [46, 124, 194]
+```
+
+364 commits in three days, one branch + PR per feature, merged only when CI and Entire Gates were green.
+
+**Shortcuts and known rough edges (stated plainly):**
+
+- Entire's `prepare-commit-msg` hook stalled in Git Bash on Windows; those commits were finished without the checkpoint trailer.
+- The neatlogs SDK requires Python < 3.14, so the one-liner pins `--python 3.13`; without neatlogs a local span recorder takes over.
+- The before/after numbers are a scripted session replayed through the real gate, not a field study.
+- Only Claude Code was run end to end with a live agent; the other ten agents are tested against their documented hook payloads.
+- `SOLO_DEMO_MODE=1` opens the dashboard without a token and allows any browser origin - for the demo only.
+- The product started as a refund-approval agent; that code was removed in v3 ([`evidence/history/`](evidence/history)).
 
 ## Evidence for judges
 

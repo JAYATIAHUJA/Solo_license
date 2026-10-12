@@ -21,7 +21,7 @@ export function Faq() {
   const [open, setOpen] = useState(-1);
   return (
     <section className="lp-section lp-faq" id="faq">
-      <SectionHead index="013" label="Questions" />
+      <SectionHead label="Questions" />
       <div className="lp-faq-grid">
         <h2 className="lp-h2 serif">Fair <em className="italic">questions.</em></h2>
         <div>

@@ -65,7 +65,7 @@ function Scene({ p }) {
     <motion.div ref={stageRef} className="sc-crash-stage" animate={{ backgroundColor: dark ? '#0e0e0d' : 'rgba(14,14,13,0)', color: dark ? '#f3f1ec' : '#0e0e0d' }} transition={{ duration: 0.5 }}>
       <motion.div className="sc-wrap sc-crash-wrap" animate={stage === 2 ? { x: [0, -16, 13, -8, 5, 0], y: [0, 6, -4, 2, 0] } : {}} transition={{ duration: 0.5 }}>
         <div className="sc-crash-copy">
-          <div className="sc-head"><span className="mono">(006)</span><span className="mono">The crash</span></div>
+          <div className="sc-head"><span className="mono">The crash</span></div>
           <AnimatePresence mode="wait">
             <motion.h2 key={stage} className="sc-title serif" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               {['Turn #48. Same agent, same repo.', 'Something is off.', 'One bad turn. Back to zero.', 'And it stays there.'][stage]}

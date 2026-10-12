@@ -40,7 +40,7 @@ export function Remedies() {
 
   return (
     <section className="lp-section" id="fixes">
-      <SectionHead index="008" label="Remediation" />
+      <SectionHead label="Remediation" />
       <div className="lp-split">
         <h2 className="lp-h2 serif">It tells the agent <em className="italic">how to fix it.</em></h2>
         <p className="lp-copy">On its next call the agent is told the exact undo.</p>
