@@ -46,6 +46,22 @@ Runners and Trails are enabled on the repository. Each pull request gets an **En
 | #9 Ticket agent with recovery, Stripe/CSV connectors, inbox and earned trust | [trail 3](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/3) |
 | #10 Evidence pack: before/after recovery with paired neatlogs traces | [trail 4](https://entire.io/gh/JAYATIAHUJA/Solo_license/trails/4) |
 
+### Capturing evaluated Trail evidence
+
+For judge evidence, capture a Trail only **after** its Entire Gates have evaluated the pushed
+commit. A useful screenshot shows the Trail title and branch, the commit or diff, and populated
+Gates for findings, checks, and up-to-date status. A Trail that was merged before evaluation may
+show `Not checked`; that is audit history, but not runner evidence.
+
+```bash
+entire trail list --status any
+entire trail create                 # create a Trail for the current evidence branch
+git push origin <branch>            # runners trigger from the push
+```
+
+Wait for the Trail page to report the runner outcomes before merging. The expected clean result
+for a documentation-only change is no findings, rather than an empty, unevaluated Gates panel.
+
 ## 4 · Entire Graph: what the recovery path touches
 
 `entire graph` (plugin v0.4.0) indexes the repository and answers structural questions before a
