@@ -29,4 +29,4 @@ addopts = "-q"
 include = ["sololicense*", "planning*"]
 
 [tool.setuptools.package-data]
-sololicense = ["db/*.sql"]
+sololicense = ["db/*.sql", "dashboard/index.html", "dashboard/assets/*"]
