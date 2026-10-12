@@ -1,0 +1,22 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R5H9CZBK2P16W42R13A160",
+  "strategy": "manual-commit",
+  "branch": "feat/onboard",
+  "checkpoints_count": 22,
+  "files_touched": [
+    "sololicense/api/app.py",
+    "sololicense/coding/agents.py",
+    "sololicense/coding/gate.py",
+    "sololicense/coding/install.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ]
+}
