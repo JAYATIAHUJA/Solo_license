@@ -1,9 +1,11 @@
 """The coding-agent gate: Claude Code hook events in, license decisions out.
 
-Claude Code calls three of its hooks over HTTP; the agent cannot skip them:
+Claude Code calls its hooks over HTTP; the agent cannot skip them:
 
 * ``UserPromptSubmit`` opens a *turn*: the request and a snapshot of the
   working tree, so the end of the turn can be checked against both.
+* ``PreToolUse`` fires before every call, even with permissions bypassed:
+  forbidden actions and loop stops are denied there, everything else passes.
 * ``PermissionRequest`` fires only when Claude Code would show a prompt, so
   edits and reads that are already allowed never reach us. The call is
   classified into an action class and answered from that class's license in
@@ -121,6 +123,36 @@ class CodingGate:
         self.conn.commit()
         return answer
 
+    def pre_tool(self, event: dict) -> dict:
+        """Claude Code's PreToolUse fires before every call in every permission
+        mode, bypass included, where PermissionRequest may never fire. Only what
+        no mode may skip is answered here: a forbidden action or a loop stop is
+        denied (and recorded by :meth:`permission`, once: a denied call never
+        reaches PermissionRequest), a freeze asks. Anything else gets no decision
+        and nothing is written, so PermissionRequest and the earned levels decide."""
+        session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
+        tool, tool_input = str(event.get("tool_name", "")), event.get("tool_input") or {}
+        repo, root = repo_of(cwd)
+        result = classify_tool(tool, tool_input)
+        rules = policy_mod.effective(self.conn, repo, root)
+        repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
+        if (result.hard_deny or policy_mod.denied(rules, tool, tool_input, root)
+                or loops.halted(self.conn, session) or repeats >= loops.STOP_AT):
+            answer = self.permission({**event, "_hook": "PreToolUse"})
+            decision = (answer.get("hookSpecificOutput") or {}).get("decision") or {}
+            reason = str(decision.get("message", "")) or answer.get("systemMessage", "")
+            out: dict = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                                "permissionDecisionReason": reason},
+                         "systemMessage": answer.get("systemMessage", reason)}
+            if decision.get("interrupt"):
+                out.update({"continue": False, "stopReason": reason})
+            return out
+        if rules.freeze and result.action_class != "read":
+            return {"hookSpecificOutput": {
+                "hookEventName": "PreToolUse", "permissionDecision": "ask",
+                "permissionDecisionReason": f"Solo License: Frozen by policy ({rules.source}): every action asks."}}
+        return {}
+
     def permission(self, event: dict) -> dict:
         self._agent = str(event.get("_agent") or "claude-code")
         session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
@@ -172,24 +204,26 @@ class CodingGate:
             decided_by=by, level=level, source=result.source, reason=reason,
             outcome="denied" if decision == "deny" else "pending", trace_id=trace.trace_id,
         )
+        via = {"hook": str(event["_hook"])} if event.get("_hook") else {}
         trace.span(f"gate.{decision}", status="error" if decision == "deny" else "ok",
                    decision_id=decision_id, tool=tool, command=command, action_class=spec.key,
                    pattern=result.pattern, level=level, decided_by=by, source=result.source, reason=reason,
-                   policy=rules.digest, policy_source=rules.source, ceiling=ceiling)
+                   policy=rules.digest, policy_source=rules.source, ceiling=ceiling, **via)
         if decision == "deny" and by == "policy":
             # As serious as a hard deny: recorded, and the class goes back to asking.
-            trace.span("detection.policy_violation", status="error", severity="critical",
-                       message=reason, reason=reason, action_class=spec.key, command=command, policy=rules.digest)
+            trace.span("detection.policy_violation", status="error", severity="critical", message=reason,
+                       reason=reason, action_class=spec.key, command=command, policy=rules.digest, **via)
             self._fail(repo, spec.key, f"Tried an action this repo's policy forbids: {command}", trace, turn=turn)
         elif decision == "deny" and by == "loop-guard":
             # A halt, not evidence: the class keeps its level.
             trace.span("detection.loop", status="error", severity="critical", message=reason, reason=reason,
-                       kind="loop-stop", action_class=spec.key, command=command, repeats=repeats, interrupt=True)
+                       kind="loop-stop", action_class=spec.key, command=command, repeats=repeats, interrupt=True,
+                       **via)
             self.conn.commit()
             return self._permission_response(decision, reason, interrupt=True)
         elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
-                       message=reason, reason=reason, action_class=spec.key, command=command)
+                       message=reason, reason=reason, action_class=spec.key, command=command, **via)
             self._fail(repo, spec.key, f"Tried a forbidden action: {command}", trace, turn=turn)
         interrupt = False
         if decision == "deny":
@@ -201,7 +235,7 @@ class CodingGate:
                                              text=text, delivered=True)
                 reason = text.removeprefix("Solo License: ")
                 trace.span("remediation.sent", status="error", kind="denied", decision_id=decision_id,
-                           attempts=denials, action_class=spec.key, reason=reason, interrupt=True)
+                           attempts=denials, action_class=spec.key, reason=reason, interrupt=True, **via)
         self.conn.commit()
         return self._permission_response(decision, reason, interrupt=interrupt)
 

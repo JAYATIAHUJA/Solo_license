@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 
 # The gate's own events (the routes under /api/hooks/<event>).
 PROMPT, PERMISSION, POST, POST_FAIL, STOP = "user-prompt", "permission", "post-tool", "post-tool-failure", "stop"
+# Claude Code's PreToolUse: only refusals no permission mode may skip; already in Claude Code's shape.
+PRE_TOOL = "pre-tool"
 
 # Agents whose prompt and post-tool hooks document ``hookSpecificOutput.additionalContext``
 # (code.claude.com/docs/en/hooks, developers.openai.com/codex/hooks). Cursor's
@@ -60,8 +62,8 @@ class AgentSpec:
 
 AGENTS: dict[str, AgentSpec] = {a.key: a for a in (
     AgentSpec("claude-code", "Claude Code", "http", ".claude/settings.local.json",
-              {"UserPromptSubmit": PROMPT, "PermissionRequest": PERMISSION, "PostToolUse": POST,
-               "PostToolUseFailure": POST_FAIL, "Stop": STOP}, can_ask=True,
+              {"UserPromptSubmit": PROMPT, "PreToolUse": PRE_TOOL, "PermissionRequest": PERMISSION,
+               "PostToolUse": POST, "PostToolUseFailure": POST_FAIL, "Stop": STOP}, can_ask=True,
               notes="Native HTTP hooks; also installable as a plugin. GLM (z.ai) runs inside Claude Code, so it is covered.",
               docs="https://code.claude.com/docs/en/hooks", aliases=("claude", "glm")),
     AgentSpec("codex", "OpenAI Codex CLI", "command", ".codex/hooks.json",
@@ -257,6 +259,8 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
     gate_event = spec.events.get(native_event)
     if gate_event is None:
         return Native()
+    if gate_event == PRE_TOOL:
+        return Native(answer or None)
     verdict, reason = _gate_decision(gate_event, answer)
     if gate_event == PERMISSION:
         interrupt = bool(((answer or {}).get("hookSpecificOutput") or {}).get("decision", {}).get("interrupt"))
