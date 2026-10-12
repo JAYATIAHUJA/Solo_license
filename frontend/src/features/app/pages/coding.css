@@ -23,6 +23,13 @@
   .cd-flag input { font-size: 16px; } /* below 16px iOS Safari zooms in on focus */
 }
 
+/* What the agent was told during a turn. */
+.cd-told { display: grid; gap: 4px; margin-top: 6px; }
+.cd-told-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.cd-told-head b { font-weight: 500; }
+.cd-told-head small { color: var(--muted); }
+.cd-told-text { margin: 0; border-left-color: var(--ink); }
+
 /* A level that moved since the last poll flashes once. */
 .cd-level { transition: background-color 0.4s var(--ease), color 0.4s var(--ease); }
 .cd-level.is-up { animation: cd-flash-up 1.6s var(--ease); }
