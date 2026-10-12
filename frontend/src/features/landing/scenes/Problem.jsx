@@ -29,7 +29,6 @@ function Scene({ p }) {
   return (
     <div className="sc-wrap">
       <div className="sc-head">
-        <span className="mono muted">(003)</span>
         <ScrambleText className="mono" text="The diff nobody asked for" />
       </div>
       <h2 className="sc-title serif">

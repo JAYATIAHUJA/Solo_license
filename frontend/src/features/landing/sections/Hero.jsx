@@ -18,7 +18,7 @@ export function Hero() {
       <div className="lp-hero-grid">
         <div className="lp-hero-copy">
           <motion.p className="mono lp-kicker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            (001) - The control layer for coding agents
+            The control layer for coding agents
           </motion.p>
           <h1 className="lp-h1 serif">
             <MaskWords text="Autonomy" animateOnMount />{' '}

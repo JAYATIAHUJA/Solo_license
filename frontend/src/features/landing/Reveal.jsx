@@ -48,11 +48,10 @@ export function MaskWords({ text, delay = 0, stagger = 0.06, className = '', ani
   );
 }
 
-/** Section heading row: index number, label, and a hand-drawn rule. */
-export function SectionHead({ index, label, children }) {
+/** Section heading row: label, and a hand-drawn rule. */
+export function SectionHead({ label, children }) {
   return (
     <div className="lp-head">
-      <span className="mono">({index})</span>
       <ScrambleText className="mono" text={label} />
       {children}
     </div>

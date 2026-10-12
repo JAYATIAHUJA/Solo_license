@@ -23,7 +23,7 @@ export function Install() {
   const [agent, setAgent] = useState(AGENTS[0]);
   return (
     <section className="lp-section lp-install" id="install">
-      <SectionHead index="001" label="Works with your agent" />
+      <SectionHead label="Works with your agent" />
       <div className="lp-install-agents" role="tablist" aria-label="Your coding agent">
         {AGENTS.map((a) => (
           <button key={a.key} type="button" role="tab" aria-selected={a.key === agent.key}

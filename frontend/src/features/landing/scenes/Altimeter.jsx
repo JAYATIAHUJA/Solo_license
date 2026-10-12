@@ -41,7 +41,6 @@ export function Altimeter() {
         {STOPS.map(([id, label], i) => (
           <button key={id} className={`alt-tick ${current === id ? 'is-on' : ''}`} style={{ top: `${(i / (STOPS.length - 1)) * 100}%` }} onClick={() => go(id)} aria-label={label}>
             <i />
-            <span className="mono">{String(i + 1).padStart(2, '0')}</span>
           </button>
         ))}
         <motion.span className="alt-needle" style={{ scaleY: needle }} />
