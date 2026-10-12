@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../../lib/store.jsx';
 import { eventLinks } from '../../../lib/event-links.js';
+import { flagReason, flagSentence, personName } from '../../../lib/ledger-words.js';
 import { toDate, when } from '../../../lib/format.js';
 import '../components/activity.css';
 
@@ -39,22 +40,13 @@ function EventLinks({ links }) {
   );
 }
 
-/** "human:jayati" -> "Jayati"; the gate itself -> "Solo License". */
-function personName(actorId) {
-  if (!actorId) return '';
-  const id = String(actorId);
-  if (id.startsWith('system')) return 'Solo License';
-  const raw = id.includes(':') ? id.split(':').slice(1).join(':') : id;
-  const name = raw.replace(/[-_.]+/g, ' ').trim();
-  return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : 'Someone';
-}
-
 const VERBS = { promote: 'earned', demote: 'lost', restore: 'was resumed at' };
 
 /** One permission change as a sentence. */
 function sentence(e) {
   const [cls, repo] = e.task_class.split('@');
   const why = (e.reason || '').split('\n')[0];
+  if (e.kind === 'flag') return flagSentence(e);
   if (e.kind === 'policy') {
     return <>Policy for <b>{repo === '*' ? 'all repositories' : repo}</b> changed{why ? <> - {why}</> : ''}</>;
   }
@@ -88,6 +80,7 @@ export function Ledger() {
             return (
               <li key={e.id} className="hist-row">
                 <b>{sentence(e)}</b>
+                {e.kind === 'flag' && flagReason(e) && <p className="hist-reason">“{flagReason(e)}”</p>}
                 <small>
                   <span title={date ? date.toLocaleString() : undefined}>{when(e.created_at)}</span>
                   {who ? ` · by ${who}` : ''}
