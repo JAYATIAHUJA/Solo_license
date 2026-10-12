@@ -6,19 +6,12 @@ import { Gate } from './gate/Gate.jsx';
 import { Nav } from './sections/Nav.jsx';
 import { Hero } from './sections/Hero.jsx';
 import { Ticker } from './sections/Ticker.jsx';
-import { Problem } from './scenes/Problem.jsx';
 import { Terminal } from './scenes/Terminal.jsx';
-import { Journey } from './scenes/Journey.jsx';
-import { AgentGraph } from './scenes/AgentGraph.jsx';
 import { Crash } from './scenes/Crash.jsx';
-import { Detections } from './sections/Detections.jsx';
-import { Remedies } from './sections/Remedies.jsx';
-import { EvidenceMock } from './scenes/EvidenceMock.jsx';
-import { LedgerTrack } from './scenes/LedgerTrack.jsx';
+import { ProductTour } from './scenes/ProductTour.jsx';
 import { Altimeter } from './scenes/Altimeter.jsx';
 import { Facts } from './sections/Facts.jsx';
 import { Faq } from './sections/Faq.jsx';
-import { Install } from './sections/Install.jsx';
 import { Closing } from './sections/Closing.jsx';
 import { Footer } from './sections/Footer.jsx';
 import { useSmoothScroll } from './useSmoothScroll.js';
@@ -52,15 +45,8 @@ export function LandingPage() {
         <Hero />
         <Ticker />
         <Terminal />
-        <Problem />
-        <Journey />
-        <AgentGraph />
         <Crash />
-        <Detections />
-        <Remedies />
-        <EvidenceMock />
-        <LedgerTrack />
-        <Install />
+        <ProductTour />
         <Facts />
         <Faq />
         <Closing />

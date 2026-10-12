@@ -42,7 +42,7 @@ export function Hero() {
           <motion.div className="lp-hero-cta" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.8 }}>
             <AskBar />
             <Magnetic><Link to="/app" className="btn btn-ink">Open the dashboard <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
-            <Magnetic><a href="#journey" className="btn btn-line">See how it earns</a></Magnetic>
+            <Magnetic><a href="#tour" className="btn btn-line">Take the product tour</a></Magnetic>
           </motion.div>
         </div>
 

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { StoreProvider, useStore } from './lib/store.jsx';
 import { Access } from './features/access/Access.jsx';
 import { LandingPage } from './features/landing/LandingPage.jsx';
+import { InstallPage } from './features/landing/InstallPage.jsx';
 import { CodingSetup } from './features/setup/CodingSetup.jsx';
 import { AppShell } from './features/app/AppShell.jsx';
 import { Coding } from './features/app/pages/Coding.jsx';
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing" element={<Navigate to="/" replace />} />
+        <Route path="/install" element={<InstallPage />} />
         <Route path="/access" element={<Access />} />
         <Route path="/onboarding" element={guarded(<CodingSetup />)} />
         <Route path="/setup" element={<Navigate to="/onboarding" replace />} />

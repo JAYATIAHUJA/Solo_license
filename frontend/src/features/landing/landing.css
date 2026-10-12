@@ -328,3 +328,9 @@
   .lp-feed-row { padding: 6px 8px; }
   .lp-feed-why { font-size: 11px; }
 }
+
+/* ---------- install page ---------- */
+.lp-install-page main { padding-top: 68px; }
+.lp-install-lead { padding-bottom: 0 !important; }
+.lp-install-lead .lp-h2 { margin: 0 0 20px; }
+.lp-install-onboard { font-family: var(--font-mono); margin: 0 0 18px; padding: 16px 18px; background: var(--ink); color: var(--paper); font-size: clamp(12px, 1.2vw, 15px); white-space: pre-wrap; overflow-wrap: anywhere; }

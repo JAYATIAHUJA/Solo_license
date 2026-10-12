@@ -5,12 +5,11 @@ import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 import { Logo } from '../../../components/brand/Logo.jsx';
 
 const LINKS = [
-  ['#journey', 'How it earns'],
-  ['#agent', 'The loop'],
-  ['#crash', 'The crash'],
-  ['#evidence', 'Evidence'],
-  ['#install', 'Install'],
-  ['#faq', 'FAQ'],
+  ['/#terminal', 'In your agent'],
+  ['/#crash', 'The crash'],
+  ['/#tour', 'Product'],
+  ['/install', 'Install'],
+  ['/#faq', 'FAQ'],
 ];
 
 export function Nav() {

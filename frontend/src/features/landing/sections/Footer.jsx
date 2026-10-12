@@ -7,11 +7,11 @@ export function Footer({ onReplayIntro }) {
       <div className="lp-footer-top">
         <Link to="/" className="lp-logo"><Logo /> Solo License<sup>®</sup></Link>
         <nav>
-          <a href="#journey">How it earns</a>
-          <a href="#agent">The loop</a>
-          <a href="#crash">The crash</a>
-          <a href="#evidence">Evidence</a>
-          <button className="lp-footer-link" onClick={onReplayIntro}>Replay intro</button>
+          <a href="/#terminal">In your agent</a>
+          <a href="/#crash">The crash</a>
+          <a href="/#tour">Product</a>
+          <Link to="/install">Install</Link>
+          {onReplayIntro && <button className="lp-footer-link" onClick={onReplayIntro}>Replay intro</button>}
         </nav>
         <nav>
           <Link to="/app">Dashboard</Link>
