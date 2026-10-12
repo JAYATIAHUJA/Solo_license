@@ -7,7 +7,11 @@ import { Nav } from './sections/Nav.jsx';
 import { Hero } from './sections/Hero.jsx';
 import { Ticker } from './sections/Ticker.jsx';
 import { Terminal } from './scenes/Terminal.jsx';
+import { Problem } from './scenes/Problem.jsx';
+import { Journey } from './scenes/Journey.jsx';
+import { AgentGraph } from './scenes/AgentGraph.jsx';
 import { Crash } from './scenes/Crash.jsx';
+import { LedgerTrack } from './scenes/LedgerTrack.jsx';
 import { ProductTour } from './scenes/ProductTour.jsx';
 import { Altimeter } from './scenes/Altimeter.jsx';
 import { Facts } from './sections/Facts.jsx';
@@ -45,8 +49,12 @@ export function LandingPage() {
         <Hero />
         <Ticker />
         <Terminal />
+        <Problem />
+        <Journey />
+        <AgentGraph />
         <Crash />
         <ProductTour />
+        <LedgerTrack />
         <Facts />
         <Faq />
         <Closing />
