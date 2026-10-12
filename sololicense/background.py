@@ -98,6 +98,19 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def _windows_command_line(pid: int) -> str | None:
+    """The command line of *pid* on Windows, or None if it cannot be read."""
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
 def _process_matches(pid: int, state: dict) -> bool:
     """Confirm that *pid* is still the gate process before terminating it."""
     expected = str(state.get("executable") or "")
@@ -120,9 +133,11 @@ def _process_matches(pid: int, state: dict) -> bool:
             actual = os.path.normcase(buf.value)
             if expected and actual != os.path.normcase(expected):
                 return False
-            return True
         finally:
             kernel32.CloseHandle(handle)
+        line = _windows_command_line(pid)
+        # Same image is not enough: a reused pid may run another python.exe script.
+        return line is None or all(part in line for part in command[1:])
     proc = Path(f"/proc/{pid}")
     if not proc.exists():
         # macOS and other POSIX without /proc: ask ps for the command line.
@@ -254,7 +269,7 @@ def _kill(pid: int, state: dict | None = None) -> bool:
         from ctypes import wintypes
 
         kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(0x1400, False, pid)  # QUERY_LIMITED_INFORMATION | TERMINATE
+        handle = kernel32.OpenProcess(0x1401, False, pid)  # QUERY_LIMITED_INFORMATION | QUERY_INFORMATION | TERMINATE
         if not handle:
             return False
         try:

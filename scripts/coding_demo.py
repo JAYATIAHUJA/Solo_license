@@ -198,8 +198,7 @@ def benchmark() -> dict:
         scratch = Path(scratch)
         repo = setup(scratch / "shop-api")
         ledger = scratch / "ledger"
-        config = replace(load_config(), db_path=scratch / "bench.db", ledger_repo=ledger,
-                         llm_provider="deterministic")
+        config = replace(load_config(), db_path=scratch / "bench.db", ledger_repo=ledger)
         ctx = build_app(config)
         result = replay(repo, ctx.coding_gate, "coding-benchmark")
         licenses = [dict(r) for r in ctx.conn.execute(

@@ -296,3 +296,15 @@ def test_loop_guidance_reaches_codex_and_is_a_no_op_for_cursor(gate, client):
     assert "3 times" in answers[2]["hookSpecificOutput"]["additionalContext"]
     shell = {"conversation_id": "cu", "cwd": str(gate.project), "command": "ls"}
     assert [client.post("/api/hooks/cursor/afterShellExecution", json=shell).json() for _ in range(3)][2] == {}
+
+
+def test_a_new_prompt_starts_the_repeat_count_again(harness):
+    from sololicense.coding import loops
+
+    for _ in range(4):
+        loops.record(harness.conn, "s-new", "bash:npm test", failed=False)
+    assert loops.seen(harness.conn, "s-new", "bash:npm test").count == 4
+    loops.halt(harness.conn, "s-new", "stopped")
+    loops.new_prompt(harness.conn, "s-new")
+    assert loops.seen(harness.conn, "s-new", "bash:npm test").count == 0
+    assert loops.halted(harness.conn, "s-new") == ""

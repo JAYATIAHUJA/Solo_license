@@ -162,3 +162,10 @@ def halted(conn: sqlite3.Connection, session_id: str) -> str:
 
 def clear_halt(conn: sqlite3.Connection, session_id: str) -> None:
     conn.execute("DELETE FROM agent_fingerprints WHERE session_id = ? AND fingerprint = ?", (session_id, _HALT))
+
+
+def new_prompt(conn: sqlite3.Connection, session_id: str) -> None:
+    """A person asked for something new: a halt is lifted and repeats are counted
+    from zero, so "run the tests" in five separate prompts is not a loop."""
+    clear_halt(conn, session_id)
+    conn.execute(_RESET_COUNTERS, (session_id, _HALT))
