@@ -106,6 +106,40 @@
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/subagent-start",
+            "timeout": 10,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:8000/api/hooks/subagent-stop",
+            "timeout": 150,
+            "headers": {
+              "X-Solo-Hook-Key": "$SOLO_HOOK_KEY"
+            },
+            "allowedEnvVars": [
+              "SOLO_HOOK_KEY"
+            ]
+          }
+        ]
+      }
     ]
   }
 }

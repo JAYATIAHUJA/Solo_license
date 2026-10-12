@@ -79,11 +79,13 @@ class Policy:
     freeze: bool = False
     source: str = "built-in"
     subagent_max: int = 1
+    subagent_deny_types: tuple[str, ...] = ()
 
     def to_json(self) -> dict:
         return {"ceilings": dict(self.ceilings), "deny_commands": list(self.deny_commands),
                 "deny_paths": list(self.deny_paths), "freeze": self.freeze,
-                "subagent_max": self.subagent_max, "source": self.source}
+                "subagent_max": self.subagent_max,
+                "subagent_deny_types": list(self.subagent_deny_types), "source": self.source}
 
     @property
     def digest(self) -> str:
@@ -109,7 +111,8 @@ def _clean(raw: dict, source: str) -> Policy:
     max_level = subagents.get("max", 1)
     if not isinstance(max_level, int) or not 0 <= max_level <= 2:
         raise ValueError(f"{source}: subagents.max must be 0, 1 or 2")
-    return Policy(ceilings, commands, paths, bool(freeze.get("enabled", False)), source, max_level)
+    deny_types = tuple(str(t).strip() for t in subagents.get("deny_types", ()) if str(t).strip())
+    return Policy(ceilings, commands, paths, bool(freeze.get("enabled", False)), source, max_level, deny_types)
 
 
 def from_file(root: str | Path) -> Policy | None:
@@ -142,7 +145,8 @@ def save_local(conn: sqlite3.Connection, repo: str, raw: dict) -> Policy:
         (repo, json.dumps({"classes": {k: {"max": v} for k, v in policy.ceilings.items()},
                            "deny": {"commands": list(policy.deny_commands), "paths": list(policy.deny_paths)},
                            "freeze": {"enabled": policy.freeze},
-                           "subagents": {"max": policy.subagent_max}})),
+                           "subagents": {"max": policy.subagent_max,
+                                         "deny_types": list(policy.subagent_deny_types)}})),
     )
     return policy
 
@@ -158,6 +162,9 @@ def merge(*layers: Policy | None) -> Policy:
     if freeze:
         ceilings = {key: 0 for key in ceilings}
     subagent_max = min((p.subagent_max for p in present), default=1)
+    subagent_deny_types = tuple(dict.fromkeys(
+        t for p in present for t in p.subagent_deny_types
+    ))
     return Policy(
         ceilings=ceilings,
         deny_commands=tuple(dict.fromkeys(c for p in present for c in p.deny_commands)),
@@ -165,6 +172,7 @@ def merge(*layers: Policy | None) -> Policy:
         freeze=freeze,
         source=" + ".join(["built-in", *[p.source for p in present]]),
         subagent_max=subagent_max,
+        subagent_deny_types=subagent_deny_types,
     )
 
 
@@ -194,6 +202,20 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
             for pattern in policy.deny_paths:
                 if fnmatch.fnmatch(candidate, pattern):
                     return f"this repo's policy forbids editing '{pattern}'"
+    return ""
+
+
+def denied_subagent(policy: Policy, tool_name: str, tool_input: dict) -> str:
+    """Why a requested subagent type is forbidden, or an empty string."""
+    if str(tool_name).lower() not in {"agent", "task", "spawn_agent"}:
+        return ""
+    requested = str(tool_input.get("subagent_type") or tool_input.get("agent_type")
+                    or tool_input.get("type") or "").strip()
+    if not requested:
+        return ""
+    for denied_type in policy.subagent_deny_types:
+        if fnmatch.fnmatch(requested.lower(), denied_type.lower()):
+            return f"this repo's policy forbids spawning subagent type '{requested}'"
     return ""
 
 

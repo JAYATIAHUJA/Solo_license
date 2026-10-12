@@ -349,6 +349,8 @@ _HOOK_EVENTS = {
     "post-tool": "PostToolUse",
     "post-tool-failure": "PostToolUseFailure",
     "stop": "Stop",
+    "subagent-start": "SubagentStart",
+    "subagent-stop": "SubagentStop",
 }
 
 
@@ -403,12 +405,16 @@ def coding_hook(
         body = {**_client_fields(body), "_agent": "claude-code", "_prompt_only": True}
         if event == "user-prompt":
             return gate.user_prompt(body)
+        if event == "subagent-start":
+            return gate.subagent_start(body)
         if event == "pre-tool":
             return gate.pre_tool(body)
         if event == "permission":
             return gate.permission(body)
         if event == "stop":
             return gate.stop(body)
+        if event == "subagent-stop":
+            return gate.subagent_stop(body)
         return gate.tool_result(body, failed=event == "post-tool-failure")
 
 
@@ -648,12 +654,16 @@ def agent_hook(
             payload["_prompt_only"] = native_event == "PermissionRequest" and spec.key in ("claude-code", "codex")
             if event == "user-prompt":
                 answer = gate.user_prompt(payload)
+            elif event == "subagent-start":
+                answer = gate.subagent_start(payload)
             elif event == "pre-tool":
                 answer = gate.pre_tool(payload)
             elif event == "permission":
                 answer = gate.permission(payload)
             elif event == "stop":
                 answer = gate.stop(payload)
+            elif event == "subagent-stop":
+                answer = gate.subagent_stop(payload)
             else:
                 answer = gate.tool_result(payload, failed=event == "post-tool-failure")
             native = agents.render(spec.key, native_event, answer)

@@ -132,6 +132,37 @@ class CodingGate:
         self.conn.commit()
         return answer
 
+    def subagent_start(self, event: dict) -> dict:
+        """Open an implicit turn and give a subagent its bounded license."""
+        session, cwd = str(event.get("session_id", "")), str(event.get("cwd", "."))
+        repo, root = repo_of(cwd)
+        principal = _principal(event)
+        agent_type = str(event.get("subagent_type") or principal.removeprefix("subagent:") or "unknown")
+        rules = policy_mod.effective(self.conn, repo, root)
+        if agent_type.lower() in {t.lower() for t in rules.subagent_deny_types}:
+            reason = f"Blocked: this repo's policy forbids spawning subagent type '{agent_type}'."
+            return {"decision": "deny", "reason": reason}
+        self.user_prompt({**event, "prompt": "", "_implicit": True, "_principal": principal})
+        summary = self._subagent_summary(repo, root, principal, rules)
+        return {"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": summary}}
+
+    def subagent_stop(self, event: dict) -> dict:
+        """Run the normal turn verifier for a subagent's isolated work."""
+        return self.stop(event)
+
+    def _subagent_summary(self, repo: str, root: str, principal: str, rules: policy_mod.Policy) -> str:
+        levels = []
+        for key, spec in ACTION_CLASSES.items():
+            if key == "unknown":
+                continue
+            license_row = agent_repo.effective_license(self.conn, repo, key, principal,
+                                                       max_level=rules.subagent_max, create=False)
+            level = min(int(license_row["level"]), rules.ceilings[key])
+            levels.append(f"{key}=L{level}")
+        return (f"Solo License: {principal} starts with a lower trust ceiling in {repo}. "
+                f"Work within these levels: {', '.join(levels)}. "
+                "Actions outside the ceiling ask a person; do not push or change protected policy.")
+
     def pre_tool(self, event: dict) -> dict:
         """Claude Code's PreToolUse fires before every call in every permission
         mode, bypass included, where PermissionRequest may never fire. Only what
@@ -147,8 +178,9 @@ class CodingGate:
         principal = _principal(event)
         result = classify_tool(tool, tool_input)
         rules = policy_mod.effective(self.conn, repo, root)
+        subagent_denial = policy_mod.denied_subagent(rules, tool, tool_input)
         repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
-        if (result.hard_deny or policy_mod.denied(rules, tool, tool_input, root)
+        if (result.hard_deny or subagent_denial or policy_mod.denied(rules, tool, tool_input, root)
                 or loops.halted(self.conn, session) or repeats >= loops.STOP_AT):
             answer = self.permission({**event, "_hook": "PreToolUse"})
             decision = (answer.get("hookSpecificOutput") or {}).get("decision") or {}
@@ -194,9 +226,12 @@ class CodingGate:
         ceiling = rules.ceilings[spec.key]
         level = min(int(lic["level"]), ceiling)
         forbidden = policy_mod.denied(rules, tool, tool_input, root)
+        subagent_denial = policy_mod.denied_subagent(rules, tool, tool_input)
 
         if result.hard_deny:
             decision, by, reason = "deny", "hard-deny", f"Blocked: {result.hard_deny}."
+        elif subagent_denial:
+            decision, by, reason = "deny", "policy", f"Blocked: {subagent_denial}."
         elif forbidden:
             decision, by, reason = "deny", "policy", f"Blocked: {forbidden}."
         elif rules.freeze:
