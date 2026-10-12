@@ -11,7 +11,7 @@
     "denied": 3,
     "over_edits_sent_back": 1,
     "over_edit_lines_reviewed": 0,
-    "turns_failed_checks": 0
+    "turns_failed_checks": 1
   },
   "days": [
     {
@@ -43,16 +43,16 @@
     {
       "day": 1,
       "prompt": "Fix the bug in cart.js: total should multiply price by qty.",
-      "sent_back": "",
-      "status": "verified",
+      "sent_back": "the tests fail after this turn's changes (`npm test --silent`) (could not tell which tests failed before):",
+      "status": "failed",
       "scope_score": 5,
       "lines_changed": 2,
-      "tests": "failing before and after"
+      "tests": "failed"
     },
     {
       "day": 1,
       "prompt": "Fix the off-by-one in discount.js.",
-      "sent_back": "over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines).",
+      "sent_back": "over-editing: this turn changed 169 lines in 2 files for this request (scope 2/5). Keep only the change that was asked for and revert the unrelated edits in: format.js (167 lines). This turn changed: discount.js, format.js. To undo: put a file back as it was before the turn with `git checkout c6cd40c54095 -- <file>` (delete files the turn created), or set the whole turn aside with `git stash push --include-untracked -m \"solo-license: undo turn\"`.",
       "status": "verified",
       "scope_score": 5,
       "lines_changed": 2,
@@ -171,14 +171,14 @@
     {
       "action_class": "file-edit",
       "level": 0,
-      "successes": 1,
-      "failures": 1
+      "successes": 0,
+      "failures": 3
     },
     {
       "action_class": "git-local",
       "level": 0,
-      "successes": 1,
-      "failures": 0
+      "successes": 0,
+      "failures": 1
     },
     {
       "action_class": "git-remote",
@@ -205,46 +205,46 @@
       "kind": "promote",
       "from_level": 0,
       "to_level": 1,
-      "git_sha": "60ed30a"
+      "git_sha": "8864b2c"
     },
     {
       "task_class": "read@shop-api",
       "kind": "promote",
       "from_level": 0,
       "to_level": 1,
-      "git_sha": "75c89a1"
+      "git_sha": "7404451"
     },
     {
       "task_class": "test-run@shop-api",
       "kind": "promote",
       "from_level": 1,
       "to_level": 2,
-      "git_sha": "250924f"
+      "git_sha": "c9d0644"
     },
     {
       "task_class": "read@shop-api",
       "kind": "promote",
       "from_level": 1,
       "to_level": 2,
-      "git_sha": "70f7a2e"
+      "git_sha": "8cd49a1"
     }
   ],
   "traces": [
-    "a36b75e299cbd32b606e4658a854a2a7",
-    "7ad6f28ed25fe27b43db094a082f28ac",
-    "5037c38e7b98b97ad57d25f2dc98a61a",
-    "a1cd723e3b16329b251e669a757a16f3",
-    "c64163fd731af05f117c4085587e9266",
-    "f9d23d879a60eeca7dc7dd900289d42c",
-    "c9e0f97eff672b3256c1455bea97dd86",
-    "05d72bee75aa300a5b4af8568976f928",
-    "17435743f8e8e11cfd268048eb61cfe3",
-    "9c4601b858ef56a9549152700fb68300",
-    "6bdbec5cfa8eb94185a61f698cac28e0",
-    "ff31fe6416035114e218363bfa9e05fe",
-    "9e99ae59457cb126a495beb9562e7d32",
-    "40525f070f752cfc0910ba5f491044b4",
-    "5190edcdfd04f2fadbfc251e290f63e2"
+    "564af052b4c14ae58788b5f2dece7ea8",
+    "7b341364f146478482783a532aed2495",
+    "2a29947afc174fec83fcf71ee018f9ff",
+    "4dee341bce6747509b0af7c193ed9d4d",
+    "f4502ee068b145dca2f4cd744532ae85",
+    "3162834cc4ae46f7bec9cc5e455a8349",
+    "1998c0a2aec04b29a1d1936d0fe138d3",
+    "148b3f2fb28b4a56bc80ab63a92272f3",
+    "cadfb67c18d24c5f90e18095cdbb4180",
+    "f15c5ff7e71747de8876575fdac4ceec",
+    "bca283e006f94c84bfa93016b6f84087",
+    "9a3134beef8e4b178a8b42a75399dbf6",
+    "248d2c1d39f04067b8393e8e719d1eee",
+    "79f009b6812e46a5938b9a88a2b8342e",
+    "c28460a64dbc4964bb30dab3d3b4f6be"
   ],
-  "neatlogs": true
+  "neatlogs": false
 }

@@ -17,6 +17,21 @@ Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · u
 
 </div>
 
+## For judges, in one table
+
+| Criterion | Where the evidence is |
+|---|---|
+| **The agent (30%)** | The gate plans, allows/defers/denies, verifies each turn (diff scope + tests), sends work back and updates trust: [`sololicense/coding/`](sololicense/coding). Watch it live: `make coding-demo`, then any supported agent in `../shop-api-demo` |
+| **Tool use (25%)** | neatlogs: one trace per turn, detections as error spans ([results](#results)). Entire: every permission change is a commit ([`evidence/entire.md`](evidence/entire.md)). cfo.ai: the level is a margin driver ([`planning/cfo/`](planning/cfo)) |
+| **Demo video (20%)** | The before/after table below, reproduced by `make coding-benchmark` -> [`evidence/benchmarks/coding_before_after.md`](evidence/benchmarks/coding_before_after.md) |
+| **Building in public (15%)** | 300+ commits during the hackathon (`git log --since=2026-10-10`), every PR through Entire Trails |
+| **Usefulness + originality (10%)** | Nobody ships earned+revocable agent permissions; see "What is new here" at the end |
+
+**Every claim above is machine-checked:** `bash scripts/verify.sh` runs the ten claims in
+[`evidence/claims.json`](evidence/claims.json) (tests, builds, the security denials, the benchmark)
+and CI runs the same script on every push - the README cannot drift from the code without the
+build going red.
+
 ---
 
 ## The problem
@@ -147,7 +162,7 @@ Earning trust is the engine. Around it sit the controls a team needs while agent
 | **"This was wrong"** | One click on any decision or turn in the dashboard drops that class to L0 and queues a note the agent sees on its next prompt ("your last turn was flagged by the user: ..."). Levels animate as they change; a kill switch freezes every class. |
 | **Per-principal licenses and subagents** | The main agent and each subagent type keep their own evidence. Subagents start capped at `[subagents] max` (default L1), can be denied by type, and are checked at their own stop. |
 | **Loop detection** | Three identical calls get guidance, five are denied, the same failure three times says "stop retrying", and a file edited four times in a turn is sent back. A loop is a halt, not a demotion. |
-| **Session digest** | Jev judges a risky command against the session's goal, the turn so far and the policy (a bounded digest, never the raw transcript), and asks a person when it is not confident. |
+| **Session digest** | Jev judges a risky command against a bounded digest of the session's goal, its recent calls and the current trust levels (never the raw transcript), and asks a person when it is not confident. |
 | **MCP tool classes** | `mcp__github__merge_pull_request` is its own class, `mcp:github`. Reads can earn L2, writes L1 once you approved that tool, destructive verbs (merge, delete, deploy) always ask; `[tools."mcp__aws__*"]` in the policy file can forbid or cap a tool. |
 | **Budget guardrails** | `[budget]` caps USD per session and per day, read from the agent's own transcript where it reports cost. Past a cap only reading is allowed until a person raises it. |
 | **Policy as code** | `.solo-license/policy.toml` is committed with the repo and can only make the agent ask *more*. `solo-license policy init` writes a starter file. |
