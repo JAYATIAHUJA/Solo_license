@@ -1,6 +1,6 @@
 /* ---------- frame ---------- */
 .lp { overflow-x: clip; }
-.lp-section { max-width: var(--max); margin: 0 auto; padding: clamp(72px, 10vw, 140px) var(--gutter); }
+.lp-section { max-width: var(--max); margin: 0 auto; padding: clamp(40px, 6vw, 80px) var(--gutter); }
 .lp-head { display: flex; gap: 18px; align-items: baseline; padding-bottom: 14px; margin-bottom: clamp(36px, 5vw, 64px); border-bottom: 1px solid var(--ink); }
 .lp-head .mono:first-child { color: var(--muted); }
 .lp-h2 { font-size: clamp(44px, 6.4vw, 96px); line-height: 0.95; letter-spacing: -0.025em; margin: 0; }
@@ -29,8 +29,9 @@
 .lp-hero { max-width: var(--max); margin: 0 auto; padding: clamp(28px, 4vw, 56px) var(--gutter) 0; }
 .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
 .lp-kicker { color: var(--muted); margin: 0 0 28px; }
-.lp-h1 { font-size: clamp(64px, 10.5vw, 168px); line-height: 0.86; letter-spacing: -0.035em; margin: 0; }
+.lp-h1 { font-size: clamp(40px, 8vw, 128px); line-height: 0.92; letter-spacing: -0.035em; margin: 0; }
 .lp-h1 em { padding: 0 0.04em; }
+.lp-h1 { white-space: normal; text-wrap: balance; }
 .lp-lede { font-size: clamp(17px, 1.35vw, 20px); line-height: 1.55; max-width: 52ch; margin: 36px auto 0; color: var(--ink-2); }
 .lp-lede b { font-weight: 600; color: var(--ink); }
 .lp-hero-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 32px; }
@@ -190,22 +191,25 @@
   .lp-note-c, .lp-note-b { display: none; }
 }
 
-/* ---------- ask bar (hero) ---------- */
-.lp-ask { flex-basis: 100%; display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 6px 0 16px; border: 1px solid var(--ink); background: var(--sheet); transition: box-shadow 0.2s var(--ease); margin-bottom: 4px; }
-.lp-ask.is-focused { box-shadow: 5px 5px 0 var(--ink); }
-.lp-ask-field { position: relative; flex: 1; height: 100%; overflow: hidden; }
-.lp-ask-field input { position: absolute; inset: 0; width: 100%; border: 0; outline: none; background: transparent; font-size: 15px; z-index: 1; }
-.lp-ask-hint { position: absolute; left: 0; top: 50%; translate: 0 -50%; color: var(--muted); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; pointer-events: none; }
+/* ---------- install command bar (hero + install page) ---------- */
+.lp-ask { flex: 1 1 520px; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border: 1px solid var(--ink); background: var(--sheet); transition: box-shadow 0.2s var(--ease), background 0.2s var(--ease); }
+.lp-ask.is-copied { background: var(--paper); box-shadow: 4px 4px 0 var(--ink); }
+.lp-ask-cmd { flex: 1; min-width: 0; font: 400 14px/1.45 var(--font-mono); line-height: 1.45; color: var(--ink); text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+.lp-hero-cta { align-items: stretch; }
+.lp-hero-open { flex: none; height: auto; min-height: 54px; }
+@media (max-width: 640px) {
+  .lp-ask { flex-basis: 100%; }
+  .lp-hero-open { width: 100%; }
+}
 .lp-manifesto .lp-ticker { margin: 0 calc(-1 * var(--gutter)) clamp(28px, 5vh, 56px); }
 
 /* ---------- hero on short laptop screens ---------- */
 @media (min-width: 901px) and (max-height: 820px) {
-  .lp-h1 { font-size: clamp(52px, min(9.5vw, 12.5vh), 150px) !important; }
+  .lp-h1 { font-size: clamp(40px, min(7.4vw, 12.5vh), 120px) !important; }
   .lp-kicker { margin-bottom: 10px !important; }
   .lp-lede { margin-top: 12px !important; font-size: 15px !important; }
   .lp-hero-cta { margin-top: 14px !important; gap: 8px; }
-  .lp-ask { height: 46px; }
-  .lp-hero-cta .btn { height: 40px; }
+  .lp-hero-cta .btn { min-height: 44px; }
   .lp-hero-meta { margin-top: 12px !important; }
   .lp-hero-meta > div { padding-top: 8px !important; padding-bottom: 8px !important; }
   .lp-hero-meta p { margin-top: 4px; font-size: 13px !important; }
@@ -214,10 +218,8 @@
 /* ---------- one section = one viewport (desktop / tablet landscape) ---------- */
 @media (min-width: 901px) and (min-height: 560px) {
   .lp-section {
-    height: 100svh; min-height: 0;
-    display: flex; flex-direction: column; justify-content: center;
-    padding-block: clamp(28px, 6vh, 72px);
-    overflow: hidden;
+    height: auto; min-height: 0;
+    padding-block: clamp(36px, 7vh, 72px);
   }
   .lp-head { margin-bottom: clamp(18px, 4vh, 48px); }
   .lp-split { margin-bottom: clamp(18px, 4vh, 48px); }
@@ -228,7 +230,7 @@
   .lp-hero { min-height: calc(100svh - 68px); display: flex; flex-direction: column; padding-top: clamp(16px, 3vh, 40px); }
   .lp-hero-grid { flex: 1; min-height: 0; align-content: center; }
   .lp-kicker { margin-bottom: clamp(10px, 2.4vh, 28px); }
-  .lp-h1 { font-size: clamp(56px, min(10.5vw, 14.5vh), 168px); }
+  .lp-h1 { font-size: clamp(40px, min(8vw, 14.5vh), 128px); }
   .lp-lede { margin-top: clamp(14px, 3vh, 36px); font-size: clamp(15px, 2.1vh, 20px); }
   .lp-hero-cta { margin-top: clamp(14px, 3vh, 32px); }
   .lp-hero-meta { margin-top: clamp(16px, 3vh, 40px); }
@@ -292,7 +294,9 @@
 
 /* ---------- install page ---------- */
 .lp-install-page main { padding-top: 68px; }
-.lp-install-lead { padding-bottom: 0 !important; }
+.lp-install-page .lp-section { height: auto !important; min-height: 0 !important; display: block; }
+.lp-install-lead { padding-top: clamp(28px, 5vh, 56px) !important; padding-bottom: 0 !important; }
+.lp-install-lead .lp-ask { margin-top: 8px; }
 .lp-install-lead .lp-h2 { margin: 0 0 20px; }
 .lp-install-onboard { font-family: var(--font-mono); margin: 0 0 18px; padding: 16px 18px; background: var(--ink); color: var(--paper); font-size: clamp(12px, 1.2vw, 15px); white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -317,7 +321,7 @@
 
 /* ---------- hero on narrow phones (after the 900px rules so it wins) ---------- */
 @media (max-width: 560px) {
-  .lp-h1 { font-size: clamp(40px, 13.5vw, 64px); line-height: 0.95; }
+  .lp-h1 { font-size: clamp(24px, 8.6vw, 52px); line-height: 1; }
   .lp-hero-cta .btn { width: 100%; justify-content: center; }
   .lp-hero-meta { grid-template-columns: 1fr; }
   .lp-hero-meta > div, .lp-hero-meta > div + div { padding: 14px 0; border-left: 0; text-align: left; }

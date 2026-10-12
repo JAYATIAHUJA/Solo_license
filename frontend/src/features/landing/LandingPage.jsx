@@ -11,7 +11,6 @@ import { Problem } from './scenes/Problem.jsx';
 import { Journey } from './scenes/Journey.jsx';
 import { AgentGraph } from './scenes/AgentGraph.jsx';
 import { Crash } from './scenes/Crash.jsx';
-import { LedgerTrack } from './scenes/LedgerTrack.jsx';
 import { Detections } from './sections/Detections.jsx';
 import { Remedies } from './sections/Remedies.jsx';
 import { Altimeter } from './scenes/Altimeter.jsx';
@@ -67,7 +66,6 @@ export function LandingPage() {
         <Crash />
         <Detections />
         <Remedies />
-        <LedgerTrack />
         <Facts />
         <Faq />
         <Closing />

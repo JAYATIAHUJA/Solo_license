@@ -21,25 +21,15 @@ export function Hero() {
             (001) - The control layer for coding agents
           </motion.p>
           <h1 className="lp-h1 serif">
-            <MaskWords text="Autonomy" animateOnMount />
-            <br />
+            <MaskWords text="Autonomy" animateOnMount />{' '}
             <MaskWords text="is" animateOnMount delay={0.12} />{' '}
             <SketchCircle delay={1.1}><em className="italic"><MaskWords text="earned," animateOnMount delay={0.18} /></em></SketchCircle>
             <br />
             <MaskWords text="not assumed." animateOnMount delay={0.26} />
           </h1>
-          <motion.p
-            className="lp-lede"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.8 }}
-          >
-            Your coding agent has to <b>earn</b> the right to act without asking - one kind of action at a
-            time, in each repo, from verified results. One failure, or one over-edit, drops it back to asking you.
-          </motion.p>
           <motion.div className="lp-hero-cta" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.8 }}>
             <AskBar />
-            <Magnetic><Link to="/app" className="btn btn-ink">Open the dashboard <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
+            <Magnetic><Link to="/app" className="btn btn-ink lp-hero-open">Open dashboard <HandIcon name="arrow-right" size={16} /></Link></Magnetic>
           </motion.div>
         </div>
       </div>

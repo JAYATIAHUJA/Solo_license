@@ -10,7 +10,6 @@ const STOPS = [
   ['crash', 'The crash'],
   ['detections', 'Detections'],
   ['fixes', 'Remediation'],
-  ['ledger', 'Ledger'],
   ['faq', 'FAQ'],
 ];
 
