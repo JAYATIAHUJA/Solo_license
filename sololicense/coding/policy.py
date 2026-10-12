@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from sololicense.coding.actions import ACTION_CLASSES
+from sololicense.coding.budget import Limits
 
 POLICY_FILE = Path(".solo-license") / "policy.toml"
 ALL_REPOS = "*"
@@ -62,10 +63,12 @@ paths = [".env", ".env.*"]
 # true: every action asks, whatever has been earned.
 enabled = false
 
-[subagents]
-# Subagents inherit the repo license, capped at this level until they earn
-# their own evidence. The cap can only be tightened by policy.
-max = 1
+[budget]
+# USD caps (estimates where the agent does not report its own cost). Past a
+# cap only reading is allowed until a person raises it or resumes.
+# session_usd = 5
+# day_usd     = 25
+# warn_at     = 0.8
 """
 
 
@@ -78,14 +81,14 @@ class Policy:
     deny_paths: tuple[str, ...] = ()
     freeze: bool = False
     source: str = "built-in"
-    subagent_max: int = 1
-    subagent_deny_types: tuple[str, ...] = ()
+    budget: Limits = field(default_factory=Limits)
 
     def to_json(self) -> dict:
-        return {"ceilings": dict(self.ceilings), "deny_commands": list(self.deny_commands),
-                "deny_paths": list(self.deny_paths), "freeze": self.freeze,
-                "subagent_max": self.subagent_max,
-                "subagent_deny_types": list(self.subagent_deny_types), "source": self.source}
+        out = {"ceilings": dict(self.ceilings), "deny_commands": list(self.deny_commands),
+               "deny_paths": list(self.deny_paths), "freeze": self.freeze, "source": self.source}
+        if self.budget.any:
+            out["budget"] = budget_json(self.budget)
+        return out
 
     @property
     def digest(self) -> str:
@@ -107,12 +110,27 @@ def _clean(raw: dict, source: str) -> Policy:
     commands = tuple(str(c).strip() for c in deny.get("commands", []) if str(c).strip())
     paths = tuple(str(p).strip().replace("\\", "/") for p in deny.get("paths", []) if str(p).strip())
     freeze = raw.get("freeze") or {}
-    subagents = raw.get("subagents") or {}
-    max_level = subagents.get("max", 1)
-    if not isinstance(max_level, int) or not 0 <= max_level <= 2:
-        raise ValueError(f"{source}: subagents.max must be 0, 1 or 2")
-    deny_types = tuple(str(t).strip() for t in subagents.get("deny_types", ()) if str(t).strip())
-    return Policy(ceilings, commands, paths, bool(freeze.get("enabled", False)), source, max_level, deny_types)
+    return Policy(ceilings, commands, paths, bool(freeze.get("enabled", False)), source,
+                  _clean_budget(raw.get("budget") or {}, source))
+
+
+def budget_json(limits: Limits) -> dict:
+    return {"session_usd": limits.session_usd, "day_usd": limits.day_usd, "warn_at": limits.warn_at}
+
+
+def _clean_budget(raw: dict, source: str) -> Limits:
+    def cap(key: str) -> float | None:
+        value = raw.get(key)
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= 1_000_000:
+            raise ValueError(f"{source}: budget {key} must be a positive number of USD")
+        return float(value)
+
+    warn = raw.get("warn_at", 0.8)
+    if isinstance(warn, bool) or not isinstance(warn, (int, float)) or not 0 < warn < 1:
+        raise ValueError(f"{source}: budget warn_at must be between 0 and 1")
+    return Limits(cap("session_usd"), cap("day_usd"), float(warn))
 
 
 def from_file(root: str | Path) -> Policy | None:
@@ -138,15 +156,17 @@ def local(conn: sqlite3.Connection, repo: str) -> Policy | None:
 
 
 def save_local(conn: sqlite3.Connection, repo: str, raw: dict) -> Policy:
+    """Save this machine's layer. A body without ``budget`` keeps the saved caps."""
+    if "budget" not in raw:
+        before = local(conn, repo)
+        raw = {**raw, "budget": budget_json(before.budget) if before else {}}
     policy = _clean(raw, "this machine")
     conn.execute(
         "INSERT INTO agent_policies (repo, body, updated_at) VALUES (?, ?, datetime('now')) "
         "ON CONFLICT (repo) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
         (repo, json.dumps({"classes": {k: {"max": v} for k, v in policy.ceilings.items()},
                            "deny": {"commands": list(policy.deny_commands), "paths": list(policy.deny_paths)},
-                           "freeze": {"enabled": policy.freeze},
-                           "subagents": {"max": policy.subagent_max,
-                                         "deny_types": list(policy.subagent_deny_types)}})),
+                           "freeze": {"enabled": policy.freeze}, "budget": budget_json(policy.budget)})),
     )
     return policy
 
@@ -161,18 +181,20 @@ def merge(*layers: Policy | None) -> Policy:
     freeze = any(p.freeze for p in present)
     if freeze:
         ceilings = {key: 0 for key in ceilings}
-    subagent_max = min((p.subagent_max for p in present), default=1)
-    subagent_deny_types = tuple(dict.fromkeys(
-        t for p in present for t in p.subagent_deny_types
-    ))
+
+    def lowest(values) -> float | None:
+        values = [v for v in values if v is not None]
+        return min(values) if values else None
+
+    budgets = [p.budget for p in present]
     return Policy(
         ceilings=ceilings,
         deny_commands=tuple(dict.fromkeys(c for p in present for c in p.deny_commands)),
         deny_paths=tuple(dict.fromkeys(x for p in present for x in p.deny_paths)),
         freeze=freeze,
         source=" + ".join(["built-in", *[p.source for p in present]]),
-        subagent_max=subagent_max,
-        subagent_deny_types=subagent_deny_types,
+        budget=Limits(lowest(b.session_usd for b in budgets), lowest(b.day_usd for b in budgets),
+                      min([b.warn_at for b in budgets if b.any] or [0.8])),
     )
 
 
@@ -202,20 +224,6 @@ def denied(policy: Policy, tool_name: str, tool_input: dict, root: str | Path) -
             for pattern in policy.deny_paths:
                 if fnmatch.fnmatch(candidate, pattern):
                     return f"this repo's policy forbids editing '{pattern}'"
-    return ""
-
-
-def denied_subagent(policy: Policy, tool_name: str, tool_input: dict) -> str:
-    """Why a requested subagent type is forbidden, or an empty string."""
-    if str(tool_name).lower() not in {"agent", "task", "spawn_agent"}:
-        return ""
-    requested = str(tool_input.get("subagent_type") or tool_input.get("agent_type")
-                    or tool_input.get("type") or "").strip()
-    if not requested:
-        return ""
-    for denied_type in policy.subagent_deny_types:
-        if fnmatch.fnmatch(requested.lower(), denied_type.lower()):
-            return f"this repo's policy forbids spawning subagent type '{requested}'"
     return ""
 
 
