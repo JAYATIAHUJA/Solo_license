@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole, toDate, when } from '../../../lib/format.js';
+import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey } from '../../../lib/coding-live.js';
 import './coding.css';
 
 const POLL_MS = 4000;
+const FLASH_MS = 1600;
 
 export const CODING_LEVELS = [
   { short: 'Asks you', long: 'Asks you before every action of this kind.' },
@@ -47,6 +49,78 @@ export function useCoding() {
     return () => window.clearInterval(timer);
   }, [load]);
   return { coding, setCoding, error, load };
+}
+
+/** { "repo:class": "up" | "down" } for levels that moved at the last poll, cleared after a moment. */
+function useLevelFlash(licenses) {
+  const seen = useRef(null);
+  const [flash, setFlash] = useState({});
+  const signature = JSON.stringify(levelsOf(licenses));
+  useEffect(() => {
+    const levels = JSON.parse(signature);
+    const changes = levelChanges(seen.current, levels);
+    seen.current = levels;
+    if (Object.keys(changes).length) setFlash(changes);
+  }, [signature]);
+  useEffect(() => {
+    if (!Object.keys(flash).length) return undefined;
+    const timer = window.setTimeout(() => setFlash({}), FLASH_MS);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
+  return flash;
+}
+
+/** "This was wrong": a required reason, then the flag. */
+function FlagBox({ target, onDone, onCancel }) {
+  const [reason, setReason] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event) => {
+    event.preventDefault();
+    setPending(true);
+    setError('');
+    try {
+      onDone(await api.codingFlag(flagRequest(target, reason)));
+    } catch (cause) {
+      setError(cause.message);
+      setPending(false);
+    }
+  };
+  return (
+    <form className="cd-flag" onSubmit={submit}>
+      <label>
+        <span>What was wrong? The agent is told on its next prompt, and this kind of action goes back to asking you.</span>
+        <input type="text" value={reason} maxLength={500} required autoFocus disabled={pending}
+          onChange={(e) => setReason(e.target.value)} placeholder="e.g. it deleted the migrations folder" />
+      </label>
+      <span className="cd-actions">
+        <button type="submit" className="btn btn-ink btn-sm" disabled={pending || !reason.trim()}>
+          {pending ? 'Flagging…' : 'Flag as wrong'}
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={onCancel}>Cancel</button>
+      </span>
+      {error && <p className="cd-flag-error" role="alert">{error}</p>}
+    </form>
+  );
+}
+
+/** Flag state for one decision or turn row: the side button, and the box and result below it. */
+function flagRow({ id, target, flagged, flag, busy }) {
+  const status = flagged ? <span className="pl-status bad">Flagged as wrong</span> : null;
+  const button = flagged || flag.open === id ? status : (
+    <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => flag.setOpen(id)}>
+      This was wrong
+    </button>
+  );
+  const below = (
+    <>
+      {flag.open === id && (
+        <FlagBox target={target} onDone={(body) => flag.done(id, body)} onCancel={() => flag.setOpen(null)} />
+      )}
+      {flag.result?.id === id && <p className="cd-flag-done" role="status">{flag.result.text}</p>}
+    </>
+  );
+  return { button, below };
 }
 
 function nextSentence(lic) {
@@ -92,7 +166,7 @@ function Setup({ open }) {
   );
 }
 
-function LicenseCard({ lic, onResume, busy }) {
+function LicenseCard({ lic, onResume, busy, flash }) {
   const paused = lic.demoted_from != null && lic.level === 0;
   const total = lic.successes + (lic.runs_needed || 0);
   const share = lic.runs_needed ? Math.min(1, lic.successes / Math.max(1, total)) : 1;
@@ -101,7 +175,8 @@ function LicenseCard({ lic, onResume, busy }) {
     <article className={`pl-card cd-lic ${paused ? 'is-paused' : ''}`}>
       <div className="app-card-top">
         <h3>{lic.label}</h3>
-        <span className={`pl-status ${paused ? 'bad' : lic.level >= 2 ? 'ok' : lic.level === 1 ? 'ok' : 'wait'}`}>
+        <span aria-live="polite"
+          className={`pl-status cd-level ${paused ? 'bad' : lic.level >= 1 ? 'ok' : 'wait'}${flash ? ` is-${flash}` : ''}`}>
           L{lic.level} · {paused ? 'Paused' : words.short}
         </span>
       </div>
@@ -141,9 +216,24 @@ function Savings({ s }) {
 
 export function Coding() {
   const { coding, setCoding, error } = useCoding();
-  const { setToast, session } = useStore();
+  const { setToast, session, load: loadHistory } = useStore();
   const [repo, setRepo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [flagOpen, setFlagOpen] = useState(null);
+  const [flagResult, setFlagResult] = useState(null);
+  const flash = useLevelFlash(coding?.licenses);
+  const flagged = useMemo(() => flaggedTargets(coding?.flags), [coding]);
+  const flag = {
+    open: flagOpen,
+    setOpen: (id) => { setFlagOpen(id); setFlagResult(null); },
+    result: flagResult,
+    done: (id, body) => {
+      if (body?.licenses) setCoding(body);
+      setFlagOpen(null);
+      setFlagResult({ id, text: 'Flagged. This kind of action is back to L0, and the agent is told what to undo on its next prompt.' });
+      loadHistory();
+    },
+  };
 
   const repos = useMemo(() => (coding?.repos || []).map((r) => r.repo), [coding]);
   const current = repo || repos[0] || '';
@@ -221,7 +311,9 @@ export function Coding() {
           <div className="pl-empty">Nothing yet. Open Claude Code in a repository with the plugin installed; every kind of action it tries appears here, starting at L0.</div>
         ) : (
           <div className="pl-grid">
-            {licenses.map((l) => <LicenseCard key={`${l.repo}:${l.action_class}`} lic={l} onResume={resume} busy={busy} />)}
+            {licenses.map((l) => (
+              <LicenseCard key={licenseKey(l)} lic={l} onResume={resume} busy={busy} flash={flash[licenseKey(l)]} />
+            ))}
           </div>
         )}
       </section>
@@ -236,6 +328,7 @@ export function Coding() {
                 ? { label: 'Sent back, then verified', tone: 'ok' }
                 : (TURN[t.status] || TURN.open);
               const date = toDate(t.created_at);
+              const row = flagRow({ id: `t${t.id}`, target: { turn_id: t.id }, flagged: flagged.turns.has(t.id), flag, busy });
               return (
                 <li key={t.id} className="pl-row cd-turn">
                   <span className="pl-row-main">
@@ -256,7 +349,9 @@ export function Coding() {
                     {(t.status === 'failed' || t.status === 'blocked') && (
                       <button type="button" className="btn btn-line btn-sm" disabled={busy} onClick={() => rewind(t)}>Rewind</button>
                     )}
+                    {row.button}
                   </span>
+                  {row.below}
                 </li>
               );
             })}
@@ -270,6 +365,10 @@ export function Coding() {
           <ul className="pl-list">
             {decisions.map((d) => {
               const s = DECISION[d.decision] || DECISION.ask;
+              // A blocked action never ran, so there is nothing to call wrong.
+              const row = d.decision === 'deny' ? {} : flagRow({
+                id: `d${d.id}`, target: { decision_id: d.id }, flagged: flagged.decisions.has(d.id), flag, busy,
+              });
               return (
                 <li key={d.id} className="pl-row">
                   <span className="pl-row-main">
@@ -280,7 +379,9 @@ export function Coding() {
                     <span className={`pl-status ${s.tone}`}>{d.decided_by === 'person' ? 'You approved' : s.label}</span>
                     {d.outcome === 'failed' && <span className="pl-status bad">Failed</span>}
                     {d.outcome === 'verified' && <span className="pl-status ok">Verified</span>}
+                    {row.button}
                   </span>
+                  {row.below}
                 </li>
               );
             })}

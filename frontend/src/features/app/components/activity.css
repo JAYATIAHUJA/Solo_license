@@ -68,6 +68,7 @@
 .hist-row { display: grid; gap: 4px; padding: 14px 16px; }
 .hist-row b { font-weight: 500; overflow-wrap: anywhere; }
 .hist-row small { color: var(--muted); font-size: 13px; }
+.hist-reason { margin: 0; color: var(--ink-2); font-size: 14px; border-left: 3px solid var(--bad); padding-left: 10px; overflow-wrap: anywhere; }
 .hist-link { color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 2px; background: none; border: 0; padding: 0; cursor: pointer; }
 .hist-link:hover { color: var(--ink); }
 .hist-link code { font: 12px var(--font-mono); }

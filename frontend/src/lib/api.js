@@ -45,6 +45,7 @@ export const api = {
   coding: (repo) => request(`/api/coding${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`),
   codingRestore: (body) => request('/api/coding/licenses/restore', { method: 'POST', body }),
   codingRewind: (turnId) => request(`/api/coding/turns/${turnId}/rewind`, { method: 'POST' }),
+  codingFlag: (body) => request('/api/coding/flags', { method: 'POST', body }),
   codingTestCommand: (repo, testCommand) => request('/api/coding/test-command', { method: 'POST', body: { repo, test_command: testCommand } }),
   session: () => request('/api/session', { auth: false }),
   demoSession: (name) => request('/api/session/demo', { method: 'POST', body: { name }, auth: false }),
