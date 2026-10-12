@@ -48,13 +48,23 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Solo License API", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+
+
+def _allowed_origins() -> list[str]:
+    """Demo mode serves a public dashboard with no cookies or secrets, so any
+    browser origin may call it; deployments list theirs in SOLO_ALLOWED_ORIGINS."""
+    if os.environ.get("SOLO_DEMO_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return ["*"]
+    return [
         origin.strip()
         for origin in os.environ.get("SOLO_ALLOWED_ORIGINS", "http://localhost:5174").split(",")
         if origin.strip()
-    ],
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
