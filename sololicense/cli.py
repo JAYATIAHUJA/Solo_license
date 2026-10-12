@@ -1,7 +1,9 @@
 """``solo-license``: install, run and check Solo License from one command.
 
     uvx --from git+https://github.com/JAYATIAHUJA/Solo_license solo-license init --agent auto
+    solo-license init --global    # user-level hooks: every repository on this machine
     solo-license serve            # the local gate + dashboard on http://127.0.0.1:8000
+    solo-license serve --background / stop / status
     solo-license doctor           # is the gate up, which agents are wired here
     solo-license prompt --agent codex   # a ready prompt that makes your agent set itself up
     solo-license hook <agent> <event>   # the command-hook shim (normally called by the agent)
@@ -20,6 +22,8 @@ from pathlib import Path
 
 REPO_URL = "https://github.com/JAYATIAHUJA/Solo_license"
 INSTALL_ONE_LINER = f"uvx --from git+{REPO_URL} solo-license init --agent auto"
+GLOBAL_STEPS = (f"uv tool install git+{REPO_URL}", "solo-license init --global", "solo-license serve --background")
+GLOBAL_ONE_LINER = " && ".join(GLOBAL_STEPS)
 DEFAULT_URL = os.environ.get("SOLO_LICENSE_URL", "http://127.0.0.1:8000")
 
 
@@ -46,41 +50,29 @@ def _get(url: str, timeout: float = 3.0) -> dict | None:
 def cmd_init(args: argparse.Namespace) -> int:
     from sololicense.coding import install
 
-    install.main([str(args.repo), "--agent", args.agent, "--url", args.url])
-    print("\nNext: run `solo-license serve` and keep it running, then `solo-license doctor`.")
+    if args.global_:
+        return cmd_init_global(args)
+    flags = (["--dry-run"] if args.dry_run else []) + (["--remove"] if args.remove else [])
+    install.main([str(args.repo), "--agent", args.agent, "--url", args.url, *flags])
+    if not (args.dry_run or args.remove):
+        print("\nNext: run `solo-license serve` and keep it running, then `solo-license doctor`.")
     return 0
 
 
+def cmd_init_global(args: argparse.Namespace) -> int:
+    from sololicense.coding import global_install
+
+    return global_install.run(args.agent, args.url, dry_run=args.dry_run, remove=args.remove)
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
-    from sololicense.coding.agents import AGENTS
+    from sololicense import doctor
 
     repo = Path(args.repo).resolve()
-    ok = True
-    health = _get(f"{args.url}/api/coding/agents")
-    print(f"gate     {'up' if health else 'NOT REACHABLE'} at {args.url}")
-    if not health:
-        ok = False
-        print("         start it with: solo-license serve")
-    print(f"repo     {repo}")
-    for spec in AGENTS.values():
-        path = repo / spec.config_path
-        wired = path.exists() and ("solo-license" in _read(path) or "/api/hooks/" in _read(path))
-        if wired:
-            print(f"  wired  {spec.label:<34} {spec.config_path}")
-    shim = repo / ".solo-license" / "hook.py"
-    if shim.exists():
-        print(f"shim     {shim}")
-    if health:
-        seen = _get(f"{args.url}/api/coding") or {}
-        for a in seen.get("agents", []):
-            print(f"seen     {a['agent']}: {a['decisions']} decisions, last {a['last_seen']}")
-    return 0 if ok else 1
-
-
-def _read(path: Path) -> str:
-    if path.is_dir():
-        return "".join(p.read_text(encoding="utf-8", errors="ignore") for p in path.glob("*") if p.is_file())
-    return path.read_text(encoding="utf-8", errors="ignore")
+    print(f"repo  {repo}")
+    checks = doctor.run(repo, args.url, get=_get)
+    print(doctor.render(checks))
+    return doctor.exit_code(checks)
 
 
 def cmd_policy(args: argparse.Namespace) -> int:
@@ -103,11 +95,16 @@ def cmd_hook(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
+    from sololicense import background
+
     try:
         import uvicorn  # noqa: F401
     except ImportError:
         print("The server needs its dependencies: uv tool install git+" + REPO_URL)
         return 1
+    args.port = args.port or background.default_port()
+    if args.background:
+        return cmd_serve_background(args)
     home = Path(os.environ.get("SOLO_LICENSE_HOME", Path.home() / ".solo-license"))
     home.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("SOLO_LICENSE_DB", str(home / "solo_license.db"))
@@ -120,6 +117,66 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve_background(args: argparse.Namespace) -> int:
+    from sololicense import background
+
+    state = background.start(args.host, args.port)
+    status = state["status"]
+    if status == "external":
+        print(f"Something already answers at {state['url']}; not starting another gate.")
+        return 0
+    if status == "failed":
+        print(f"The gate exited at once; see {state['log']}")
+        return 1
+    print({"running": "Already running", "started": "Started", "starting": "Still starting"}[status]
+          + f": Solo License gate on {state['url']} (pid {state['pid']})")
+    print(f"Log: {state['log']}\nStop it with: solo-license stop")
+    return 0
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    from sololicense import background
+
+    result = background.stop()
+    print({"stopped": f"Stopped the gate (pid {result.get('pid')}).",
+           "still-running": f"Could not stop pid {result.get('pid')}.",
+           "stale": "The gate was not running (cleared a stale pid file).",
+           "not-running": "The gate is not running.",
+           "external": f"A gate answers at {result['url']}, but it was not started with --background; "
+                       "stop it where it runs."}[result["status"]])
+    return 1 if result["status"] == "still-running" else 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    from sololicense import background
+
+    state = background.status()
+    if state["healthy"]:
+        how = f"background pid {state['pid']}" if state["running"] else "started outside --background"
+        print(f"Solo License gate is up at {state['url']} ({how})\nLog: {state['log']}")
+        return 0
+    if state["running"]:
+        print(f"Gate process {state['pid']} is running but not answering at {state['url']} yet; "
+              f"see {state['log']}")
+        return 1
+    print(f"The gate is not running at {state['url']}. Start it: solo-license serve --background")
+    return 1
+
+
+def _add_init_scope_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--global", dest="global_", action="store_true",
+                   help="user-level hooks for every repository (with --agent auto: the agents found in your home)")
+    p.add_argument("--dry-run", action="store_true", help="print the changes as a diff; write nothing")
+    p.add_argument("--remove", action="store_true", help="take Solo License's hooks out again (uninstall)")
+
+
+def _add_background_commands(sub) -> None:
+    p = sub.add_parser("stop", help="stop the gate started with serve --background")
+    p.set_defaults(fn=cmd_stop)
+    p = sub.add_parser("status", help="is the gate running, and where")
+    p.set_defaults(fn=cmd_status)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="solo-license", description="Earned autonomy for coding agents.")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -129,12 +186,15 @@ def main(argv: list[str] | None = None) -> int:
                                                    "grok, windsurf, kiro, cline, opencode, auto or all")
     p.add_argument("--repo", default=".")
     p.add_argument("--url", default=DEFAULT_URL)
+    _add_init_scope_args(p)
     p.set_defaults(fn=cmd_init)
 
     p = sub.add_parser("serve", help="run the local gate and dashboard")
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--port", type=int, default=None, help="default: the port of SOLO_LICENSE_URL, else 8000")
+    p.add_argument("--background", action="store_true", help="detach; pid and log under ~/.solo-license")
     p.set_defaults(fn=cmd_serve)
+    _add_background_commands(sub)
 
     p = sub.add_parser("doctor", help="check the gate and this repository's hooks")
     p.add_argument("--repo", default=".")
