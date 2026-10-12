@@ -268,6 +268,7 @@ class _GeminiSession:
 
 TRANSCRIPTS = {"claude-code": _ClaudeTranscript, "codex": _CodexRollout, "gemini": _GeminiSession}
 _READ: dict[str, tuple[int, object]] = {}   # "<agent>:<path>" -> (bytes consumed, adapter)
+MAX_TRANSCRIPT_READ = 1024 * 1024  # keep one hook invocation bounded to 1 MiB
 
 
 def usage_from_transcript(agent: str, path: str | None) -> Spend | None:
@@ -280,6 +281,11 @@ def usage_from_transcript(agent: str, path: str | None) -> Spend | None:
     if file.suffix not in (".jsonl", ".json") or not file.is_file():
         return None
     if file.suffix == ".json":
+        try:
+            if file.stat().st_size > MAX_TRANSCRIPT_READ:
+                return None
+        except OSError:
+            return None
         adapter = factory()
         try:
             adapter.feed(json.loads(file.read_text(encoding="utf-8")))
@@ -294,7 +300,10 @@ def usage_from_transcript(agent: str, path: str | None) -> Spend | None:
             offset, adapter = 0, factory()
         with file.open("rb") as handle:
             handle.seek(offset)
-            chunk = handle.read()
+            # Transcript files are append-only and may grow for the entire
+            # session.  Consume a bounded window; the next hook invocation
+            # resumes from the last complete line.
+            chunk = handle.read(MAX_TRANSCRIPT_READ)
     except OSError:
         return None
     end = chunk.rfind(b"\n")  # a half-written last line is read next time
