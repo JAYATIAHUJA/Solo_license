@@ -344,6 +344,7 @@ def test_neatlogs(
 
 _HOOK_EVENTS = {
     "user-prompt": "UserPromptSubmit",
+    "pre-tool": "PreToolUse",
     "permission": "PermissionRequest",
     "post-tool": "PostToolUse",
     "post-tool-failure": "PostToolUseFailure",
@@ -402,6 +403,8 @@ def coding_hook(
         body = {**_client_fields(body), "_agent": "claude-code", "_prompt_only": True}
         if event == "user-prompt":
             return gate.user_prompt(body)
+        if event == "pre-tool":
+            return gate.pre_tool(body)
         if event == "permission":
             return gate.permission(body)
         if event == "stop":
@@ -645,6 +648,8 @@ def agent_hook(
             payload["_prompt_only"] = native_event == "PermissionRequest" and spec.key in ("claude-code", "codex")
             if event == "user-prompt":
                 answer = gate.user_prompt(payload)
+            elif event == "pre-tool":
+                answer = gate.pre_tool(payload)
             elif event == "permission":
                 answer = gate.permission(payload)
             elif event == "stop":
