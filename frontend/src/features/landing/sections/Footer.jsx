@@ -8,6 +8,8 @@ export function Footer({ onReplayIntro }) {
         <Link to="/" className="lp-logo"><Logo /> Solo License<sup>®</sup></Link>
         <nav>
           <a href="/#terminal">In your agent</a>
+          <a href="/#journey">How it earns</a>
+          <a href="/#agent">The loop</a>
           <a href="/#crash">The crash</a>
           <a href="/#tour">Product</a>
           <Link to="/install">Install</Link>

@@ -17,7 +17,7 @@ const LOG = [
    (Moto's theme-invert), the level crashes, and the card is stamped. */
 export function Crash() {
   return (
-    <Pinned id="crash" length={2.8} className="sc-crash">
+    <Pinned id="crash" length={2.4} className="sc-crash">
       {(p) => <Scene p={p} />}
     </Pinned>
   );

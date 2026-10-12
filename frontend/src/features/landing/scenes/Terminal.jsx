@@ -26,7 +26,7 @@ const AGENTS = ['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'Windsurf', 'Cop
 
 export function Terminal() {
   return (
-    <Pinned id="terminal" length={3.2} className="sc-terminal">
+    <Pinned id="terminal" length={2.6} className="sc-terminal">
       {(p) => <Scene p={p} />}
     </Pinned>
   );

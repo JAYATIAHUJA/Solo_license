@@ -25,7 +25,7 @@ const CHAPTERS = [
 
 export function ProductTour() {
   return (
-    <Pinned id="tour" length={CHAPTERS.length + 1} className="sc-tour">
+    <Pinned id="tour" length={CHAPTERS.length} className="sc-tour">
       {(p) => <Scene p={p} />}
     </Pinned>
   );
