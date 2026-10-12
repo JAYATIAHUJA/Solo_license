@@ -192,11 +192,11 @@
 }
 
 /* ---------- install command bar (hero + install page) ---------- */
-.lp-ask { flex: 1 1 520px; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border: 1px solid var(--ink); background: var(--sheet); transition: box-shadow 0.2s var(--ease), background 0.2s var(--ease); }
+.lp-ask { flex: 1 1 520px; min-width: 0; box-sizing: border-box; min-height: 56px; margin: 0; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; border: 1px solid var(--ink); background: var(--sheet); transition: box-shadow 0.2s var(--ease), background 0.2s var(--ease); }
 .lp-ask.is-copied { background: var(--paper); box-shadow: 4px 4px 0 var(--ink); }
 .lp-ask-cmd { flex: 1; min-width: 0; font: 400 14px/1.45 var(--font-mono); line-height: 1.45; color: var(--ink); text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
-.lp-hero-cta { align-items: stretch; }
-.lp-hero-open { flex: none; height: auto; min-height: 54px; }
+.lp-hero-cta { align-items: center; }
+.lp-hero-open { flex: none; box-sizing: border-box; height: 56px; min-height: 56px; margin: 0; }
 @media (max-width: 640px) {
   .lp-ask { flex-basis: 100%; }
   .lp-hero-open { width: 100%; }
@@ -209,7 +209,6 @@
   .lp-kicker { margin-bottom: 10px !important; }
   .lp-lede { margin-top: 12px !important; font-size: 15px !important; }
   .lp-hero-cta { margin-top: 14px !important; gap: 8px; }
-  .lp-hero-cta .btn { min-height: 44px; }
   .lp-hero-meta { margin-top: 12px !important; }
   .lp-hero-meta > div { padding-top: 8px !important; padding-bottom: 8px !important; }
   .lp-hero-meta p { margin-top: 4px; font-size: 13px !important; }
