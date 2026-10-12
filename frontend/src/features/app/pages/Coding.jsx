@@ -4,6 +4,7 @@ import { api } from '../../../lib/api.js';
 import { useStore } from '../../../lib/store.jsx';
 import { moneyWhole, toDate, when } from '../../../lib/format.js';
 import { flagRequest, flaggedTargets, levelChanges, levelsOf, licenseKey } from '../../../lib/coding-live.js';
+import { byTurn, loopBadge, remediationView } from '../../../lib/coding-guidance.js';
 import './coding.css';
 
 const POLL_MS = 4000;
@@ -102,6 +103,23 @@ function FlagBox({ target, onDone, onCancel }) {
       {error && <p className="cd-flag-error" role="alert">{error}</p>}
     </form>
   );
+}
+
+/** What the agent was told (or will be told at its next prompt) during one turn. */
+function Told({ remediations }) {
+  return remediations.map((r) => {
+    const view = remediationView(r);
+    return (
+      <div key={r.id} className="cd-told">
+        <span className="cd-told-head">
+          <b>{r.delivered_at ? 'Agent was told:' : 'Agent will be told:'}</b>
+          <span className={`pl-status ${view.status.tone}`}>{view.status.label}</span>
+          <small>{when(r.delivered_at || r.created_at)}</small>
+        </span>
+        <pre className="cd-reason cd-told-text">{view.text}</pre>
+      </div>
+    );
+  });
 }
 
 /** Flag state for one decision or turn row: the side button, and the box and result below it. */
@@ -223,6 +241,8 @@ export function Coding() {
   const [flagResult, setFlagResult] = useState(null);
   const flash = useLevelFlash(coding?.licenses);
   const flagged = useMemo(() => flaggedTargets(coding?.flags), [coding]);
+  const told = useMemo(() => byTurn(coding?.remediations), [coding]);
+  const looped = useMemo(() => byTurn(coding?.loops), [coding]);
   const flag = {
     open: flagOpen,
     setOpen: (id) => { setFlagOpen(id); setFlagResult(null); },
@@ -329,6 +349,7 @@ export function Coding() {
                 : (TURN[t.status] || TURN.open);
               const date = toDate(t.created_at);
               const row = flagRow({ id: `t${t.id}`, target: { turn_id: t.id }, flagged: flagged.turns.has(t.id), flag, busy });
+              const loop = loopBadge(looped.get(t.id));
               return (
                 <li key={t.id} className="pl-row cd-turn">
                   <span className="pl-row-main">
@@ -343,8 +364,10 @@ export function Coding() {
                     {t.entire_checkpoint && (
                       <span className="cd-cmds"><CopyLine cmd={`entire checkpoint explain ${t.entire_checkpoint.slice(0, 12)}`} /></span>
                     )}
+                    <Told remediations={told.get(t.id) || []} />
                   </span>
                   <span className="pl-row-side">
+                    {loop && <span className={`pl-status ${loop.tone}`} title={loop.title}>{loop.label}</span>}
                     <span className={`pl-status ${s.tone}`}>{s.label}</span>
                     {(t.status === 'failed' || t.status === 'blocked') && (
                       <button type="button" className="btn btn-line btn-sm" disabled={busy} onClick={() => rewind(t)}>Rewind</button>
