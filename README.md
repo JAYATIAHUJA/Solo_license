@@ -19,6 +19,8 @@ Built for the [neatHack AI agent hackathon](https://neatlogs.com/hackathon) · u
 
 ---
 
+**Every feature, and where to find it (CLI, dashboard, plugin): [docs/FEATURES.md](docs/FEATURES.md).**
+
 ## The problem
 
 Every coding agent offers two bad deals:
