@@ -103,9 +103,11 @@
 .lp-fix-top code { padding: 4px 8px; border: 1px solid var(--ink); font-size: 12px; }
 .lp-fix-beat h3 { font: 400 clamp(26px, 2.6vw, 38px)/1 var(--font-serif); margin: 0; }
 .lp-fix-log { margin: 0; }
-.lp-fix-log li { grid-template-columns: minmax(110px, auto) 1fr; }
+.sc-log.lp-fix-log li { grid-template-columns: minmax(140px, auto) 1fr; }
 .lp-fix-told { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--ink); }
-.lp-fix-told p { margin: 6px 0 0; font-size: 21px; line-height: 1.2; }
+.lp-fix-told p { margin: 6px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-2); }
+.lp-fix-told code, .lp-fix-loop code { text-transform: none; letter-spacing: 0; }
+.lp-fix-told code { font-size: 12px; padding: 1px 4px; background: var(--sheet); border: 1px solid var(--hair); overflow-wrap: anywhere; }
 .lp-fix-loop { display: grid; gap: 10px; }
 .lp-fix-loop code { font-size: 12px; }
 .lp-fix-ticks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
@@ -191,6 +193,8 @@
   .lp-fix { grid-template-columns: 1fr; }
   .lp-fix-beat, .lp-fix-beat + .lp-fix-beat { padding: 20px 0; border-left: 0; }
   .lp-fix-beat + .lp-fix-beat { border-top: 1px solid var(--hair); }
+  .sc-log.lp-fix-log li { grid-template-columns: 1fr; gap: 2px; }
+  .sc-log.lp-fix-log em { grid-column: auto; }
   .lp-footer-top { grid-template-columns: 1fr 1fr; }
   .lp-footer-top > a { grid-column: span 2; }
 }
@@ -273,7 +277,7 @@
   /* remediation */
   .lp-fix-beat { gap: clamp(8px, 1.6vh, 14px); padding-top: clamp(12px, 2.4vh, 22px); }
   .lp-fix-beat h3 { font-size: clamp(22px, min(2.6vw, 4.4vh), 38px); }
-  .lp-fix-told p { font-size: clamp(16px, 2.6vh, 21px); }
+  .lp-fix-told p { font-size: clamp(12.5px, 1.9vh, 14.5px); }
   .lp-fix-log li { padding: clamp(4px, 0.9vh, 8px) 0; }
 
   /* evidence */
@@ -286,7 +290,8 @@
   /* facts */
   .lp-fact b { font-size: clamp(72px, min(11vw, 22vh), 168px); }
 
-  /* faq */
+  /* faq: an open answer can outgrow one screen, so this section grows instead of clipping */
+  .lp-faq { height: auto; min-height: 100svh; overflow: visible; }
   .lp-faq-q { padding: clamp(12px, 2.2vh, 22px) 0; font-size: clamp(16px, 2.3vh, 19px); }
 
   /* closing + footer share the last screen */

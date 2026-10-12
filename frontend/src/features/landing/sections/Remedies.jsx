@@ -6,28 +6,28 @@ const EASE = [0.22, 1, 0.36, 1];
 
 const BEATS = [
   {
-    code: 'remediation',
+    code: 'tool-failed',
     title: 'A failed install.',
     log: [
-      ['tool.Bash', 'npm install left-pad@9'],
-      ['verify.install', 'exit 1 · ERESOLVE', true],
+      ['tool.failed', 'npm install · exit 1', true],
+      ['remediation.sent', 'install-dep → L0'],
     ],
-    told: 'Restore package.json and package-lock.json: git checkout -- package.json package-lock.json',
+    told: '`npm install left-pad@9` failed and install-dep is back to asking. Undo the partial change (`git checkout -- package.json package-lock.json`) and continue without it.',
   },
   {
     code: 'flagged',
     title: 'You mark it wrong.',
     log: [
-      ['turn.flagged', 'marked wrong · by you', true],
-      ['license.flag', 'file-edit · L2 → L0'],
+      ['turn.flagged', 'wrong file · by you', true],
+      ['remediation.queued', 'file-edit → L0'],
     ],
-    told: 'Your last turn was flagged by the user. Revert its changes before anything else.',
+    told: 'Your last turn was flagged by the user: wrong file. file-edit is back to asking. Revert that turn’s changes before continuing… Then ask the user what they want instead.',
   },
   {
     code: 'loop-stop',
-    title: 'The same failing call.',
+    title: 'The same call, again.',
     loop: true,
-    told: 'Five blocked attempts this turn. Stop trying variations and tell the user what is failing.',
+    told: 'This is the 5th time `npm test -- cart.test.js` runs with nothing edited in between. Stopping here so a person can look: say what you were trying to do and ask the user how to proceed.',
   },
 ];
 
@@ -63,7 +63,7 @@ export function Remedies() {
             )}
             <div className="lp-fix-told">
               <span className="mono muted">Agent is told</span>
-              <p className="hand">“{beat.told}”</p>
+              <p>{beat.told.split('`').map((part, k) => (k % 2 ? <code key={k} className="mono">{part}</code> : part))}</p>
             </div>
           </motion.li>
         ))}
