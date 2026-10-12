@@ -168,14 +168,42 @@ def start(host: str = "127.0.0.1", port: int | None = None, *, wait: float = 30.
     return {"status": "starting", **state}
 
 
-def _kill(pid: int) -> None:
+def _kill(pid: int, state: dict | None = None) -> bool:
+    """Terminate the recorded process without following a reused PID."""
+    if os.name != "nt" and hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
+        try:
+            fd = os.pidfd_open(pid)
+        except OSError:
+            return False
+        try:
+            if state and not _process_matches(pid, state):
+                return False
+            signal.pidfd_send_signal(fd, signal.SIGTERM)
+            return True
+        except OSError:
+            return False
+        finally:
+            os.close(fd)
     if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
-        return
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1400, False, pid)  # QUERY_LIMITED_INFORMATION | TERMINATE
+        if not handle:
+            return False
+        try:
+            if state and not _process_matches(pid, state):
+                return False
+            return bool(kernel32.TerminateProcess(handle, 1))
+        finally:
+            kernel32.CloseHandle(handle)
+    if state and not _process_matches(pid, state):
+        return False
     try:
         os.killpg(pid, signal.SIGTERM)       # the gate leads its own session
     except (ProcessLookupError, PermissionError):
-        return
+        return False
     for _ in range(40):
         if not _alive(pid):
             return
@@ -184,6 +212,7 @@ def _kill(pid: int) -> None:
         os.killpg(pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError):
         pass
+    return True
 
 
 def stop() -> dict:
@@ -195,10 +224,9 @@ def stop() -> dict:
     if not _alive(pid):
         pidfile().unlink(missing_ok=True)
         return {"status": "stale", **state}
-    if not _process_matches(pid, state):
+    if not _kill(pid, state):
         pidfile().unlink(missing_ok=True)
         return {"status": "pid-reused", **state}
-    _kill(pid)
     for _ in range(40):
         if not _alive(pid):
             break
