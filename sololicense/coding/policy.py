@@ -90,11 +90,6 @@ class Policy:
     budget: Limits = field(default_factory=Limits)
 
     def to_json(self) -> dict:
-        return {"ceilings": dict(self.ceilings), "deny_commands": list(self.deny_commands),
-                "deny_paths": list(self.deny_paths), "freeze": self.freeze,
-                "subagent_max": self.subagent_max,
-                "subagent_deny_types": list(self.subagent_deny_types), "source": self.source}
-    def to_json(self) -> dict:
         out = {"ceilings": dict(self.ceilings), "deny_commands": list(self.deny_commands),
                "deny_paths": list(self.deny_paths), "freeze": self.freeze, "source": self.source}
         out["subagent_max"] = self.subagent_max
