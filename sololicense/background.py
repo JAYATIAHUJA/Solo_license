@@ -179,6 +179,16 @@ def _kill(pid: int, state: dict | None = None) -> bool:
             if state and not _process_matches(pid, state):
                 return False
             signal.pidfd_send_signal(fd, signal.SIGTERM)
+            for _ in range(40):
+                if not _alive(pid):
+                    return True
+                time.sleep(0.25)
+            # Keep using the same pidfd for escalation; never look up the
+            # numeric PID again after the identity check.
+            try:
+                signal.pidfd_send_signal(fd, signal.SIGKILL)
+            except OSError:
+                pass
             return True
         except OSError:
             return False
