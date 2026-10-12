@@ -26,15 +26,22 @@
 .lp-sheet .btn { margin-top: 12px; justify-content: center; }
 
 /* ---------- hero ---------- */
-.lp-hero { max-width: var(--max); min-height: calc(100svh - 68px); margin: 0 auto; padding: clamp(28px, 4vw, 56px) var(--gutter); display: grid; place-items: center; }
-.lp-hero-grid { width: min(100%, 980px); }
-.lp-hero-copy { display: grid; justify-items: center; text-align: center; }
+.lp-hero { max-width: var(--max); margin: 0 auto; padding: clamp(28px, 4vw, 56px) var(--gutter) 0; }
+.lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
 .lp-kicker { color: var(--muted); margin: 0 0 28px; }
-.lp-h1 { font-size: clamp(40px, 8vw, 128px); line-height: 0.92; letter-spacing: -0.035em; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.lp-h1 { font-size: clamp(40px, 8vw, 128px); line-height: 0.92; letter-spacing: -0.035em; margin: 0; }
 .lp-h1 em { padding: 0 0.04em; }
+.lp-h1 { white-space: normal; text-wrap: balance; }
 .lp-lede { font-size: clamp(17px, 1.35vw, 20px); line-height: 1.55; max-width: 52ch; margin: 36px auto 0; color: var(--ink-2); }
 .lp-lede b { font-weight: 600; color: var(--ink); }
-.lp-hero-cta { display: flex; justify-content: center; width: min(100%, 760px); margin-top: 32px; }
+.lp-hero-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 32px; }
+.lp-hero-copy { width: 100%; max-width: 1100px; margin: 0 auto; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.lp-hero-copy .lp-h1 { max-width: 100%; overflow-wrap: break-word; }
+.lp-hero-meta { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: clamp(40px, 5vw, 72px); border-top: 1px solid var(--ink); }
+.lp-hero-meta > div { padding: 18px 20px 24px 0; }
+.lp-hero-meta > div + div { padding-left: 20px; border-left: 1px solid var(--hair); }
+.lp-hero-meta p { margin: 8px 0 0; font-size: 15px; max-width: 30ch; overflow-wrap: anywhere; }
+.lp-h1 { overflow-wrap: break-word; }
 
 /* ---------- ticker ---------- */
 .lp-ticker { border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); overflow: hidden; background: var(--ink); color: var(--paper); margin-top: clamp(48px, 6vw, 80px); }
@@ -161,7 +168,8 @@
   .lp-burger { display: grid; }
   .lp-nav-cta .btn-ghost { display: none; }
   .lp-hero-grid, .lp-split, .lp-evidence-grid, .lp-faq-grid, .lp-ladder-controls { grid-template-columns: 1fr; }
-  .lp-facts { grid-template-columns: 1fr 1fr; }
+  .lp-hero-meta, .lp-facts { grid-template-columns: 1fr 1fr; }
+  .lp-hero-meta > div:nth-child(3) { grid-column: span 2; border-left: 0; padding-left: 0; border-top: 1px solid var(--hair); }
   .lp-fact:nth-child(3) { padding-left: 0; border-left: 0; }
   .lp-fact:nth-child(n+3) { border-top: 1px solid var(--ink); }
   .lp-index-head { grid-template-columns: 36px 1fr 24px; }
@@ -180,13 +188,19 @@
   .lp-nav-cta .btn-ink { display: none; }
   .lp-loop { grid-template-columns: 1fr; }
   .lp-packet-wrap { padding: 16px; }
-  .lp-note-c { display: none; }
+  .lp-note-c, .lp-note-b { display: none; }
 }
 
 /* ---------- install command bar (hero + install page) ---------- */
 .lp-ask { flex: 1 1 520px; min-width: 0; box-sizing: border-box; min-height: 56px; margin: 0; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; border: 1px solid var(--ink); background: var(--sheet); transition: box-shadow 0.2s var(--ease), background 0.2s var(--ease); }
 .lp-ask.is-copied { background: var(--paper); box-shadow: 4px 4px 0 var(--ink); }
 .lp-ask-cmd { flex: 1; min-width: 0; font: 400 14px/1.45 var(--font-mono); line-height: 1.45; color: var(--ink); text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+.lp-hero-cta { align-items: center; }
+.lp-hero-open { flex: none; box-sizing: border-box; height: 56px; min-height: 56px; margin: 0; }
+@media (max-width: 640px) {
+  .lp-ask { flex-basis: 100%; }
+  .lp-hero-open { width: 100%; }
+}
 .lp-manifesto .lp-ticker { margin: 0 calc(-1 * var(--gutter)) clamp(28px, 5vh, 56px); }
 
 /* ---------- hero on short laptop screens ---------- */
@@ -194,7 +208,10 @@
   .lp-h1 { font-size: clamp(40px, min(7.4vw, 12.5vh), 120px) !important; }
   .lp-kicker { margin-bottom: 10px !important; }
   .lp-lede { margin-top: 12px !important; font-size: 15px !important; }
-  .lp-hero-cta { margin-top: 14px !important; }
+  .lp-hero-cta { margin-top: 14px !important; gap: 8px; }
+  .lp-hero-meta { margin-top: 12px !important; }
+  .lp-hero-meta > div { padding-top: 8px !important; padding-bottom: 8px !important; }
+  .lp-hero-meta p { margin-top: 4px; font-size: 13px !important; }
 }
 
 /* ---------- one section = one viewport (desktop / tablet landscape) ---------- */
@@ -210,11 +227,15 @@
   .lp-copy { font-size: clamp(14px, 2vh, 17px); }
 
   /* hero fills the viewport below the 68px nav */
-  .lp-hero { min-height: calc(100svh - 68px); height: auto; padding-top: clamp(16px, 3vh, 40px); }
+  .lp-hero { min-height: calc(100svh - 68px); display: flex; flex-direction: column; padding-top: clamp(16px, 3vh, 40px); }
+  .lp-hero-grid { flex: 1; min-height: 0; align-content: center; }
   .lp-kicker { margin-bottom: clamp(10px, 2.4vh, 28px); }
   .lp-h1 { font-size: clamp(40px, min(8vw, 14.5vh), 128px); }
   .lp-lede { margin-top: clamp(14px, 3vh, 36px); font-size: clamp(15px, 2.1vh, 20px); }
   .lp-hero-cta { margin-top: clamp(14px, 3vh, 32px); }
+  .lp-hero-meta { margin-top: clamp(16px, 3vh, 40px); }
+  .lp-hero-meta > div { padding-top: 12px; padding-bottom: 14px; }
+  .lp-hero-meta p { font-size: 14px; }
 
   /* manifesto */
   .lp-manifesto { justify-content: flex-start; padding-top: 0; }

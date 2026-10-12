@@ -57,6 +57,9 @@ export function CodingSetup() {
     }).catch(() => {});
   }, []);
   useEffect(() => { api.codingInstall(agent).then(setInstall).catch(() => {}); }, [agent]);
+  // the paste-in prompt is agent-neutral: whichever agent reads it sets itself up
+  const [anyAgentPrompt, setAnyAgentPrompt] = useState('');
+  useEffect(() => { api.codingInstall('auto').then((r) => setAnyAgentPrompt(r.prompt)).catch(() => {}); }, []);
   useEffect(() => {
     const poll = () => api.coding().then((r) => setSeen(r.agents || [])).catch(() => {});
     poll();
@@ -214,10 +217,10 @@ export function CodingSetup() {
                 </details>
               </div>
             )}
-            {install && tab === 'agent' && (
+            {anyAgentPrompt && tab === 'agent' && (
               <div className="su-body">
-                <p>Paste this into {spec?.label || 'your agent'}. It installs Solo License itself.</p>
-                <Copy text={install.prompt} block />
+                <p>Paste this into any coding agent. It sets Solo License up for itself.</p>
+                <Copy text={anyAgentPrompt} block />
               </div>
             )}
             {install && tab === 'plugin' && (
