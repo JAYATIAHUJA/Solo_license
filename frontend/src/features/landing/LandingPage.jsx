@@ -12,6 +12,7 @@ import { Journey } from './scenes/Journey.jsx';
 import { AgentGraph } from './scenes/AgentGraph.jsx';
 import { Crash } from './scenes/Crash.jsx';
 import { Detections } from './sections/Detections.jsx';
+import { Remedies } from './sections/Remedies.jsx';
 import { EvidenceMock } from './scenes/EvidenceMock.jsx';
 import { LedgerTrack } from './scenes/LedgerTrack.jsx';
 import { Altimeter } from './scenes/Altimeter.jsx';
@@ -56,6 +57,7 @@ export function LandingPage() {
         <AgentGraph />
         <Crash />
         <Detections />
+        <Remedies />
         <EvidenceMock />
         <LedgerTrack />
         <Install />

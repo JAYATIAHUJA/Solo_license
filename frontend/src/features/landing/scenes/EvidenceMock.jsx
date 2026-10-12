@@ -112,7 +112,7 @@ export function EvidenceMock() {
   return (
     <section id="evidence" className="lp-section sc-evidence" ref={ref}>
       <div className="sc-evidence-head">
-        <div className="sc-head"><span className="mono muted">(008)</span><ScrambleText className="mono" text="The evidence packet" /></div>
+        <div className="sc-head"><span className="mono muted">(009)</span><ScrambleText className="mono" text="The evidence packet" /></div>
         <h2 className="sc-title serif">Recovery is a <em className="italic">judgement,</em> not a retry.</h2>
       </div>
       <div className="sc-evidence-stage" ref={stageRef} style={{ perspective: 1600 }}>
