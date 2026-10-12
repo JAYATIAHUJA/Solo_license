@@ -4,14 +4,14 @@ import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 import { SketchArrow, SketchCircle } from '../../../components/sketch/Sketch.jsx';
 import { DitherField } from '../../../components/shader/PaperBackdrop.jsx';
 import { MaskWords } from '../Reveal.jsx';
-import { HeroSpecimen } from './HeroSpecimen.jsx';
+import { HeroGateFeed } from './HeroGateFeed.jsx';
 import { AskBar } from './AskBar.jsx';
 import { Magnetic } from '../../../components/fx/Magnetic.jsx';
 
 const META = [
   ['For', 'Claude Code, Codex, Cursor, Gemini, Antigravity, Copilot, Grok, Windsurf and more'],
-  ['Proves', 'Every turn: the diff against your request, then the tests'],
-  ['Earns', 'Auto-approval per action class, only when the evidence beats the cost of a mistake'],
+  ['Earns', 'Auto-approval per action class, from verified turns: the diff against your request, then the tests'],
+  ['Controls', 'Subagents, MCP servers and spend: each earns its own license or stops at its cap'],
 ];
 
 export function Hero() {
@@ -20,7 +20,7 @@ export function Hero() {
       <div className="lp-hero-grid">
         <div className="lp-hero-copy">
           <motion.p className="mono lp-kicker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            (001) - Earned autonomy for coding agents
+            (001) - The control layer for coding agents
           </motion.p>
           <h1 className="lp-h1 serif">
             <MaskWords text="Autonomy" animateOnMount />
@@ -53,10 +53,10 @@ export function Hero() {
           transition={{ duration: 1.3, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
           <DitherField className="lp-hero-shader" shape="warp" speed={0.25} size={2.4} />
-          <HeroSpecimen />
+          <HeroGateFeed />
           <div className="lp-note lp-note-b hand">
             <SketchArrow width={70} height={46} d="M64 42 C 44 40, 20 30, 8 6" end={[8, 6, -2.1]} delay={2} />
-            one failed turn → L0
+            every call, judged by what it earned
           </div>
         </motion.div>
       </div>
