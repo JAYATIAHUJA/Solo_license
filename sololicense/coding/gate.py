@@ -107,6 +107,8 @@ class CodingGate:
             agent=agent,
         )
         self._traces[turn_id] = trace
+        if not event.get("_implicit"):  # a turn opened for an agent without a prompt hook is not a person
+            loops.clear_halt(self.conn, session)
         trace.span("turn.start", turn=turn_id, prompt=str(event.get("prompt", ""))[:300])
         answer: dict = {}
         if agent in agents.TAKES_CONTEXT:
@@ -157,10 +159,11 @@ class CodingGate:
             decision, reason = "ask", self._ask_reason(spec.key, level, lic, ceiling)
         # Counted when calls run (tool_result); here only read, so nothing counts twice.
         repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
-        if decision != "deny" and repeats >= loops.STOP_AT:
+        halted = loops.halted(self.conn, session)
+        if decision != "deny" and (repeats >= loops.STOP_AT or halted):
             decision, by = "deny", "loop-guard"
-            reason = remediation.compose("loop-stop", command=command, attempts=repeats).text.removeprefix(
-                "Solo License: ")
+            reason = (halted or remediation.compose("loop-stop", command=command, attempts=repeats).text
+                      ).removeprefix("Solo License: ")
 
         decision_id = agent_repo.insert_decision(
             self.conn, session_id=session, agent=str(event.get("_agent") or "claude-code"),
@@ -266,6 +269,8 @@ class CodingGate:
         else:
             return "", False
         text = remediation.compose(kind, command=command, reason=seen.error, attempts=seen.count).text
+        if halt:
+            loops.halt(self.conn, session, text)
         self._trace(turn).span("detection.loop", status="error", severity="critical" if halt else "warning",
                                kind=kind, command=command, repeats=seen.count, failures=seen.failures,
                                action_class=classify_tool(tool, tool_input).action_class,
@@ -306,8 +311,10 @@ class CodingGate:
 
     def stop(self, event: dict) -> dict:
         session = str(event.get("session_id", ""))
+        loops.clear_halt(self.conn, session)
         turn = agent_repo.current_turn(self.conn, session)
         if turn is None or turn["status"] != "open":
+            self.conn.commit()
             return {}
         trace = self._trace(turn)
         decisions = agent_repo.decisions_for_turn(self.conn, turn["id"])
@@ -550,7 +557,8 @@ class CodingGate:
     def _turn(self, session: str, repo: str, root: str) -> sqlite3.Row:
         turn = agent_repo.current_turn(self.conn, session)
         if turn is None or turn["status"] != "open":
-            self.user_prompt({"session_id": session, "cwd": root, "prompt": "", "_agent": self._agent})
+            self.user_prompt({"session_id": session, "cwd": root, "prompt": "", "_agent": self._agent,
+                              "_implicit": True})
             turn = agent_repo.current_turn(self.conn, session)
         return turn
 

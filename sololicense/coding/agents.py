@@ -272,7 +272,7 @@ def _render_context(agent: str, native_event: str, answer: dict, context: str) -
     """Text for the model next to a tool result or a prompt. The event name is
     the agent's own: a Codex PostToolUse that failed is still a PostToolUse."""
     if agent not in TAKES_CONTEXT:
-        return Native()  # recorded and shown in the dashboard; the turn check still applies
+        return _render_halt(agent, answer)  # recorded and shown in the dashboard; the turn check still applies
     body: dict = {"hookSpecificOutput": {"hookEventName": native_event, "additionalContext": context}}
     # Claude Code adds a PostToolUse block's reason next to the tool result; on
     # Codex a block replaces the result, so Codex gets the context alone.
@@ -282,6 +282,20 @@ def _render_context(agent: str, native_event: str, answer: dict, context: str) -
         if key in answer:
             body[key] = answer[key]
     return Native(body)
+
+
+def _render_halt(agent: str, answer: dict) -> Native:
+    """A loop stop after a tool ran, for agents whose post-tool hook can end the run
+    (geminicli.com/docs/hooks/reference: AfterTool ``continue``; Cline: ``cancel``).
+    The others are refused at their next pre-tool hook instead."""
+    if answer.get("continue") is not False:
+        return Native()
+    reason = str(answer.get("stopReason", ""))
+    if agent == "gemini":
+        return Native({"continue": False, "stopReason": reason})
+    if agent == "cline":
+        return Native({"cancel": True, "errorMessage": reason})
+    return Native()
 
 
 def _render_permission(agent: str, native_event: str, verdict: str, reason: str, interrupt: bool = False) -> Native:
