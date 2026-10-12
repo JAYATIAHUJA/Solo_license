@@ -422,3 +422,38 @@ CREATE TABLE IF NOT EXISTS agent_flags (
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     delivered_at   TEXT
 );
+
+-- What a coding session has spent, as running totals per slice: the agent's own
+-- figure ('statusline', 'msg:<id>') or an estimate from its transcript's tokens.
+CREATE TABLE IF NOT EXISTS agent_spend (
+    session_id    TEXT NOT NULL,
+    part          TEXT NOT NULL,
+    agent         TEXT NOT NULL,
+    repo          TEXT NOT NULL,
+    model         TEXT NOT NULL DEFAULT '',
+    source        TEXT NOT NULL,                 -- reported | estimate
+    cost_usd      REAL,
+    tokens        INTEGER NOT NULL DEFAULT 0,
+    unpriced      TEXT NOT NULL DEFAULT '',      -- models without a known price
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, part)
+);
+
+-- Spend per repository and local day: what each session's total moved by that day.
+CREATE TABLE IF NOT EXISTS agent_spend_days (
+    repo          TEXT NOT NULL,
+    day           TEXT NOT NULL,
+    session_id    TEXT NOT NULL,
+    cost_usd      REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (repo, day, session_id)
+);
+
+-- Once-only budget marks per scope ('session:<id>', 'day:<repo>:<day>', 'turn:<id>'):
+-- warned / capped at a given cap, sent back, or resumed by a person.
+CREATE TABLE IF NOT EXISTS agent_budget_marks (
+    scope         TEXT NOT NULL,
+    mark          TEXT NOT NULL,
+    actor_id      TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (scope, mark)
+);

@@ -207,10 +207,15 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
     session = str(_first(p, "session_id", "sessionId", "conversation_id", "conversationId", "trajectory_id",
                          "taskId", "sessionID", "thread_id", default=""))
     roots = _first(p, "workspace_roots", "workspaceRoots", "workspacePaths", default=None)
+    info = p.get("tool_info") if isinstance(p.get("tool_info"), dict) else {}
     cwd = str(_first(p, "cwd", "workspaceRoot", "directory",
-                     default=(roots[0] if isinstance(roots, list) and roots else ".")))
+                     default=_first(info, "cwd", default=(roots[0] if isinstance(roots, list) and roots else "."))))
     body: dict = {"session_id": session or f"{spec.key}:{cwd}", "cwd": cwd,
                   "principal": _principal(p)}
+    # Where the agent keeps its session file (read for token usage by budget.py).
+    transcript = _first(p, "transcript_path", "transcriptPath")
+    if transcript:
+        body["transcript_path"] = str(transcript)
 
     if event == PROMPT:
         body["prompt"] = str(_first(p, "prompt", "user_prompt", "message", default=""))

@@ -31,7 +31,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from sololicense.coding import agents, digest, entire, jev, loops, remediation
+from sololicense.coding import agents, budget, entire, jev, loops, remediation
+from sololicense.coding import digest
 from sololicense.coding import policy as policy_mod
 from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe, edited_path
 from sololicense.coding.ladder import CodingLadder
@@ -186,7 +187,8 @@ class CodingGate:
         rules = policy_mod.effective(self.conn, repo, root)
         subagent_denial = policy_mod.denied_subagent(rules, tool, tool_input)
         repeats = loops.seen(self.conn, session, loops.fingerprint(tool, tool_input)).count + 1
-        if (result.hard_deny or subagent_denial or policy_mod.denied(rules, tool, tool_input, root)
+        over_budget = result.action_class != "read" and budget.check(self.conn, session, repo, rules.budget).blocked
+        if (result.hard_deny or subagent_denial or policy_mod.denied(rules, tool, tool_input, root) or over_budget
                 or loops.halted(self.conn, session) or repeats >= loops.STOP_AT):
             answer = self.permission({**event, "_hook": "PreToolUse"})
             decision = (answer.get("hookSpecificOutput") or {}).get("decision") or {}
@@ -232,6 +234,7 @@ class CodingGate:
         ceiling = rules.ceilings[spec.key]
         level = min(int(lic["level"]), ceiling)
         forbidden = policy_mod.denied(rules, tool, tool_input, root)
+        spend = budget.check(self.conn, session, repo, rules.budget)
         subagent_denial = policy_mod.denied_subagent(rules, tool, tool_input)
 
         if result.hard_deny:
@@ -240,6 +243,8 @@ class CodingGate:
             decision, by, reason = "deny", "policy", f"Blocked: {subagent_denial}."
         elif forbidden:
             decision, by, reason = "deny", "policy", f"Blocked: {forbidden}."
+        elif spend.blocked and spec.key != "read":
+            decision, by, reason = "deny", "budget", budget.deny_reason(spend)
         elif rules.freeze:
             by = "license" if event.get("_prompt_only", True) else "agent-settings"
             decision, reason = "ask", f"Frozen by policy ({rules.source}): every action asks."
@@ -289,6 +294,9 @@ class CodingGate:
                        **via)
             self.conn.commit()
             return self._permission_response(decision, reason, interrupt=True)
+        elif decision == "deny" and by == "budget":
+            # A stop, not evidence: no level changes.
+            self._budget_capped(turn, spend, trace)
         elif decision == "deny":
             trace.span("detection.forbidden_action", status="error", severity="critical",
                        message=reason, reason=reason, action_class=spec.key, command=command, **via)
@@ -315,6 +323,7 @@ class CodingGate:
         loop_note, halt = self._watch_loops(session, tool, tool_input, event, failed, principal=principal)
         row = agent_repo.pending_decision(self.conn, session, tool, describe(tool, tool_input),
                                           principal=principal)
+        loop_note = "\n\n".join(t for t in (loop_note, self._budget_note(event)) if t)
         if row is None:  # never went through the gate (already allowed by settings)
             self.conn.commit()
             return self._with_loop_note({}, loop_note, halt, failed)
@@ -423,6 +432,9 @@ class CodingGate:
             self.conn.commit()
             return {}
         trace = self._trace(turn)
+        sent_back = self._budget_stop(event, turn, trace, retrying=bool(event.get("stop_hook_active")))
+        if sent_back:
+            return sent_back
         decisions = agent_repo.decisions_for_turn(self.conn, turn["id"])
         ok, reason, details = (True, "", {})
         if self.verifier is not None:
@@ -628,6 +640,77 @@ class CodingGate:
         trace.span("license.policy", action_class="policy", reason=summary, actor_id=actor_id, git_sha=sha or "")
         trace.flush(self.conn, None)
         return sha
+
+    # --- budget ----------------------------------------------------------------
+
+    def _budget_status(self, event: dict, turn: sqlite3.Row) -> budget.Status:
+        """Spend so far (re-read from the agent's transcript, if it has one) against the policy's caps."""
+        budget.observe(self.conn, event, turn["repo"])
+        rules = policy_mod.effective(self.conn, turn["repo"], turn["cwd"])
+        return budget.check(self.conn, turn["session_id"], turn["repo"], rules.budget)
+
+    def _budget_note(self, event: dict) -> str:
+        """Text for the agent the first time its session crosses the warn line or a cap."""
+        turn = agent_repo.current_turn(self.conn, str(event.get("session_id", "")))
+        if turn is None:
+            return ""
+        status = self._budget_status(event, turn)
+        note = budget.notice(self.conn, status)
+        if note is None:
+            return ""
+        trace = self._trace(turn)
+        if note.kind == "cap":
+            self._budget_capped(turn, status, trace)
+        else:
+            trace.span("detection.budget", status="error", severity="warning", kind="budget-warn",
+                       reason=note.text.removeprefix("Solo License: "), spent=status.spent, cap=status.cap,
+                       scope=status.scope)
+        agent_repo.queue_remediation(self.conn, session_id=turn["session_id"], turn_id=turn["id"],
+                                     kind=f"budget-{note.kind}", text=note.text, delivered=True)
+        return note.text
+
+    def _budget_stop(self, event: dict, turn: sqlite3.Row, trace: Trace, *, retrying: bool) -> dict:
+        """At the cap, a turn is sent back once for a summary instead of more work."""
+        status = self._budget_status(event, turn)
+        if retrying or not status.blocked or not budget.mark_once(self.conn, f"turn:{turn['id']}", "budget-stop"):
+            return {}
+        self._budget_capped(turn, status, trace)
+        text = budget.stop_text(status)
+        trace.span("remediation.sent", status="error", kind="budget-stop", turn=turn["id"],
+                   reason=text.removeprefix("Solo License: "), spent=status.spent, cap=status.cap)
+        agent_repo.queue_remediation(self.conn, session_id=turn["session_id"], turn_id=turn["id"],
+                                     kind="budget-stop", text=text, delivered=True)
+        self.conn.commit()
+        return {"decision": "block", "reason": text}
+
+    def _budget_capped(self, turn: sqlite3.Row, status: budget.Status, trace: Trace) -> None:
+        """The first time a cap is reached: an incident, an event and a ledger commit."""
+        if not budget.mark_once(self.conn, status.scope_key, f"recorded@{status.cap}"):
+            return
+        summary = (f"{status.scope.capitalize()} budget reached: {budget.usd(status.spent)} of "
+                   f"{budget.usd(status.cap)} ({turn['agent']}, session {turn['session_id'][:12]}). "
+                   "Only reading is allowed until a person raises the cap or resumes.")
+        trace.span("detection.budget", status="error", severity="critical", kind="budget-cap", reason=summary,
+                   spent=status.spent, cap=status.cap, scope=status.scope)
+        self._budget_event(turn["repo"], summary, GATE_ACTOR, trace)
+
+    def resume_budget(self, repo: str, session_id: str | None, *, actor_id: str) -> list[str]:
+        """A person lifts the cap for a session (and the repo today), recorded like any change."""
+        lifted = budget.resume(self.conn, repo, session_id, actor_id)
+        trace = self.tracer.start_trace("coding.budget", defaults=_who(repo), session_id=session_id or None)
+        where = f"session {session_id[:12]}" if session_id else "today"
+        self._budget_event(repo, f"{actor_id}: resumed past the budget cap for {where} in {repo}.", actor_id, trace)
+        trace.flush(self.conn, None)
+        self.conn.commit()
+        return lifted
+
+    def _budget_event(self, repo: str, summary: str, actor_id: str, trace: Trace) -> None:
+        event_id = agent_repo.insert_event(self.conn, repo=repo, action_class="budget", kind="budget", from_level=0,
+                                           to_level=0, reason=summary, actor_id=actor_id, trace_id=trace.trace_id)
+        sha = self.ledger.record(LedgerEntry(f"budget@{repo}", "budget", 0, 0, summary, None, trace.trace_id))
+        if sha:
+            agent_repo.set_event_sha(self.conn, event_id, sha)
+        trace.span("license.budget", action_class="budget", reason=summary, actor_id=actor_id, git_sha=sha or "")
 
     def _change(self, repo: str, key: str, kind: str, old: int, new: int, reason: str, trace: Trace,
                 actor_id: str = GATE_ACTOR, checkpoint: str | None = None,
