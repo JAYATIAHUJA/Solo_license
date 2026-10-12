@@ -1,0 +1,68 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R70RX89EHEC4FWTAQ39PFM",
+  "session_id": "9785f29d-f1ba-41b1-bd01-4ac78bf07f72",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-12T14:07:17.5817002Z",
+  "branch": "fix/landing-restore-lists",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/features/landing/Reveal.jsx"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "3e0c05aa4584",
+  "checkpoint_transcript_start": 2134,
+  "transcript_lines_at_start": 2134,
+  "compact_transcript_start": 322,
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 4140,
+    "cache_read_tokens": 2152648,
+    "output_tokens": 1751,
+    "api_call_count": 4
+  },
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-12T14:07:17.2957762Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 4,
+    "human_modified": 8,
+    "human_removed": 0,
+    "total_committed": 4,
+    "total_lines_changed": 12,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2501,
+      "user_lines_removed": 39,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/launch.json": 143,
+        ".cursor/hooks.json": 40,
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "docs/IMPLEMENTATION_PLAN.md": 179,
+        "docs/PRD-v3-control-layer.md": 453,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/strategy/2026-10-11-pivot-and-winning-plan.md": 651,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260,
+        "docs/superpowers/plans/2026-10-12-agent-events.md": 321,
+        "docs/superpowers/plans/2026-10-12-scrap-payments-frontend.md": 139,
+        "docs/superpowers/plans/2026-10-12-v3-roadmap.md": 206
+      },
+      "user_removed_per_file": {
+        ".claude/launch.json": 39
+      }
+    }
+  ]
+}
