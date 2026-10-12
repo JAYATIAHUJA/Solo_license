@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_01GGHEp86ZJqq8BswoRx6umF",
+  "agent_id": "add034df7476bd559",
+  "subagent_type": "general-purpose",
+  "task_description": "Competitor census and OSS lane check",
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 105487,
+    "cache_read_tokens": 1712595,
+    "output_tokens": 714,
+    "api_call_count": 21
+  },
+  "started_at": "2026-10-12T19:39:41.7386883+05:30",
+  "completed_at": "2026-10-12T19:51:38.6295979+05:30"
+}
