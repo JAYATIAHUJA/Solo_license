@@ -714,6 +714,8 @@ def agent_hook(
                 answer = gate.stop(payload)
             elif event == "subagent-stop":
                 answer = gate.subagent_stop(payload)
+            elif event == "person-asked":
+                answer = gate.person_asked(payload)
             else:
                 answer = gate.tool_result(payload, failed=event == "post-tool-failure")
             native = agents.render(spec.key, native_event, answer)
@@ -867,3 +869,36 @@ def freeze_coding(payload: FreezePayload, actor: Actor = Depends(require_role(Ro
                 payload.repo, f"{'freeze on' if payload.enabled else 'freeze off'} for {where}", actor.actor_id)
         context.conn.commit()
         return coding_payload(context)
+
+
+# --- the dashboard, served by the gate itself when it has been built -------------------
+
+def dashboard_dir() -> Path | None:
+    """``SOLO_DASHBOARD_DIR``, else ``frontend/dist`` next to this checkout (``npm run build``)."""
+    from pathlib import Path as _Path
+
+    configured = os.environ.get("SOLO_DASHBOARD_DIR", "").strip()
+    candidates = [_Path(configured)] if configured else []
+    candidates.append(_Path(__file__).resolve().parents[2] / "frontend" / "dist")
+    return next((c for c in candidates if (c / "index.html").is_file()), None)
+
+
+from starlette.exceptions import HTTPException as _StarletteHTTPException  # noqa: E402
+from fastapi.exception_handlers import http_exception_handler as _default_http_handler  # noqa: E402
+
+
+@app.exception_handler(_StarletteHTTPException)
+async def dashboard_or_error(request: Request, exc: _StarletteHTTPException):
+    """The built dashboard (landing, setup guide, app) on the gate's own port, so
+    ``solo-license onboard`` can open it without a separate web server. Only a
+    GET that no API route answered gets it; everything else keeps its error."""
+    from fastapi.responses import FileResponse
+
+    root = dashboard_dir()
+    path = request.url.path.lstrip("/")
+    if exc.status_code != 404 or request.method != "GET" or root is None or path.startswith("api/"):
+        return await _default_http_handler(request, exc)
+    target = (root / path).resolve()
+    if path and target.is_file() and target.is_relative_to(root.resolve()):
+        return FileResponse(target)
+    return FileResponse(root / "index.html")

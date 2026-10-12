@@ -5,6 +5,7 @@ import { useStore } from '../../lib/store.jsx';
 import { when } from '../../lib/format.js';
 import { Logo } from '../../components/brand/Logo.jsx';
 import { SecretInput, TestRow } from '../app/components/IntegrationFields.jsx';
+import { plainNeatlogsError } from '../../lib/probe-errors.js';
 import '../app/components/plain-form.css';
 import './setup.css';
 
@@ -174,7 +175,7 @@ export function CodingSetup() {
         </p>
       </Step>
 
-      <Step n="3" title="Optional: sharper decisions and traces" done={settings.jev_enabled && settings.neatlogs_enabled}>
+      <Step n="3" title="Optional: connect neatlogs, Jev and Entire" done={settings.jev_enabled && settings.neatlogs_enabled}>
         <div className="pl-fields su-keys">
           <SecretInput label="TypeSafe API key (Jev)" field="typesafe_api_key" values={keys} settings={settings}
             onChange={(p) => setKeys((k) => ({ ...k, ...p }))} placeholder="ts_…"
@@ -189,8 +190,15 @@ export function CodingSetup() {
           </button>
           <TestRow label="Test Jev" okText="Jev answered" disabled={!settings.jev_enabled}
             onTest={async () => { const r = await api.testJev(); return { ok: r.ok, message: '' }; }} />
+          <TestRow label="Test neatlogs" okText="Trace sent and read back" disabled={!settings.neatlogs_enabled && !keys.neatlogs_api_key.trim()}
+            onTest={() => api.testNeatlogs({ neatlogs_api_key: keys.neatlogs_api_key, neatlogs_project: keys.neatlogs_project })}
+            translate={plainNeatlogsError} />
         </div>
         <p className="pl-small pl-muted">API keys are stored encrypted on this machine and never shown back in full.</p>
+        <p className="pl-small pl-muted">
+          <b>Entire</b> needs no key: with the Entire CLI in the repository (<code>entire enable</code>), a failed turn links
+          to the checkpoint of that session, and the dashboard can rewind it.
+        </p>
       </Step>
 
       <Step n="4" title="Say hello" done={Boolean(connected)}>

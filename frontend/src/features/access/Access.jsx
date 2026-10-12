@@ -24,6 +24,21 @@ export function Access() {
     api.session().then(setInfo).catch((cause) => setError(cause.message));
   }, []);
 
+  // `solo-license onboard` opens /access#token=<this machine's admin token>:
+  // sign in with it once and drop it from the address bar. The hash never
+  // reaches a server.
+  useEffect(() => {
+    const handed = new URLSearchParams(window.location.hash.slice(1)).get('token');
+    if (!handed) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    enter(async () => {
+      saveSession({ token: handed, kind: 'token' });
+      const actor = await api.me();
+      saveSession({ token: handed, actor, name: actor.id, kind: 'token' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function enter(fn) {
     setBusy(true); setError('');
     try {

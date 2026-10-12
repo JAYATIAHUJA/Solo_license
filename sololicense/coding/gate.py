@@ -219,6 +219,23 @@ class CodingGate:
         return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
                                        "permissionDecisionReason": f"Solo License: {reason}"}}
 
+    def person_asked(self, event: dict) -> dict:
+        """The agent is asking a person about the call its every-call hook just
+        sent (OpenCode's permission.ask). If that call then runs, the person said
+        yes, so it counts like a yes in Claude Code - instead of being only observed."""
+        session, principal = str(event.get("session_id", "")), _principal(event)
+        row = self.conn.execute(
+            "SELECT id, trace_id, action_class FROM agent_decisions WHERE session_id = ? AND principal = ? "
+            "AND decision = 'ask' AND decided_by = 'agent-settings' AND outcome = 'pending' "
+            "ORDER BY id DESC LIMIT 1", (session, principal)).fetchone()
+        if row is not None:
+            self.conn.execute("UPDATE agent_decisions SET decided_by = 'license' WHERE id = ?", (row["id"],))
+            turn = agent_repo.current_turn(self.conn, session, principal=principal)
+            if turn is not None:
+                self._trace(turn).span("gate.person_asked", decision_id=row["id"], action_class=row["action_class"])
+        self.conn.commit()
+        return {}
+
     def permission(self, event: dict) -> dict:
         self._agent = str(event.get("_agent") or "claude-code")
         principal = _principal(event)
