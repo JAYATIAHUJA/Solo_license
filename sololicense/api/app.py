@@ -532,6 +532,23 @@ def coding_dashboard(
         return coding_payload(context, repo)
 
 
+@app.get("/api/coding/decisions")
+def coding_all_decisions(
+    request: Request,
+    repo: str | None = Query(default=None, max_length=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Every permission decision ever recorded (the dashboard only polls the latest 60)."""
+    with _lock:
+        context = get_context()
+        host = request.client.host if request.client else ""
+        if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            current_actor(authorization)
+        config = getattr(context, "config", None)
+        return {"decisions": [{**dict(r), "neatlogs_link": neatlogs_link(config, r["trace_id"])}
+                              for r in agent_repo.all_decisions(context.conn, repo)]}
+
+
 class TestCommandPayload(BaseModel):
     repo: str = Field(min_length=1, max_length=200)
     test_command: str = Field(default="", max_length=400)

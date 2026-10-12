@@ -11,7 +11,6 @@ export function Footer({ onReplayIntro }) {
           <a href="/#journey">How it earns</a>
           <a href="/#agent">The loop</a>
           <a href="/#crash">The crash</a>
-          <a href="/#tour">Product</a>
           <Link to="/install">Install</Link>
           {onReplayIntro && <button className="lp-footer-link" onClick={onReplayIntro}>Replay intro</button>}
         </nav>

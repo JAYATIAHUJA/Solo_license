@@ -13,7 +13,7 @@
 .cd-savings span { color: var(--muted); font-size: 13px; }
 .pl-row-main b code { font-size: 13px; overflow-wrap: anywhere; }
 
-/* "This was wrong": an inline reason box under the row. */
+/* "Report mistake": an inline reason box under the row. */
 .cd-flag { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px 12px; background: var(--bad-bg); border-left: 3px solid var(--bad); }
 .cd-flag label { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
 .cd-flag input { height: 34px; padding: 0 10px; border: 1px solid var(--line); background: var(--card); font: 14px var(--font-sans); color: var(--ink); }
@@ -48,3 +48,8 @@
 }
 .cd-links { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
 .cd-links code { font-size: 12px; }
+
+/* The report button is a rare action: faint until the row is hovered or focused. */
+.cd-report { opacity: 0.45; font-size: 12px; transition: opacity 0.15s var(--ease); }
+.pl-row:hover .cd-report, .cd-report:hover, .cd-report:focus-visible { opacity: 1; }
+@media (hover: none) { .cd-report { opacity: 0.7; } }

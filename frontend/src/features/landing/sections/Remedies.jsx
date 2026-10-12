@@ -43,7 +43,7 @@ export function Remedies() {
       <SectionHead index="008" label="Remediation" />
       <div className="lp-split">
         <h2 className="lp-h2 serif">It tells the agent <em className="italic">how to fix it.</em></h2>
-        <p className="lp-copy">Taking the keys away is half of it. On the next hook, the agent gets the exact undo. Each moment below is a neatlogs incident and an Entire checkpoint, linked from its permission history row.</p>
+        <p className="lp-copy">On its next call the agent is told the exact undo.</p>
       </div>
       <SketchRule seed={420} />
       <ol className="lp-fix">

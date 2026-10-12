@@ -8,7 +8,6 @@ const LINKS = [
   ['/#terminal', 'In your agent'],
   ['/#journey', 'How it earns'],
   ['/#crash', 'The crash'],
-  ['/#tour', 'Product'],
   ['/install', 'Install'],
   ['/#faq', 'FAQ'],
 ];
