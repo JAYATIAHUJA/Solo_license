@@ -38,20 +38,40 @@ def build(conn: sqlite3.Connection, session_id: str, *, repo: str = "", principa
         ).fetchall()
         trust = [{"class": str(row["action_class"]), "level": int(row["level"]),
                   "streak": int(row["successes_at_level"])} for row in rows]
+    call = current_call or {}
+    safe_call = {k: call[k] for k in ("tool", "principal") if k in call}
+    if "input" in call:
+        safe_call["args_digest"] = _args_digest(json.dumps(call["input"], sort_keys=True, default=str))
     digest = {
         "goal": str(turn["prompt"] if turn else "")[:4000],
         "turn": {"files_touched": [], "diff_stat": "", "failures": []},
         "recent_calls": recent,
         "trust": trust,
-        "current_call": {**(current_call or {}), "principal": principal},
+        "current_call": {**safe_call, "principal": principal},
     }
     return digest
 
 
 def encode(digest: dict) -> str:
-    """Encode and cap a digest without allowing a large tool payload to escape."""
-    text = json.dumps(digest, separators=(",", ":"), ensure_ascii=True)
-    return text[:MAX_CHARS]
+    """Encode a digest while preserving valid JSON under the hard size cap."""
+    value = json.loads(json.dumps(digest, default=str))
+    while True:
+        text = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+        if len(text) <= MAX_CHARS:
+            return text
+        if isinstance(value.get("recent_calls"), list) and value["recent_calls"]:
+            value["recent_calls"] = value["recent_calls"][-max(1, len(value["recent_calls"]) // 2):]
+            continue
+        if isinstance(value.get("trust"), list) and value["trust"]:
+            value["trust"] = value["trust"][-max(1, len(value["trust"]) // 2):]
+            continue
+        goal = str(value.get("goal", ""))
+        if len(goal) > 256:
+            value["goal"] = goal[:len(goal) // 2]
+            continue
+        value["goal"] = goal[:64]
+        value["turn"] = {"files_touched": [], "diff_stat": "", "failures": []}
+        value["current_call"] = {"principal": value.get("current_call", {}).get("principal", "main")}
 
 
 def state(conn: sqlite3.Connection, session_id: str, *, repo: str = "", principal: str = "main",

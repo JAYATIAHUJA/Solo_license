@@ -33,6 +33,17 @@ def test_subagent_lifecycle_payloads_normalize_to_gate_events():
     assert start == agents.SUB_START and start_body["principal"] == "subagent:Explore"
     assert stop == agents.SUB_STOP and stop_body["modified_files"] == ["src/a.py"]
 
+    _, without_files = agents.normalize("claude-code", "SubagentStop", {
+        "session_id": "s", "cwd": "/repo", "agent_id": "a1", "agent_type": "Explore",
+    })
+    assert "modified_files" not in without_files
+
+
+def test_subagent_start_deny_is_forwarded_for_claude_and_codex():
+    answer = {"decision": "deny", "reason": "Explore is forbidden"}
+    assert agents.render("claude-code", "SubagentStart", answer).body == answer
+    assert agents.render("codex", "SubagentStart", answer).body == answer
+
 
 def test_subagent_start_receives_a_license_summary(harness, tmp_path):
     project = tmp_path / "shop-api"

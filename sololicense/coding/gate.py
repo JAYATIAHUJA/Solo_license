@@ -120,7 +120,7 @@ class CodingGate:
         self._traces[turn_id] = trace
         self.conn.execute(
             "INSERT INTO agent_sessions (session_id, agent, repo, principal, digest) VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(session_id) DO UPDATE SET agent=excluded.agent, repo=excluded.repo, "
+            "ON CONFLICT(session_id, principal) DO UPDATE SET agent=excluded.agent, repo=excluded.repo, "
             "principal=excluded.principal, digest=excluded.digest",
             (session, agent, repo, principal, digest.state(self.conn, session, repo=repo, principal=principal)),
         )

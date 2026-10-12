@@ -27,3 +27,18 @@ def test_digest_is_bounded(harness):
     agent_repo.open_turn(harness.conn, session_id="large", repo="repo", cwd=".", prompt="x" * 100_000,
                          base_ref=None, trace_id=None)
     assert len(digest.state(harness.conn, "large")) <= digest.MAX_CHARS
+
+
+def test_bounded_encoding_remains_valid_json():
+    encoded = digest.encode({"goal": "x" * 100_000, "recent_calls": [], "trust": [],
+                             "turn": {}, "current_call": {"principal": "main"}})
+    assert len(encoded) <= digest.MAX_CHARS
+    assert json.loads(encoded)["current_call"]["principal"] == "main"
+
+
+def test_session_rows_allow_one_digest_per_principal(harness):
+    harness.conn.execute("INSERT INTO agent_sessions(session_id, agent, repo, principal, digest) VALUES(?,?,?,?,?)",
+                         ("shared", "claude-code", "repo", "main", "{}"))
+    harness.conn.execute("INSERT INTO agent_sessions(session_id, agent, repo, principal, digest) VALUES(?,?,?,?,?)",
+                         ("shared", "claude-code", "repo", "subagent:Explore", "{}"))
+    assert harness.conn.execute("SELECT COUNT(*) FROM agent_sessions WHERE session_id='shared'").fetchone()[0] == 2
