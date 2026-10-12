@@ -7,6 +7,10 @@ const WORDS = [
   'Earned per action class',
   'Over-editing gets sent back',
   'One failure → L0',
+  'Subagents earn their own license',
+  'MCP servers earn per tool',
+  'Budget caps stop the spend',
+  'Flag it, and the agent is told',
   'Every change is a commit',
   'Asks you → Runs what you approved → Runs alone',
 ];
