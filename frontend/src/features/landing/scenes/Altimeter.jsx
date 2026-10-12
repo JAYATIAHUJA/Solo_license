@@ -4,15 +4,8 @@ import { motion, useScroll, useSpring } from 'motion/react';
 const STOPS = [
   ['top', 'Intro'],
   ['terminal', 'In your agent'],
-  ['problem', 'Problem'],
-  ['journey', 'Earning'],
-  ['agent', 'The loop'],
   ['crash', 'The crash'],
-  ['detections', 'Detections'],
-  ['fixes', 'Remediation'],
-  ['evidence', 'Evidence'],
-  ['ledger', 'Ledger'],
-  ['install', 'Install'],
+  ['tour', 'Product'],
   ['faq', 'FAQ'],
 ];
 

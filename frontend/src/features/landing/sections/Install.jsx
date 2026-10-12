@@ -40,7 +40,7 @@ export function Install() {
   const prompt = `Install Solo License in this repo for ${agent.label}: run \`uv tool install ${REPO}\`, then \`solo-license init --agent ${agent.key}\`. Change nothing else, and tell me to keep \`solo-license serve\` running.`;
   return (
     <section className="lp-section lp-install" id="install">
-      <SectionHead index="011" label="Install" />
+      <SectionHead index="001" label="Pick your agent" />
       <div className="lp-split">
         <h2 className="lp-h2 serif">One line. <em className="italic">Any</em> agent.</h2>
         <p className="lp-copy">
