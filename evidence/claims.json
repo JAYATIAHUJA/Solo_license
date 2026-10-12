@@ -1,0 +1,45 @@
+{
+  "note": "Every README claim, machine-checked. bash scripts/verify.sh runs each command and prints PASS/FAIL; the CI claims job runs the same script on every push, so the README cannot drift from the code. Claims are read-only: they run tests and builds (gitignored artifacts only) and never rewrite committed files.",
+  "claims": [
+    {
+      "id": "backend-tests",
+      "claim": "The backend test suite passes.",
+      "command": "$PYTHON -m pytest -q"
+    },
+    {
+      "id": "frontend-tests",
+      "claim": "The frontend test suite passes.",
+      "command": "npm --prefix frontend test"
+    },
+    {
+      "id": "frontend-build",
+      "claim": "The frontend production build succeeds.",
+      "command": "npm --prefix frontend run build"
+    },
+    {
+      "id": "redirect-both-ways",
+      "claim": "A shell redirect is a write, and only a real redirect: `echo pwned >> ~/.ssh/authorized_keys` is file-edit, while `npm test 2>&1` and `npm test > /dev/null` stay test-run.",
+      "command": "$PYTHON -c \"from sololicense.coding.actions import classify_command as c; assert c('echo pwned >> ~/.ssh/authorized_keys').action_class == 'file-edit'; assert c('npm test 2>&1').action_class == 'test-run'; assert c('npm test > /dev/null').action_class == 'test-run'\""
+    },
+    {
+      "id": "force-push-denied",
+      "claim": "Force-pushing a protected branch is denied in both spellings (--force and the +refspec form); a plain push is not.",
+      "command": "$PYTHON -c \"from sololicense.coding.actions import classify_command as c; assert c('git push --force origin main').hard_deny and c('git push origin +main').hard_deny and not c('git push origin main').hard_deny\""
+    },
+    {
+      "id": "earning-promotes",
+      "claim": "Verified runs promote a class up the ladder (full gate suite: decisions, promote, demote, restore).",
+      "command": "$PYTHON -m pytest tests/test_coding_gate.py -q"
+    },
+    {
+      "id": "evidence-present",
+      "claim": "The committed before/after benchmark evidence exists and parses.",
+      "command": "$PYTHON -c \"import json; d = json.load(open('evidence/benchmarks/coding_before_after.json')); assert d\""
+    },
+    {
+      "id": "cli-works",
+      "claim": "The CLI produces the one-command self-install prompt for an agent.",
+      "command": "$PYTHON -m sololicense.cli prompt --agent claude"
+    }
+  ]
+}
