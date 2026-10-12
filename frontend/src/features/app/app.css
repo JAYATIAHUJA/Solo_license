@@ -27,7 +27,7 @@
 .app-side-job span { color: var(--ink-2); }
 .app-side-job.is-paused span { color: var(--bad); font-weight: 600; }
 
-.app-side-foot { display: grid; gap: 8px; padding: 12px 10px 0; border-top: 1px solid var(--line); }
+.app-side-foot { margin-top: auto; display: grid; gap: 8px; padding: 12px 10px 0; border-top: 1px solid var(--line); }
 .app-side-user { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .app-side-user b { color: var(--ink); font-weight: 600; }
 .app-side-foot .btn { justify-self: start; }
@@ -148,3 +148,6 @@ p.app-outcome { display: block; }
 .app-evidence i { display: block; height: 100%; background: var(--ok); transition: width 0.4s var(--ease); }
 .app-why { margin-top: 0; }
 .app-nav-heading { margin: 14px 0 4px; }
+
+/* desktop: no top bar at all - the sidebar names the page */
+@media (min-width: 861px) { .app-top { display: none; } }

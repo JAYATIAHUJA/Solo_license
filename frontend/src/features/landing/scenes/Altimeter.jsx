@@ -3,7 +3,6 @@ import { motion, useScroll, useSpring } from 'motion/react';
 
 const STOPS = [
   ['top', 'Intro'],
-  ['terminal', 'In your agent'],
   ['problem', 'Problem'],
   ['journey', 'Earning'],
   ['agent', 'The loop'],

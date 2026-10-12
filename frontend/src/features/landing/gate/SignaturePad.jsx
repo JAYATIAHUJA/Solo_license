@@ -63,8 +63,10 @@ export function SignaturePad({ onSigned }) {
         {!ink && !auto && <span className="sig-hint hand">sign here - mouse or finger</span>}
       </SketchBox>
       <div className="sig-actions">
-        <button className="btn btn-ghost btn-sm" onClick={() => { setStrokes([]); setAuto(false); }} disabled={!ink && !auto}>Clear</button>
-        <button className="btn btn-line btn-sm" onClick={() => { setStrokes([]); setAuto(true); }}><HandIcon name="spark" size={14} /> Sign for me</button>
+        {(ink || auto) && (
+          <button className="btn btn-line" onClick={() => { setStrokes([]); setAuto(false); }}>Clear</button>
+        )}
+        <button className="btn btn-line" onClick={() => { setStrokes([]); setAuto(true); }}><HandIcon name="spark" size={14} /> Sign for me</button>
         <button className="btn btn-ink" disabled={!ready} onClick={() => onSigned(d)}>Issue license L0 <HandIcon name="arrow-right" size={16} /></button>
       </div>
     </div>

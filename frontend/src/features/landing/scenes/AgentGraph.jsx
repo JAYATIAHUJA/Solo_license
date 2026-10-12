@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion, useMotionValueEvent, useTransform } from 'motion/react';
+import { motion, useMotionValueEvent, useTransform } from 'motion/react';
 import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 import { ScrambleText } from '../../../components/fx/ScrambleText.jsx';
 import { roughPath } from '../../../components/sketch/rough.js';
@@ -48,7 +48,6 @@ function Scene({ p }) {
   const [active, setActive] = useState(0);
   useMotionValueEvent(p, 'change', (v) => setActive(Math.min(NODES.length - 1, Math.max(0, Math.floor(((v - 0.05) / 0.85) * NODES.length)))));
   const edges = useMemo(() => NODES.slice(1).map((_, i) => edge(i, i + 1, i)), []);
-  const node = NODES[active];
 
   return (
     <div className="sc-wrap sc-agent-wrap">
@@ -58,14 +57,7 @@ function Scene({ p }) {
           <ScrambleText className="mono" text="One loop, every run" />
         </div>
         <h2 className="sc-title serif">Watch it <em className="italic">work.</em></h2>
-        <AnimatePresence mode="wait">
-          <motion.div key={active} className="sc-agent-step" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={{ duration: 0.35 }}>
-            <span className="mono muted">Step {String(active + 1).padStart(2, '0')} / 06</span>
-            <b className="serif">{node.title}</b>
-            <p>{node.body}</p>
-            <code className="mono">{node.out}</code>
-          </motion.div>
-        </AnimatePresence>
+        <p className="sc-body">Every request goes through the same loop: check the license, let the agent work, verify the turn, move the dial.</p>
       </div>
 
       <div className="ag-board">

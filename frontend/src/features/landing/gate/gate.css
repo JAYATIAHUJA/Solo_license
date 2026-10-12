@@ -33,6 +33,8 @@
 .sig-ink { fill: none; stroke: var(--ink); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; filter: url(#ink-wobble); }
 .sig-hint { position: absolute; left: 50%; top: 40%; translate: -50% -50%; font-size: 26px; color: var(--faint); pointer-events: none; z-index: 1; }
 .sig-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.sig-actions .btn { flex: 0 0 210px; width: 210px; min-height: 48px; justify-content: center; white-space: nowrap; }
+@media (max-width: 720px) { .sig-actions .btn { flex: 1 1 100%; width: 100%; } }
 
 .gate-flood { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; }
 

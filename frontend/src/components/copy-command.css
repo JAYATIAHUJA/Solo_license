@@ -1,0 +1,17 @@
+/* Copyable command rows: light, bordered, Copy chip on the right. */
+.cc { width: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; padding: 0; text-align: left; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.cc:hover { border-color: var(--ink); background: var(--paper); }
+.cc-mark { align-self: stretch; display: grid; place-items: center; border-right: 1px solid var(--line); color: var(--muted); font: 500 12px var(--font-mono, ui-monospace, monospace); }
+.cc code, .cc pre { min-width: 0; padding: 11px 14px; background: none; color: var(--ink); font: 13px/1.55 var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere; margin: 0; }
+.cc pre { white-space: pre-wrap; max-height: 220px; overflow: auto; }
+.cc-btn { margin: 0 8px; min-width: 76px; padding: 6px 10px; text-align: center; border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; color: var(--ink-2); background: var(--paper); white-space: nowrap; }
+.cc:hover .cc-btn { border-color: var(--ink); color: var(--ink); }
+.cc.is-copied { border-color: var(--ok); }
+.cc.is-copied .cc-btn { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
+.cc.is-block { align-items: start; }
+.cc.is-block .cc-mark { align-items: start; padding-top: 12px; }
+.cc.is-block .cc-btn { margin-top: 8px; }
+.cc-list { display: grid; border: 1px solid var(--line); }
+.cc-list .cc { border: 0; border-bottom: 1px solid var(--line); }
+.cc-list .cc:last-child { border-bottom: 0; }
+@media (max-width: 560px) { .cc-btn { min-width: 0; } }

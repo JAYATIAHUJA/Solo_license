@@ -5,7 +5,6 @@ import { HandIcon } from '../../../components/icons/HandIcon.jsx';
 import { Logo } from '../../../components/brand/Logo.jsx';
 
 const LINKS = [
-  ['/#terminal', 'In your agent'],
   ['/#journey', 'How it earns'],
   ['/#crash', 'The crash'],
   ['/install', 'Install'],

@@ -882,11 +882,24 @@ def wizard_select(payload: dict = Body(default_factory=dict),
 
 
 @app.get("/api/coding/agents")
-def coding_agents() -> dict:
-    """Supported agents and how each one is installed (public: no data)."""
-    from sololicense.coding import agents
+def coding_agents(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """Supported agents and how each one is installed. `detected` (agents that
+    left a trace on this machine) is only told to this machine or a signed-in user."""
+    import pathlib
 
-    return {"agents": [
+    from sololicense.coding import agents, install
+
+    host = request.client.host if request.client else ""
+    local = host in ("127.0.0.1", "::1", "localhost", "testclient")
+    if not local and authorization:
+        try:
+            current_actor(authorization)
+            local = True
+        except HTTPException:
+            local = False
+    detected = install.detect(pathlib.Path.cwd()) if local else []
+
+    return {"detected": detected, "agents": [
         {"key": a.key, "label": a.label, "transport": a.transport, "config_path": a.config_path,
          "can_send_back": a.can_send_back, "notes": a.notes, "docs": a.docs,
          "install": f"solo-license init --agent {a.key}"}
