@@ -1,0 +1,55 @@
+{
+  "note": "Every README claim, machine-checked. bash scripts/verify.sh runs each command and prints PASS/FAIL; CI runs the same script on every push, so the numbers cannot drift from the code.",
+  "claims": [
+    {
+      "id": "backend-tests",
+      "claim": "The backend test suite passes.",
+      "command": "$PYTHON -m pytest -q"
+    },
+    {
+      "id": "frontend-tests",
+      "claim": "The frontend test suite passes.",
+      "command": "npm --prefix frontend test"
+    },
+    {
+      "id": "frontend-build",
+      "claim": "The frontend production build succeeds.",
+      "command": "npm --prefix frontend run build"
+    },
+    {
+      "id": "redirect-is-a-write",
+      "claim": "A shell redirect is classified as a file edit, never as a read: `echo pwned >> ~/.ssh/authorized_keys` is file-edit.",
+      "command": "$PYTHON -c \"from sololicense.coding.actions import classify_command; assert classify_command('echo pwned >> ~/.ssh/authorized_keys').action_class == 'file-edit'\""
+    },
+    {
+      "id": "quoted-greater-than-stays-read",
+      "claim": "A greater-than inside quotes is not treated as a redirect.",
+      "command": "$PYTHON -c \"from sololicense.coding.actions import classify_command; assert classify_command('grep \\\"a>b\\\" notes.md').action_class == 'read'\""
+    },
+    {
+      "id": "force-push-denied",
+      "claim": "Force-pushing a protected branch is denied, in both spellings (--force and the +refspec form).",
+      "command": "$PYTHON -c \"from sololicense.coding.actions import classify_command; a = classify_command('git push --force origin main'); b = classify_command('git push origin +main'); assert a.hard_deny and b.hard_deny\""
+    },
+    {
+      "id": "plain-push-not-denied",
+      "claim": "A plain push is not hard-denied; it simply has to be earned.",
+      "command": "$PYTHON -c \"from sololicense.coding.actions import classify_command; assert not classify_command('git push origin main').hard_deny\""
+    },
+    {
+      "id": "earning-promotes",
+      "claim": "Three human-approved, verified runs promote a class from L0 to L1 (covered by the gate suite).",
+      "command": "$PYTHON -m pytest tests/test_coding_gate.py -q -k 'promote or level'"
+    },
+    {
+      "id": "benchmark-reproduces",
+      "claim": "The before/after benchmark regenerates its evidence files from scratch.",
+      "command": "make coding-benchmark"
+    },
+    {
+      "id": "cli-works",
+      "claim": "The CLI produces the one-command self-install prompt for an agent.",
+      "command": "$PYTHON -m sololicense.cli prompt --agent claude"
+    }
+  ]
+}

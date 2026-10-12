@@ -48,3 +48,26 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  claims:
+    name: README claims
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest httpx
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Machine-check every README claim
+        run: bash scripts/verify.sh
