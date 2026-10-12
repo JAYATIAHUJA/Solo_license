@@ -134,7 +134,14 @@ def current_turn(conn: sqlite3.Connection, session_id: str) -> sqlite3.Row | Non
     ).fetchone()
 
 
+TURN_CLOSE_COLUMNS = frozenset({"status", "reason", "scope_score", "lines_changed", "files_changed", "tests"})
+
+
 def close_turn(conn: sqlite3.Connection, turn_id: int, **fields) -> None:
+    """Column names come only from this fixed list; values are always bound."""
+    unknown = set(fields) - TURN_CLOSE_COLUMNS
+    if unknown:
+        raise ValueError(f"unknown agent_turns columns: {sorted(unknown)}")
     sets = ", ".join(f"{k} = ?" for k in fields)
     conn.execute(f"UPDATE agent_turns SET {sets}, closed_at = datetime('now') WHERE id = ?",
                  (*fields.values(), turn_id))
