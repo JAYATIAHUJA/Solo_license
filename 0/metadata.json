@@ -1,0 +1,77 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R6Z9BW47P25Z97CPRYH89W",
+  "session_id": "9785f29d-f1ba-41b1-bd01-4ac78bf07f72",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-12T14:06:29.3415321Z",
+  "branch": "fix/landing-restore-lists",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/features/landing/LandingPage.jsx",
+    "frontend/src/features/landing/PhoneLanding.jsx",
+    "frontend/src/features/landing/Reveal.jsx",
+    "frontend/src/features/landing/landing.css",
+    "frontend/src/features/landing/scenes/Altimeter.jsx",
+    "frontend/src/features/landing/scenes/ProductTour.jsx",
+    "frontend/src/features/landing/sections/Detections.jsx",
+    "frontend/src/features/landing/sections/Remedies.jsx",
+    "frontend/src/features/landing/usePhone.js",
+    "frontend/src/features/landing/useSmoothScroll.js"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "bfa290e77c5d",
+  "checkpoint_transcript_start": 1999,
+  "transcript_lines_at_start": 1999,
+  "compact_transcript_start": 306,
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 22028,
+    "cache_read_tokens": 7828037,
+    "output_tokens": 12284,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-12T14:06:29.008622Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 327,
+    "human_modified": 42,
+    "human_removed": 0,
+    "total_committed": 327,
+    "total_lines_changed": 369,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2501,
+      "user_lines_removed": 39,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/launch.json": 143,
+        ".cursor/hooks.json": 40,
+        "AGENTS.md": 6,
+        "CLAUDE.md": 6,
+        "docs/IMPLEMENTATION_PLAN.md": 179,
+        "docs/PRD-v3-control-layer.md": 453,
+        "docs/launch/build-in-public-posts.md": 33,
+        "docs/launch/demo-video-script.md": 20,
+        "docs/strategy/2026-10-11-pivot-and-winning-plan.md": 651,
+        "docs/superpowers/plans/2026-10-11-launch-evidence-ops.md": 44,
+        "docs/superpowers/plans/2026-10-11-product-ready-demo.md": 260,
+        "docs/superpowers/plans/2026-10-12-agent-events.md": 321,
+        "docs/superpowers/plans/2026-10-12-scrap-payments-frontend.md": 139,
+        "docs/superpowers/plans/2026-10-12-v3-roadmap.md": 206
+      },
+      "user_removed_per_file": {
+        ".claude/launch.json": 39
+      }
+    }
+  ]
+}

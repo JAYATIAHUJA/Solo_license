@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4R6Z9BW47P25Z97CPRYH89W",
+  "strategy": "manual-commit",
+  "branch": "fix/landing-restore-lists",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/src/features/landing/LandingPage.jsx",
+    "frontend/src/features/landing/PhoneLanding.jsx",
+    "frontend/src/features/landing/Reveal.jsx",
+    "frontend/src/features/landing/landing.css",
+    "frontend/src/features/landing/scenes/Altimeter.jsx",
+    "frontend/src/features/landing/scenes/ProductTour.jsx",
+    "frontend/src/features/landing/sections/Detections.jsx",
+    "frontend/src/features/landing/sections/Remedies.jsx",
+    "frontend/src/features/landing/usePhone.js",
+    "frontend/src/features/landing/useSmoothScroll.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 22028,
+    "cache_read_tokens": 7828037,
+    "output_tokens": 12284,
+    "api_call_count": 15
+  }
+}
