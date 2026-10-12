@@ -137,7 +137,10 @@ def _process_matches(pid: int, state: dict) -> bool:
             kernel32.CloseHandle(handle)
         line = _windows_command_line(pid)
         # Same image is not enough: a reused pid may run another python.exe script.
-        return line is None or all(part in line for part in command[1:])
+        # If the command line cannot be read, do not risk stopping the wrong process.
+        if line is None:
+            return False
+        return all(part in line for part in command[1:])
     proc = Path(f"/proc/{pid}")
     if not proc.exists():
         # macOS and other POSIX without /proc: ask ps for the command line.
