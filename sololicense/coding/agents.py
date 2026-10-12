@@ -225,7 +225,9 @@ def normalize(agent: str, native_event: str, payload: dict) -> tuple[str, dict] 
         body["subagent_type"] = str(_first(p, "agent_type", "subagent_type", default="unknown"))
         body["subagent_model"] = str(_first(p, "subagent_model", "model", default=""))
         if event == SUB_STOP:
-            body["modified_files"] = _first(p, "modified_files", "modifiedFiles", default=[])
+            modified = _first(p, "modified_files", "modifiedFiles", default=None)
+            if modified is not None:
+                body["modified_files"] = modified
         return event, body
 
     # A tool call: find its name and arguments wherever this agent keeps them.
@@ -293,9 +295,9 @@ def render(agent: str, native_event: str, answer: dict) -> Native:
         interrupt = bool(((answer or {}).get("hookSpecificOutput") or {}).get("decision", {}).get("interrupt"))
         return _render_permission(spec.key, native_event, verdict, reason, interrupt)
     if gate_event == SUB_START and verdict == "deny":
-        if spec.key == "cursor":
-            return Native({"decision": "deny", "reason": reason})
-        return Native()
+        # Cursor documents a structured deny; Claude/Codex still receive a
+        # clear structured response so policy blocks are not silently lost.
+        return Native({"decision": "deny", "reason": reason})
     if verdict == "continue":
         return _render_send_back(spec.key, reason)
     if verdict == "context":
