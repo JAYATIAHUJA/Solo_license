@@ -6,6 +6,7 @@ import { Logo } from '../../../components/brand/Logo.jsx';
 const NAV = [
   { to: '/app', end: true, label: 'Coding agent' },
   { to: '/app/ledger', label: 'Permission history' },
+  { to: '/app/budget', label: 'Budget' },
   { to: '/app/settings', label: 'Settings' },
 ];
 

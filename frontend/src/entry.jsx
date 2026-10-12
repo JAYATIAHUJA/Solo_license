@@ -8,6 +8,7 @@ import { CodingSetup } from './features/setup/CodingSetup.jsx';
 import { AppShell } from './features/app/AppShell.jsx';
 import { Coding } from './features/app/pages/Coding.jsx';
 import { Ledger } from './features/app/pages/Ledger.jsx';
+import { Budget } from './features/app/pages/Budget.jsx';
 import { Settings } from './features/app/pages/Settings.jsx';
 import { SketchDefs } from './components/sketch/SketchDefs.jsx';
 import './styles/tokens.css';
@@ -42,6 +43,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/app" element={guarded(<AppShell />)}>
           <Route index element={<Coding />} />
           <Route path="ledger" element={<Ledger />} />
+          <Route path="budget" element={<Budget />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
