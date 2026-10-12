@@ -166,3 +166,12 @@ def test_process_matches_rejects_a_different_command():
     finally:
         proc.terminate()
         proc.wait()
+
+
+def test_an_unreadable_command_line_is_not_a_match(monkeypatch):
+    """Fail safe: without the command line we cannot tell a reused pid apart."""
+    if os.name != "nt":
+        return
+    monkeypatch.setattr(background, "_windows_command_line", lambda pid: None)
+    assert not background._process_matches(os.getpid(), {"executable": sys.executable,
+                                                         "command": [sys.executable, "-m", "x"]})
