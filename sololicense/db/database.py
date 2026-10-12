@@ -37,6 +37,7 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     _migrate_runs(conn)
     _migrate_v3(conn)
     _migrate_principals(conn)
+    _migrate_sessions(conn)
     conn.commit()
 
 
@@ -100,6 +101,30 @@ def _migrate_principals(conn: sqlite3.Connection) -> None:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
         if "principal" not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN principal TEXT NOT NULL DEFAULT 'main'")
+
+
+def _migrate_sessions(conn: sqlite3.Connection) -> None:
+    """Upgrade an early digest table keyed only by session_id."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_sessions'").fetchone():
+        return
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(agent_sessions)")}
+    pk = [row["name"] for row in conn.execute("PRAGMA table_info(agent_sessions)") if row["pk"]]
+    if "principal" in columns and pk == ["session_id"]:
+        conn.execute("ALTER TABLE agent_sessions RENAME TO agent_sessions_legacy")
+        conn.execute(
+            """CREATE TABLE agent_sessions (
+                session_id TEXT NOT NULL, agent TEXT NOT NULL DEFAULT 'claude-code',
+                repo TEXT NOT NULL, principal TEXT NOT NULL DEFAULT 'main',
+                started_at TEXT NOT NULL DEFAULT (datetime('now')), cost_usd REAL NOT NULL DEFAULT 0,
+                model TEXT, digest TEXT NOT NULL DEFAULT '{}', PRIMARY KEY (session_id, principal)
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO agent_sessions(session_id, agent, repo, principal, started_at, cost_usd, model, digest)
+               SELECT session_id, agent, repo, principal, started_at, cost_usd, model, digest
+                 FROM agent_sessions_legacy"""
+        )
+        conn.execute("DROP TABLE agent_sessions_legacy")
 
 
 _ADDED_COLUMNS = {

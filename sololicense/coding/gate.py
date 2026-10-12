@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from sololicense.coding import agents, entire, jev, loops, remediation
+from sololicense.coding import agents, digest, entire, jev, loops, remediation
 from sololicense.coding import policy as policy_mod
 from sololicense.coding.actions import ACTION_CLASSES, Classification, classify_tool, describe, edited_path
 from sololicense.coding.ladder import CodingLadder
@@ -118,6 +118,12 @@ class CodingGate:
             agent=agent, principal=principal,
         )
         self._traces[turn_id] = trace
+        self.conn.execute(
+            "INSERT INTO agent_sessions (session_id, agent, repo, principal, digest) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(session_id, principal) DO UPDATE SET agent=excluded.agent, repo=excluded.repo, "
+            "principal=excluded.principal, digest=excluded.digest",
+            (session, agent, repo, principal, digest.state(self.conn, session, repo=repo, principal=principal)),
+        )
         if not event.get("_implicit"):  # a turn opened for an agent without a prompt hook is not a person
             loops.clear_halt(self.conn, session)
         trace.span("turn.start", turn=turn_id, prompt=str(event.get("prompt", ""))[:300])
@@ -218,7 +224,7 @@ class CodingGate:
         turn = self._turn(session, repo, root, principal=principal)
         trace = self._trace(turn)
         command = describe(tool, tool_input)
-        result = self._classify(tool, tool_input, root)
+        result = self._classify(tool, tool_input, root, session=session, repo=repo, principal=principal)
         spec = ACTION_CLASSES[result.action_class]
         rules = policy_mod.effective(self.conn, repo, root)
         lic = agent_repo.effective_license(self.conn, repo, spec.key, principal,
@@ -642,11 +648,15 @@ class CodingGate:
 
     # --- helpers -----------------------------------------------------------
 
-    def _classify(self, tool: str, tool_input: dict, root: str) -> Classification:
+    def _classify(self, tool: str, tool_input: dict, root: str, *, session: str = "", repo: str = "",
+                  principal: str = "main") -> Classification:
         result = classify_tool(tool, tool_input)
         if result.action_class != "unknown" or result.hard_deny or not self.jev_client.enabled:
             return result
-        verdict = jev.classify_command(self.jev_client, describe(tool, tool_input), root)
+        session_state = digest.state(self.conn, session, repo=repo, principal=principal,
+                                     current_call={"tool": tool, "input": tool_input}) if session else ""
+        verdict = jev.classify_command(self.jev_client, describe(tool, tool_input), root,
+                                       session_state=session_state)
         if verdict is None:
             return Classification("unknown", result.pattern, "fallback")
         return Classification(verdict.action_class, result.pattern, "jev", verdict.confidence,

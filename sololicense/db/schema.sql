@@ -333,6 +333,19 @@ CREATE TABLE IF NOT EXISTS agent_turns (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_turns_session ON agent_turns (session_id, id DESC);
 
+-- Compact context retained for Jev and session observability.
+CREATE TABLE IF NOT EXISTS agent_sessions (
+    session_id    TEXT NOT NULL,
+    agent         TEXT NOT NULL DEFAULT 'claude-code',
+    repo          TEXT NOT NULL,
+    principal     TEXT NOT NULL DEFAULT 'main',
+    started_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    cost_usd      REAL NOT NULL DEFAULT 0,
+    model         TEXT,
+    digest        TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (session_id, principal)
+);
+
 -- Per-repository settings (the command that verifies a turn).
 CREATE TABLE IF NOT EXISTS agent_repos (
     repo          TEXT PRIMARY KEY,
